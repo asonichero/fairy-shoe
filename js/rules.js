@@ -1,0 +1,393 @@
+// The Fairy Shoe — rules. Pure functions over a plain-JSON game state (so it saves and tests cleanly).
+//
+// Day: Morning (generate the chore list, assign residents) → resolution (chores, graduations, events, graduations,
+// Behaviour Cards) → Evening (each resident in turn: a live correction, or a reprieve; then aftercare) → day boundary
+// (the word, backfill) → Morning.
+//
+// The correction itself is live (see scene.js); this module only scores what the player actually did: the highest
+// distress they brought the resident to, whether it tipped into too harsh, against what that resident needed that evening.
+(function (root) {
+'use strict';
+const C = typeof require === 'function' && typeof module !== 'undefined' ? require('./content.js') : root.FairyShoeContent;
+const { STATS, CHARACTERS, ORDER, CHORES, CATEGORIES } = C;
+
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const HOUSE_SIZE = 3;
+const EVENING_CANDLE = 5;          // marks to spend on reprieves and aftercare each evening
+const MAX_EVENTS = 2;              // at most this many events per evening
+
+// ── Random ──────────────────────────────────────────────────────
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const pick = (rng, arr) => arr[Math.floor(rng() * arr.length)];
+function shuffle(rng, arr) { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+function weighted(rng, items) {   // items: [[value, weight], ...]
+  const total = items.reduce((s, [, w]) => s + w, 0); if (total <= 0) return null;
+  let r = rng() * total;
+  for (const [v, w] of items) { if ((r -= w) < 0) return v; }
+  return items[items.length - 1][0];
+}
+
+// ── State ───────────────────────────────────────────────────────
+const cloneStats = s => ({ ...s });
+function freshChar(id) { return { stats: cloneStats(CHARACTERS[id].base), carry: {}, visits: 0, moveOns: 0 }; }
+const pairKey = (a, b) => a < b ? a + '|' + b : b + '|' + a;
+const getRapport = (g, a, b) => g.rapport[pairKey(a, b)] != null ? g.rapport[pairKey(a, b)] : 4;
+const addRapport = (g, a, b, d) => { g.rapport[pairKey(a, b)] = clamp(getRapport(g, a, b) + d, 1, 7); };
+const stats = (g, id) => g.chars[id].stats;
+
+function newGame(rng, opts = {}) {
+  const g = {
+    v: 1, day: 0, title: opts.title || 'Ma\'am', phase: 'new', rapport: {},
+    chars: Object.fromEntries(ORDER.map(id => [id, freshChar(id)])),
+    roster: [], unseen: ORDER.slice(), collection: [],
+    chores: [], cards: [], queue: [], cursor: 0, candle: EVENING_CANDLE, notices: [], leftToday: [], history: [],
+  };
+  backfill(g, rng, true);
+  g.notices = [];
+  return g;
+}
+
+// ── Effective Attention ─────────────────────────────────────────
+// All six stats bear on whether work gets done. Pivots sit at the extremes (above 5, below 3); penalty and bonus are each
+// floored, then netted and clamped to −3…+2.
+function effectiveAttention(s) {
+  const pen = Math.max(0, s.wil - 5) * 0.5 + Math.max(0, 3 - s.com) * 0.5 + Math.max(0, s.res - 5) * 0.4 + Math.max(0, 3 - s.sat) * 0.4 + Math.max(0, 3 - s.val) * 0.3;
+  const bon = Math.max(0, s.com - 5) * 0.5 + Math.max(0, s.sat - 5) * 0.4 + Math.max(0, s.val - 5) * 0.3;
+  const mod = clamp(Math.floor(bon + 1e-9) - Math.floor(pen + 1e-9), -3, 2);
+  return { mod, value: clamp(s.att + mod, 1, 7) };
+}
+
+// ── Changing a stat ─────────────────────────────────────────────
+// Every change goes through here so that a character's traits bend it, it clamps to 1–7, and it is recorded for the
+// result card. `src` names where it came from ('chore', 'event', 'correction', 'overshoot1', 'aftercare', 'reprieve').
+function changeStat(g, id, stat, delta, src, rec) {
+  const c = g.chars[id]; if (!c || !delta) return 0;
+  let d = delta;
+  for (const t of CHARACTERS[id].traits || []) {
+    if (t.stat !== stat) continue;
+    if (t.sources && !t.sources.includes(src)) continue;
+    if (t.when && !Object.entries(t.when).every(([k, [op, v]]) => op === '>=' ? c.stats[k] >= v : c.stats[k] <= v)) continue;
+    if (t.factor === 0) { d = 0; break; }
+    if (t.factor < 1) {   // sluggish: a fraction builds up and pays out whole
+      const v = d * t.factor + (c.carry[stat] || 0), whole = v > 0 ? Math.floor(v + 1e-9) : Math.ceil(v - 1e-9);
+      c.carry[stat] = v - whole; d = whole || 0;
+    } else d = Math.round(d * t.factor);
+  }
+  const from = c.stats[stat], to = clamp(from + d, 1, 7);
+  c.stats[stat] = to;
+  if (rec && to !== from) rec.push({ id, stat, from, to });
+  return to - from;
+}
+
+// ── Graduation and the word ─────────────────────────────────────
+const cmp = (v, op, t) => op === '>=' ? v >= t : v <= t;
+const meetsGraduation = (id, s) => CHARACTERS[id].grad.every(([k, op, t]) => cmp(s[k], op, t));
+// Resentment at the ceiling and Valued on the floor, together: they use the word.
+const wordCalled = s => s.res >= 7 && s.val <= 2;
+
+function leave(g, id) { g.roster = g.roster.filter(r => r !== id); g.cards = g.cards.filter(c => c.id !== id); g.queue = g.queue.filter(q => q !== id); if (g.cursor > g.queue.length) g.cursor = g.queue.length; g.leftToday.push(id); }
+function moveOn(g, id) {
+  leave(g, id);
+  g.chars[id].moveOns++;
+  if (!g.collection.includes(id)) g.collection.push(id);   // unique, permanent
+  const n = { type: 'moveon', id, text: CHARACTERS[id].name + ' has moved on.' };
+  g.notices.push(n); return n;
+}
+function useWord(g, id, why) {
+  leave(g, id);
+  g.chars[id] = { ...freshChar(id), visits: g.chars[id].visits, moveOns: g.chars[id].moveOns };
+  if (!g.unseen.includes(id)) g.unseen.push(id);   // back in the pool, fully new; no fanfare, no memory
+  for (const o of ORDER) delete g.rapport[pairKey(id, o)];
+  const n = { type: 'word', id, why, text: CHARACTERS[id].name + ' used the word and left.' };
+  g.notices.push(n); return n;
+}
+// After any change: whoever has met their threshold moves on at once (not telegraphed).
+function sweepMoveOns(g) { const out = []; for (const id of g.roster.slice()) if (meetsGraduation(id, stats(g, id))) out.push(moveOn(g, id)); return out; }
+
+// Refill to the house size. Unseen first; once every one has been through the house, graduates come back as fresh arrivals.
+// Someone who left today isn't drawn straight back unless there is no one else.
+function backfill(g, rng, silent) {
+  const arrived = [];
+  while (g.roster.length < HOUSE_SIZE) {
+    const away = g.leftToday;
+    const pool = [g.unseen, g.collection.filter(id => !g.unseen.includes(id))].map(p => p.filter(id => !g.roster.includes(id))).find(p => p.length);
+    if (!pool) break;
+    const fresh = pool.filter(id => !away.includes(id));
+    const id = pick(rng, fresh.length ? fresh : pool);
+    g.unseen = g.unseen.filter(u => u !== id);
+    g.chars[id] = { ...freshChar(id), visits: g.chars[id].visits + 1, moveOns: g.chars[id].moveOns };
+    for (const o of ORDER) delete g.rapport[pairKey(id, o)];
+    g.roster.push(id); arrived.push(id);
+    if (!silent) g.notices.push({ type: 'arrive', id, text: CHARACTERS[id].name + ' has arrived.' });
+  }
+  return arrived;
+}
+
+// ── Morning: the chore list ─────────────────────────────────────
+// A fresh list each morning with exactly one slot per resident; a paired chore takes two.
+function generateChores(g, rng) {
+  const slots = g.roster.length, list = [];
+  let left = slots;
+  const early = g.day <= 2;
+  const solo = CHORES.filter(c => !c.paired), paired = CHORES.filter(c => c.paired);
+  const used = new Set();
+  const draw = pool => {
+    const options = pool.filter(c => !used.has(c.id)).map(c => [c, c.diff === 1 ? 4 : c.diff === 2 ? 4 : early ? 0.6 : 2]);
+    const c = weighted(rng, options); used.add(c.id); return c;
+  };
+  while (left > 0) {
+    const wantPair = left >= 2 && rng() < 0.4 && paired.some(c => !used.has(c.id));
+    const def = draw(wantPair ? paired : solo);
+    const n = def.paired ? 2 : 1;
+    list.push({ id: def.id, def, slots: Array(n).fill(null) });
+    left -= n;
+  }
+  return list;
+}
+function startMorning(g, rng) {
+  g.day++; g.phase = 'assign'; g.leftToday = []; g.cards = []; g.queue = []; g.cursor = 0; g.candle = EVENING_CANDLE;
+  g.chores = generateChores(g, rng);
+  return g.chores;
+}
+function assign(g, choreIdx, slotIdx, id) {
+  if (!g.roster.includes(id)) return false;
+  for (const ch of g.chores) ch.slots = ch.slots.map(s => s === id ? null : s);
+  const ch = g.chores[choreIdx]; if (!ch || slotIdx >= ch.slots.length) return false;
+  ch.slots[slotIdx] = id; return true;
+}
+function unassign(g, id) { for (const ch of g.chores) ch.slots = ch.slots.map(s => s === id ? null : s); }
+const allAssigned = g => g.chores.length > 0 && g.chores.every(ch => ch.slots.every(Boolean));
+const choreOf = (g, id) => g.chores.find(ch => ch.slots.includes(id));
+
+// ── Chore resolution ────────────────────────────────────────────
+const THRESH = { 1: [5, 3, 2], 2: [6, 4, 2], 3: [7, 5, 3] };   // lowest effective Attention for well / completed / partial
+function choreBand(diff, eff) {
+  const [w, c, p] = THRESH[diff];
+  return eff >= w ? 'well' : eff >= c ? 'completed' : eff >= p ? 'partial' : 'failed';
+}
+function choreEffective(g, ch) {
+  const effs = ch.slots.map(id => effectiveAttention(stats(g, id)));
+  let v = Math.min(...effs.map(e => e.value)), r = null;
+  if (ch.slots.length === 2) { r = getRapport(g, ch.slots[0], ch.slots[1]); v = clamp(v + (r >= 6 ? 1 : r <= 2 ? -1 : 0), 1, 7); }
+  return { eff: v, rapport: r };
+}
+function applyChoreBand(g, id, band, diff, rec) {
+  if (band === 'well') { changeStat(g, id, 'att', 1, 'chore', rec); if (diff >= 2) changeStat(g, id, 'sat', 1, 'chore', rec); }
+  else if (band === 'completed') changeStat(g, id, 'att', 1, 'chore', rec);
+  else if (band === 'failed') { changeStat(g, id, 'sat', -1, 'chore', rec); changeStat(g, id, 'att', -1, 'chore', rec); }
+}
+function resolveChores(g) {
+  const out = {};
+  for (const ch of g.chores) {
+    const { eff } = choreEffective(g, ch), band = choreBand(ch.def.diff, eff);
+    ch.band = band; ch.eff = eff;
+    for (const id of ch.slots) { applyChoreBand(g, id, band, ch.def.diff); out[id] = { chore: ch, band }; }
+  }
+  return out;
+}
+
+// ── Events ──────────────────────────────────────────────────────
+const occurrence = s => clamp(5 + (s.wil + s.res) * 5 - (s.sat + s.com) * 3, 5, 70);
+function lowestRapport(g, id, rng) {
+  const others = g.roster.filter(o => o !== id); if (!others.length) return null;
+  const low = Math.min(...others.map(o => getRapport(g, id, o)));
+  return pick(rng, others.filter(o => getRapport(g, id, o) === low));
+}
+function categoryWeights(g, id, hasSecond) {
+  const s = stats(g, id), b = CHARACTERS[id].bias || {};
+  const w = {
+    petty: CATEGORIES.petty.share * (1 + Math.max(0, s.wil - 4) * 0.25) * (b.petty || 1),
+    boundary: CATEGORIES.boundary.share * (1 + Math.max(0, s.wil - 4) * 0.35) * (b.boundary || 1),
+    friction: CATEGORIES.friction.share * (1 + Math.max(0, s.res - 3) * 0.3) * (b.friction || 1),
+    dishonest: CATEGORIES.dishonest.share * (b.dishonest || 1),
+    neglect: CATEGORIES.neglect.share * (1 + Math.max(0, 3 - s.sat) * 0.6 + Math.max(0, 3 - s.com) * 0.5) * (b.neglect || 1),
+    cruelty: s.res >= 5 ? CATEGORIES.cruelty.share * (s.res - 4) : 0,   // only at very high Resentment
+  };
+  if (!hasSecond) { w.friction = 0; w.cruelty = 0; }   // nobody to name: fall back to the rest (mischief most of all)
+  return w;
+}
+function fillTemplate(text, ctx) {
+  const P = ctx.pron, second = ctx.second || '';
+  const map = { Name: ctx.name, Second: second, Title: ctx.title || '', Subj: P[0], Obj: P[1], Poss: P[2], Refl: P[3] };
+  let out = '';
+  const re = /\{(\w+)\}/g; let last = 0, m;
+  while ((m = re.exec(text))) {
+    out += text.slice(last, m.index);
+    let v = map[m[1]] != null ? map[m[1]] : m[0];
+    if (['Subj', 'Obj', 'Poss', 'Refl'].includes(m[1])) {
+      const before = out.replace(/["'“‘\s]+$/, '');
+      v = !before || /[.!?]$/.test(before) ? v[0].toUpperCase() + v.slice(1) : v;
+    }
+    out += v; last = m.index + m[0].length;
+  }
+  return out + text.slice(last);
+}
+function makeEvent(g, id, rng) {
+  const second = lowestRapport(g, id, rng);
+  const cat = weighted(rng, Object.entries(categoryWeights(g, id, !!second)).filter(([, w]) => w > 0));
+  const opts = C.EVENTS[cat].map(t => typeof t === 'string' ? { text: t } : t).filter(t => !t.only || t.only === id);
+  // A resident's own templates are favoured over the generic ones.
+  const own = opts.filter(t => t.only === id);
+  const t = own.length && rng() < 0.45 ? pick(rng, own) : pick(rng, opts);
+  const def = CHARACTERS[id];
+  const text = fillTemplate(t.text, { name: def.name, pron: def.pronouns, second: second ? CHARACTERS[second].name : '', title: g.title });
+  return { id, cat, second, text, trap: !!t.trap, mod: CATEGORIES[cat].mod };
+}
+function applyEvent(g, ev, rec) {
+  const { id, second: sec, cat } = ev;
+  if (cat === 'boundary') changeStat(g, id, 'wil', 1, 'event', rec);
+  else if (cat === 'friction') { changeStat(g, id, 'res', 1, 'event', rec); changeStat(g, sec, 'res', 1, 'event', rec); addRapport(g, id, sec, -1); }
+  else if (cat === 'dishonest') changeStat(g, id, 'val', -1, 'event', rec);
+  else if (cat === 'neglect') { changeStat(g, id, 'sat', -1, 'event', rec); changeStat(g, id, 'com', -1, 'event', rec); }
+  else if (cat === 'cruelty') { changeStat(g, sec, 'res', 1, 'event', rec); changeStat(g, id, 'val', -1, 'event', rec); }
+}
+// Each resident rolls; the two best margins take an event, on two different people. A quiet evening is fine.
+function rollEvents(g, rng) {
+  const hits = g.roster.map(id => { const pct = occurrence(stats(g, id)), r = rng() * 100; return { id, margin: pct - r, hit: r < pct }; })
+    .filter(h => h.hit).sort((a, b) => b.margin - a.margin).slice(0, MAX_EVENTS);
+  return hits.map(h => makeEvent(g, h.id, rng));
+}
+
+// ── Behaviour Cards ─────────────────────────────────────────────
+function choreLine(g, id, entry, rng) {
+  const def = CHARACTERS[id], ch = entry.chore, partnerId = ch.slots.find(s => s !== id);
+  const pool = ch.slots.length === 2 ? C.PAIR_LINES[entry.band] : C.CHORE_LINES[entry.band];
+  const t = pick(rng, pool);
+  const out = fillTemplate(t.replace('{Chore}', ch.def.phrase).replace('{Partner}', partnerId ? CHARACTERS[partnerId].name : ''), { name: def.name, pron: def.pronouns, title: g.title });
+  return out[0].toUpperCase() + out.slice(1);
+}
+// Situational modifier: chore trouble +1; an event its own; both on one card add a further +1; capped at +2.
+function situationalModifier(card) {
+  const trouble = card.band === 'partial' || card.band === 'failed';
+  let m = 0;
+  if (card.event) { m = card.event.mod; if (trouble) m += 1; } else if (trouble) m = 1;
+  return Math.min(2, m);
+}
+function buildCards(g, entries, events, rng) {
+  g.cards = g.roster.map(id => {
+    const e = entries[id], ev = events.find(x => x.id === id) || null;
+    const card = { id, band: e ? e.band : 'completed', choreName: e ? e.chore.def.name : '', choreLine: e ? choreLine(g, id, e, rng) : '', event: ev, done: false };
+    card.mod = situationalModifier(card);
+    return card;
+  });
+  g.queue = g.cards.map(c => c.id); g.cursor = 0;
+}
+
+// The whole of day resolution: chores → move-ons → events → move-ons → cards. Returns what happened (for the morning report).
+function resolveDay(g, rng) {
+  g.notices = [];
+  const entries = resolveChores(g);
+  const choreSnapshot = g.roster.map(id => ({ id, band: entries[id].band, chore: entries[id].chore.def.name, eff: entries[id].chore.eff }));
+  sweepMoveOns(g);
+  const events = rollEvents(g, rng).filter(ev => g.roster.includes(ev.id) && (!ev.second || g.roster.includes(ev.second)));
+  for (const ev of events) applyEvent(g, ev);
+  sweepMoveOns(g);
+  const live = events.filter(ev => g.roster.includes(ev.id));
+  buildCards(g, entries, live, rng);
+  g.phase = 'evening';
+  return { chores: choreSnapshot, events: live, notices: g.notices.slice() };
+}
+
+// ── The correction ──────────────────────────────────────────────
+const BANDS = ['Minimal', 'Light', 'Moderate', 'Firm', 'Severe'];
+// What the resident's Wilfulness asks for on its own; Severe is only reachable with a situational modifier on top.
+const wilfulnessBand = w => w <= 1 ? 0 : w <= 3 ? 1 : w <= 5 ? 2 : 3;
+function expectedBand(s, card) {
+  if (card && card.event && card.event.trap) return 0;   // the gentle answer is the right one
+  return Math.min(4, wilfulnessBand(s.wil) + (card ? card.mod : 0));
+}
+// Distress at its peak (1 = the edge of resistance, 1.5 = too harsh) → the band the player actually reached.
+const BAND_CUTS = [0.2, 0.55, 0.9, 1.2, 1.5];
+function reachedBand(peak) { const i = BAND_CUTS.findIndex(c => peak < c); return i < 0 ? 5 : i; }   // 5 = past Severe (too harsh)
+function matchQuality(reached, expected, tooHarsh) {
+  if (tooHarsh || reached > 4) return 'over2';
+  const d = reached - expected;
+  return d === 0 ? 'well' : d === -1 ? 'under1' : d <= -2 ? 'under2' : d === 1 ? 'over1' : 'over2';
+}
+const MATCH_TEXT = { well: 'Well matched', under1: 'A little short of what was needed', under2: 'Far short; it did not land', over1: 'A little more than was needed', over2: 'Far more than was needed' };
+
+function applyMatch(g, id, q, rec) {
+  const s = stats(g, id), val = s.val;
+  if (q === 'well') {
+    changeStat(g, id, 'wil', val >= 5 ? -2 : -1, 'correction', rec);
+    changeStat(g, id, 'res', val <= 3 ? 1 : -1, 'correction', rec);
+    changeStat(g, id, 'val', 1, 'correction', rec);
+  } else if (q === 'under2') changeStat(g, id, 'com', -1, 'correction', rec);
+  else if (q === 'over1') {
+    changeStat(g, id, 'wil', -1, 'correction', rec);
+    changeStat(g, id, 'res', 1, 'overshoot1', rec);
+    if (id === 'red') changeStat(g, id, 'val', -1, 'correction', rec);   // overcorrection reads as abandonment, not discipline
+  } else if (q === 'over2') { changeStat(g, id, 'res', 2, 'correction', rec); changeStat(g, id, 'val', -1, 'correction', rec); }
+}
+
+// Score a finished live correction. `done`: { peak (highest distress), tooHarsh, smacks }.
+// Returns a snapshot (the resident may already be gone by the time it is shown).
+function applyCorrection(g, id, done) {
+  const card = g.cards.find(c => c.id === id), s = stats(g, id);
+  const expected = expectedBand(s, card), reached = reachedBand(done.peak || 0);
+  const q = matchQuality(reached, expected, done.tooHarsh);
+  const rec = [];
+  applyMatch(g, id, q, rec);
+  // Too harsh, with the trust already worn thin: they use the word, then and there.
+  const word = !!done.tooHarsh && (g.chars[id].stats.val <= 3 || g.chars[id].stats.res >= 5);
+  if (card) card.done = true;
+  const snap = { id, kind: 'correction', expected, reached, expectedName: BANDS[expected], reachedName: reached > 4 ? 'Too harsh' : BANDS[reached], quality: q, text: MATCH_TEXT[q], smacks: done.smacks || 0, tooHarsh: !!done.tooHarsh, word, changes: rec, exits: [] };
+  if (word) snap.exits.push(useWord(g, id, 'harsh')); else snap.exits.push(...sweepMoveOns(g));
+  return snap;
+}
+
+const REPRIEVE_EFFECT = {
+  stern: [['wil', -1]],
+  kind: [['val', 1], ['sat', 1]],
+  reflection: [['com', 1], ['wil', -1]],
+};
+function applyReprieve(g, id, kind) {
+  const card = g.cards.find(c => c.id === id), R = C.REPRIEVES[kind];
+  if (!R || g.candle < R.cost) return null;
+  g.candle -= R.cost;
+  const rec = [], unsettled = id === 'goldilocks' && stats(g, id).wil >= 4;
+  for (const [st, d] of REPRIEVE_EFFECT[kind]) changeStat(g, id, st, d, 'reprieve', rec);
+  if (card && card.event && card.event.trap && kind !== 'stern') changeStat(g, id, 'sat', 1, 'reprieve', rec);   // the trap variants: this is what they needed
+  if (unsettled) changeStat(g, id, 'wil', 1, 'reprieve', rec);               // no consequence, so no change
+  if (card) card.done = true;
+  const snap = { id, kind: 'reprieve', reprieve: kind, name: R.name, changes: rec, exits: [] };
+  snap.exits.push(...sweepMoveOns(g));
+  return snap;
+}
+const AFTERCARE_EFFECT = {
+  corner: id => [['com', 1]],
+  lines: () => [['com', 1], ['att', 1]],
+  held: () => [['val', 1], ['res', -1]],
+  warm: () => [['val', 1], ['sat', 1]],
+};
+function applyAftercare(g, id, kind) {
+  const A = C.AFTERCARE[kind];
+  if (!A || g.candle < A.cost) return null;
+  g.candle -= A.cost;
+  const rec = [];
+  for (const [st, d] of AFTERCARE_EFFECT[kind](id)) changeStat(g, id, st, d, 'aftercare', rec);
+  if (kind === 'corner' && stats(g, id).val <= 3) changeStat(g, id, 'res', 1, 'aftercare', rec);
+  const exits = sweepMoveOns(g);
+  return { id, kind, name: A.name, changes: rec, exits };
+}
+
+// ── Evening → next morning ──────────────────────────────────────
+const pendingCards = g => g.cards.filter(c => !c.done && g.roster.includes(c.id));
+function endEvening(g, rng) {
+  g.notices = [];
+  // The word is spoken at the day boundary, before the next chore list is dealt.
+  for (const id of g.roster.slice()) if (wordCalled(stats(g, id))) useWord(g, id, 'worn');
+  backfill(g, rng);
+  g.phase = 'boundary';
+  return g.notices.slice();
+}
+
+const api = { mulberry32, pick, shuffle, weighted, clamp, HOUSE_SIZE, EVENING_CANDLE, BANDS, BAND_CUTS, MATCH_TEXT,
+  newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, sweepMoveOns, moveOn, useWord, backfill,
+  generateChores, startMorning, assign, unassign, allAssigned, choreOf, choreBand, choreEffective, applyChoreBand, resolveChores, resolveDay,
+  occurrence, categoryWeights, fillTemplate, makeEvent, applyEvent, rollEvents, situationalModifier, buildCards,
+  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, pendingCards, endEvening,
+  getRapport, addRapport };
+root.FairyShoeRules = api;
+if (typeof module !== 'undefined' && module.exports) module.exports = api;
+})(typeof window !== 'undefined' ? window : globalThis);
