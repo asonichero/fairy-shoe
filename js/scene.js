@@ -178,7 +178,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   viewEl.appendChild(renderer.domElement);
   const scene = new T.Scene(); scene.background = new T.Color(0x120d08);
   const camera = new T.PerspectiveCamera(35, 1, 0.05, 40);
-  const controls = new T.OrbitControls(camera, renderer.domElement); controls.enableDamping = true;
+  const controls = new T.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.minDistance = 0.35; controls.maxDistance = 6; controls.maxPolarAngle = Math.PI * 0.55;
   const room = Room.buildRoom(scene);
   const resize = () => {
     const w = viewEl.clientWidth || 1, h = viewEl.clientHeight || 1;
@@ -208,6 +208,9 @@ function createStage(viewEl, { onGLProblem } = {}) {
       cam.snap = false;
     }
     controls.update();
+    // The user's orbit stays inside the room: never through a wall, the floor or the ceiling (the view slides along them instead).
+    const lim = Room.HALF - 0.12, cp = camera.position;
+    cp.x = clamp(cp.x, -lim, lim); cp.z = clamp(cp.z, -lim, lim); cp.y = clamp(cp.y, 0.1, Room.HEIGHT - 0.1);
   }
 
   function frame(now) {
