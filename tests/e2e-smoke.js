@@ -8,6 +8,12 @@ const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`,
 async function liveControls(p) {
   const dock = '.dock';
   for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
+  // the buttons are standard angles: after one, the user's own orbit takes over and no button stays lit
+  await p.evaluate(() => __fs.app.stage.controls.dispatchEvent({ type: 'start' }));
+  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'free') throw new Error('orbiting should free the camera');
+  await p.click(`${dock} >> button:text-is("Behind")`);
+  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'behind') throw new Error('a button should return to its angle');
+  await p.click(`${dock} >> button:text-is("Overview")`);
   await p.click(`${dock} >> button:text-is("Bottoms down")`);                        // layers are live: bottoms up
   await p.click(`${dock} >> button:text-is("Bottoms up")`);
   await p.click(`${dock} >> button[aria-label="Pace up"]`); await p.click(`${dock} >> button[aria-label="Strength up"]`);

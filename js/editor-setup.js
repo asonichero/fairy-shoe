@@ -19,6 +19,7 @@ const gamePos = p => p === 'knees' ? 'chair' : p;
 window.EDITOR = {
   Ov, builtIn, gamePos,
   initial: id => Ov.applyDesign(S.clone(S.PRESETS[id]), id),
+  cameraPose: (mode, scn) => SC.cameraPose(mode, { subject: scn.s, giver: scn.g }),
   seatTop: g => SC.chairSeatTop(g),
   furnish: (parent, scn, s, pos, seatTop) => SC.furnishScene(parent, scn, s, gamePos(pos), seatTop),
   poses: (scn, pos) => SC.applyPoseOverrides(scn, gamePos(pos)),

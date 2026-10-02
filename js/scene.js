@@ -129,6 +129,45 @@ function holdChairHands(s, plant) {
   }
 }
 
+// ── Standard camera angles ──────────────────────────────────────
+// Where each standard view puts the camera for a session's two bodies ({ subject, giver }, posed). The stage takes the camera there when
+// a button is pressed; the editor does the same. (Frame: which way the subject faces, how upright they are, where the glutes are.)
+const inRoom = (v, m = 0.3) => { const lim = Room.HALF - m; v.x = clamp(v.x, -lim, lim); v.z = clamp(v.z, -lim, lim); v.y = clamp(v.y, 0.08, Room.HEIGHT - 0.2); return v; };
+function focusOf(ses) {
+  const s = ses.subject, P = s.bones.pelvis.getWorldPosition(new V3()), H = s.bones.head.getWorldPosition(new V3());
+  const lean = new V3(H.x - P.x, 0, H.z - P.z), leanLen = lean.length();
+  let fwd = lean.normalize();
+  if (leanLen < 0.25) { fwd = new V3(0, 0, 1).applyQuaternion(s.bones.pelvis.getWorldQuaternion(new T.Quaternion())); fwd.y = 0; if (fwd.lengthSq() < 1e-4) fwd.set(1, 0, 0); fwd.normalize(); }
+  const up = 1 - clamp(leanLen / 0.5, 0, 1);   // 1 standing, 0 bent over
+  const C = P.clone().addScaledVector(fwd, -0.07); C.y -= 0.03 + 0.03 * up;   // the contact sites: behind and a little below the hip joint
+  return { P, H, fwd, up, C };
+}
+function cameraPose(mode, ses) {
+  ses.subject.group.updateMatrixWorld(true); ses.giver.group.updateMatrixWorld(true);
+  const f = focusOf(ses), g = ses.giver;
+  if (mode === 'behind') {   // square behind the subject, a little above the contact sites, far enough back to take in both cheeks and the thighs
+    const pos = f.C.clone().addScaledVector(f.fwd, -(1.6 + 0.6 * f.up)); pos.y = f.C.y + 0.4 + 0.1 * f.up;
+    return { pos: inRoom(pos, 0.2), tgt: f.C.clone(), fov: 40 };
+  }
+  if (mode === 'shoulder') {   // the player's own view from just over the right shoulder (the striking arm's), looking down at the contact sites
+    const GS = g.bones.upperArmR.getWorldPosition(new V3()), GH = g.bones.head.getWorldPosition(new V3());
+    const out = new V3(GS.x - GH.x, 0, GS.z - GH.z); if (out.lengthSq() < 1e-4) out.set(1, 0, 0); out.normalize();
+    const toward = new V3(f.C.x - GH.x, 0, f.C.z - GH.z); if (toward.lengthSq() < 1e-4) toward.set(1, 0, 0); toward.normalize();
+    const pos = GH.clone().addScaledVector(out, 0.14).addScaledVector(toward, 0.2); pos.y = GH.y - 0.03;
+    return { pos: inRoom(pos, 0.1), tgt: f.C.clone(), fov: 62 };
+  }
+  if (mode === 'floor') {   // the face, from in front of it, at the height that suits the pose
+    const pos = f.H.clone().addScaledVector(f.fwd, 1.7); pos.y = clamp(f.H.y - 0.45, 0.14, 1.2);
+    return { pos: inRoom(pos), tgt: f.H.clone().add(new V3(0, 0.02, 0)), fov: 50 };
+  }
+  // overview: a three-quarter view from behind, on the side away from the player, so the glutes, the player and the implement are in view
+  const GH = g.bones.head.getWorldPosition(new V3());
+  const side = new V3(-f.fwd.z, 0, f.fwd.x); if (side.dot(new V3(GH.x - f.C.x, 0, GH.z - f.C.z)) > 0) side.negate();
+  const dir = f.fwd.clone().multiplyScalar(-Math.cos(0.6)).addScaledVector(side, Math.sin(0.6));
+  const pos = f.C.clone().addScaledVector(dir, 2.5 + 0.5 * f.up); pos.y = f.C.y + 0.6 + 0.5 * f.up;
+  return { pos: inRoom(pos, 0.25), tgt: f.C.clone().addScaledVector(f.fwd, 0.15).add(new V3(0, 0.1 + 0.3 * f.up, 0)), fov: 35 };
+}
+
 // ── The stage ───────────────────────────────────────────────────
 function createStage(viewEl, { onGLProblem } = {}) {
   const renderer = new T.WebGLRenderer({ antialias: true });
@@ -151,67 +190,23 @@ function createStage(viewEl, { onGLProblem } = {}) {
   const marks = {};   // resident id → { marks, stripes }: kept through the day
   let session = null, running = false, last = 0, clock = 0, onFrame = null;
 
-  // ── Cameras. 'overview' is free to orbit; the others follow the action: each frame they are aimed from where the
-  // subject and the player are, and eased toward, so movement stays in view.
-  const cam = { mode: 'overview', fov: 35, handover: 0, pos: new V3(), tgt: new V3() };
-  // The subject's frame: which way they face, how upright they are, and where the contact sites are (the glutes: behind and a little
-  // below the hip joint). Facing is the way the body leans when bent over or across a lap, and where the pelvis points when standing.
-  function focusOf(ses) {
-    const s = ses.subject, P = s.bones.pelvis.getWorldPosition(new V3()), H = s.bones.head.getWorldPosition(new V3());
-    const lean = new V3(H.x - P.x, 0, H.z - P.z), leanLen = lean.length();
-    let fwd = lean.normalize();
-    if (leanLen < 0.25) { fwd = new V3(0, 0, 1).applyQuaternion(s.bones.pelvis.getWorldQuaternion(new T.Quaternion())); fwd.y = 0; if (fwd.lengthSq() < 1e-4) fwd.set(1, 0, 0); fwd.normalize(); }
-    const up = 1 - clamp(leanLen / 0.5, 0, 1);   // 1 standing, 0 bent over
-    const C = P.clone().addScaledVector(fwd, -0.07); C.y -= 0.03 + 0.03 * up;
-    return { P, H, fwd, up, C };
-  }
-  const inRoom = (v, m = 0.3) => { const lim = Room.HALF - m; v.x = clamp(v.x, -lim, lim); v.z = clamp(v.z, -lim, lim); v.y = clamp(v.y, 0.08, Room.HEIGHT - 0.2); return v; };
-  // Overview: a three-quarter view from behind the subject, from the side away from the player, so the glutes, the player and the
-  // implement are all in view. (It is the starting point; the view can be orbited from there.)
-  function overviewPose(ses) {
-    const f = focusOf(ses), GH = ses.giver.bones.head.getWorldPosition(new V3());
-    const side = new V3(-f.fwd.z, 0, f.fwd.x); if (side.dot(new V3(GH.x - f.C.x, 0, GH.z - f.C.z)) > 0) side.negate();
-    const dir = f.fwd.clone().multiplyScalar(-Math.cos(0.6)).addScaledVector(side, Math.sin(0.6));
-    const pos = f.C.clone().addScaledVector(dir, 2.5 + 0.5 * f.up); pos.y = f.C.y + 0.6 + 0.5 * f.up;
-    return { pos: inRoom(pos, 0.25), tgt: f.C.clone().addScaledVector(f.fwd, 0.15).add(new V3(0, 0.1 + 0.3 * f.up, 0)), fov: 35 };
-  }
-  function desired(ses) {
-    const f = focusOf(ses), g = ses.giver;
-    if (cam.mode === 'behind') {   // square behind the subject, a little above the contact sites, far enough back to take in both cheeks and the thighs
-      const pos = f.C.clone().addScaledVector(f.fwd, -(1.6 + 0.6 * f.up)); pos.y = f.C.y + 0.4 + 0.1 * f.up;
-      return { pos: inRoom(pos, 0.2), tgt: f.C.clone(), fov: 40 };
-    }
-    if (cam.mode === 'shoulder') {   // the player's own view from just over the right shoulder (the striking arm's), looking down at the contact sites
-      const GS = g.bones.upperArmR.getWorldPosition(new V3()), GH = g.bones.head.getWorldPosition(new V3());
-      const out = new V3(GS.x - GH.x, 0, GS.z - GH.z); if (out.lengthSq() < 1e-4) out.set(1, 0, 0); out.normalize();   // from the head toward that shoulder
-      const toward = new V3(f.C.x - GH.x, 0, f.C.z - GH.z); if (toward.lengthSq() < 1e-4) toward.set(1, 0, 0); toward.normalize();
-      const pos = GH.clone().addScaledVector(out, 0.14).addScaledVector(toward, 0.2); pos.y = GH.y - 0.03;   // where the eyes are: ahead of the face, over that shoulder, so the player's own chest is behind the lens
-      return { pos: inRoom(pos, 0.1), tgt: f.C.clone(), fov: 62 };
-    }
-    if (cam.mode === 'floor') {   // the face, from in front of it, at the height that suits the pose: on the floor when the head hangs low, lower than the face when it is raised
-      const pos = f.H.clone().addScaledVector(f.fwd, 1.7); pos.y = clamp(f.H.y - 0.45, 0.14, 1.2);
-      return { pos: inRoom(pos), tgt: f.H.clone().add(new V3(0, 0.02, 0)), fov: 50 };
-    }
-    return null;
-  }
+  // Standard angles (see cameraPose): a button takes the camera there; from then on the view is the user's to orbit, zoom and pan.
+  const cam = { mode: 'overview', go: null, snap: false, framed: false };
+  let api_onCam = null;
+  controls.addEventListener('start', () => { cam.go = null; cam.mode = 'free'; if (api_onCam) api_onCam(); });   // the user has taken the view
   function setCamera(mode, snap) {
     if (!CAMERAS.some(c => c[0] === mode)) return;
-    cam.mode = mode; cam.snap = !!snap; controls.enabled = mode === 'overview';
-    if (mode === 'overview') { if (session) { cam.go = overviewPose(session); cam.handover = 1; } }
-    else cam.go = null;
+    cam.mode = mode; cam.snap = !!snap;
+    cam.go = session ? cameraPose(mode, session) : null;
   }
   function updateCamera(dt) {
-    const ease = cam.snap ? 1 : 1 - Math.exp(-dt * (cam.mode === 'overview' ? 5 : 4.5));
-    cam.snap = false;
-    let want = session && cam.mode !== 'overview' ? desired(session) : null;
-    if (!want && cam.go) want = cam.go;
-    if (want) {
-      camera.position.lerp(want.pos, ease); controls.target.lerp(want.tgt, ease);
-      camera.fov += (want.fov - camera.fov) * ease; camera.updateProjectionMatrix();
-      camera.lookAt(controls.target);
-      if (cam.go && camera.position.distanceTo(cam.go.pos) < 0.03) cam.go = null;
-      if (cam.mode !== 'overview') return;
-    } else if (cam.mode === 'overview' && Math.abs(camera.fov - 35) > 0.05) { camera.fov += (35 - camera.fov) * ease; camera.updateProjectionMatrix(); }
+    if (cam.go) {
+      const ease = cam.snap ? 1 : 1 - Math.exp(-dt * 5);
+      camera.position.lerp(cam.go.pos, ease); controls.target.lerp(cam.go.tgt, ease);
+      camera.fov += (cam.go.fov - camera.fov) * ease; camera.updateProjectionMatrix();
+      if (camera.position.distanceTo(cam.go.pos) < 0.01 && controls.target.distanceTo(cam.go.tgt) < 0.01) cam.go = null;
+      cam.snap = false;
+    }
     controls.update();
   }
 
@@ -281,7 +276,8 @@ function createStage(viewEl, { onGLProblem } = {}) {
       }
       scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
-      if (cam.mode === 'overview') { s.group.updateMatrixWorld(true); g.group.updateMatrixWorld(true); const o = overviewPose({ subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = 35; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; }
+      if (cam.mode !== 'free') { const o = cameraPose(cam.mode, { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; }
+      else if (!cam.framed) { const o = cameraPose('overview', { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.framed = true; }
     }
 
     const api = {
@@ -362,8 +358,8 @@ function createStage(viewEl, { onGLProblem } = {}) {
   // The editor draws its own things in the room: a per-frame callback keeps the loop going with or without a session.
   function loop(fn) { onFrame = fn; if (fn && !running) { running = true; last = performance.now(); requestAnimationFrame(frame); } if (!fn && !session) running = false; }
   function clearMarks() { for (const k of Object.keys(marks)) delete marks[k]; }
-  return { begin, end, loop, clearMarks, setCamera, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
+  return { begin, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

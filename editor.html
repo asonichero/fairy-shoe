@@ -96,6 +96,8 @@
   <div class="tabs" id="sc-position"></div>
   <div class="sub" style="margin:8px 0 3px">Skirt (for anyone who wears one): it drapes over the pose as cloth, or is hitched up at the back, or is left off</div>
   <div class="tabs" id="sc-skirt"></div>
+  <div class="sub" style="margin:8px 0 3px">Camera angles (standard views of the scene as the game frames it; drag, scroll and right-drag still move the view)</div>
+  <div class="tabs" id="sc-cams"></div>
   <div class="sub" style="margin:8px 0 3px">Beat</div>
   <div class="poses" id="sc-beats"></div>
   <div class="row" style="margin-top:8px"><label><span>Swing speed</span><span id="v-t-speed">1.00×</span></label><input id="s-t-speed" type="range" min="0.25" max="3" step="0.05" value="1"></div>
@@ -580,9 +582,9 @@ const aimAtFace = () => {
   controls.target.copy(f); camera.position.copy(f).addScaledVector(fwd, dist);
   camera.fov = 30; camera.updateProjectionMatrix(); controls.update();
 };
-toggle('t-head', 'headCam', aimAtFace);
+toggle('t-head', 'headCam', () => { view.fovHeld = false; camGo = null; aimAtFace(); });
 function followHead() {
-  if (!view.headCam) { if (camera.fov !== 35) { camera.fov = 35; camera.updateProjectionMatrix(); } return; }
+  if (!view.headCam) { if (view.fovHeld) return; if (camera.fov !== 35) { camera.fov = 35; camera.updateProjectionMatrix(); } return; }
   const c = headOf(); if (!c) return;
   if (c !== lastHead) {
     if (headKey() !== lastKey) { aimAtFace(); return; }   // another character: look at them afresh
@@ -771,6 +773,19 @@ Object.keys(S.IMPLEMENTS).forEach(name => {
   b.classList.toggle('on', sc.skirt === id);
   document.getElementById('sc-skirt').appendChild(b);
 });
+// The game's standard camera angles, for the scene: click one to go there, then orbit as usual.
+[['overview', 'Overview'], ['behind', 'Behind'], ['shoulder', 'Over your shoulder'], ['floor', 'Face']].forEach(([id, label]) => {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.cam = id; b.title = 'Standard angle';
+  b.onclick = () => {
+    if (!sc.on || !scn) { document.getElementById('sc-on').click(); }
+    if (!scn) return;
+    view.headCam = false; view.fovHeld = true; camGo = EDITOR.cameraPose(id, scn);
+    document.querySelectorAll('#sc-cams button').forEach(x => x.classList.toggle('on', x === b));
+  };
+  document.getElementById('sc-cams').appendChild(b);
+});
+controls.addEventListener('start', () => { camGo = null; document.querySelectorAll('#sc-cams button').forEach(x => x.classList.remove('on')); });
 function refreshImplements() { document.querySelectorAll('#sc-implements button').forEach(b => b.classList.toggle('on', b.dataset.impl === sc.implement)); }
 refreshImplements(); refreshPositions();
 document.getElementById('sc-sound').onclick =e => { sc.sound = !sc.sound; e.target.classList.toggle('on', sc.sound); };
@@ -1241,6 +1256,7 @@ document.getElementById('pe-report').onclick = () => {
 // ════════════════════════════════════════════════════════════════
 // LOOP
 // ════════════════════════════════════════════════════════════════
+let camGo = null;
 const clock = new THREE.Clock();
 function animate() {
   requestAnimationFrame(animate);
@@ -1269,6 +1285,11 @@ function animate() {
   if (scn && scn.tool && scn.tool.grp) scn.tool.grp.userData.obb = true;
   for (const ch of onStage) S.skirtStep(ch, dt, onStage, [scn && scn.bench, scn && scn.tool && scn.tool.grp]);
   for (const ch of onStage) S.bunchStep(ch);   // lowered garments' gathered waistbands
+  if (camGo) {   // a standard camera angle: eased to, then the view is yours again
+    const e = 1 - Math.exp(-dt * 5);
+    camera.position.lerp(camGo.pos, e); controls.target.lerp(camGo.tgt, e); camera.fov += (camGo.fov - camera.fov) * e; camera.updateProjectionMatrix();
+    if (camera.position.distanceTo(camGo.pos) < 0.01 && controls.target.distanceTo(camGo.tgt) < 0.01) camGo = null;
+  }
   followHead();
   controls.update();
   renderer.render(scene, camera);

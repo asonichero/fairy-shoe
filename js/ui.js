@@ -375,7 +375,7 @@ function buildLiveDock(ses, card) {
   const info = h('div', { class: 'sub' }), end = h('button', { class: 'primary big', onclick: () => finishLive(ses, card) }, 'End the correction');
   const dock = h('div', { class: 'dock' },
     h('h2', {}, d.name), h('div', { class: 'sub', id: 'subline' }), h('h4', {}, 'How they are'), reading, meter, aimText,
-    h('h4', {}, 'Where you are looking from'), cams,
+    h('h4', {}, 'Camera'), h('div', { class: 'sub' }, 'Drag to orbit, scroll to zoom, right-drag to pan. These return to a standard angle.'), cams,
     h('h4', {}, 'Position'), posBtn, h('h4', {}, 'Implement'), impBtn, h('h4', {}, 'What they wear'), layers,
     h('h4', {}, 'Your hand'), ...steppers.map(s => s.el), h('div', { class: 'pair' }, smack, run), info,
     h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. ', 'Space smacks.'), end);
@@ -391,7 +391,7 @@ function buildLiveDock(ses, card) {
     steppers[2].minus.disabled = ses.runLength <= SC.RUN[0]; steppers[2].plus.disabled = ses.runLength >= SC.RUN[SC.RUN.length - 1];
     $('#subline').textContent = POS[ses.position].label + ' · ' + IMPL[ses.implement].label;
   };
-  ses.syncDock = sync; sync();
+  ses.syncDock = sync; sync(); app.stage.onCameraTaken(() => sync());
   let spoke = false, last = 0;
   ses.onChange = () => {
     const now = performance.now(); if (now - last < 80) return; last = now;
