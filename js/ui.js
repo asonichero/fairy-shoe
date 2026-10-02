@@ -293,7 +293,7 @@ async function transition(lines, minMs, work) {
 const ctxFor = id => ({ name: CH[id].name, pron: CH[id].pronouns, title: app.title });
 const tell = (text, id, extra) => R.fillTemplate(text, { ...ctxFor(id), ...extra });
 // Pre-sitting layer choices: what the resident wears for it (the rest can be changed as you go).
-const defaultLayers = () => ({ bottoms: true, briefs: false, skirt: false });
+const defaultLayers = () => ({ bottoms: true, briefs: false, skirt: 'down' });
 
 // ── Setting up the correction ───────────────────────────────────
 function renderSetup(card) {
@@ -302,7 +302,7 @@ function renderSetup(card) {
   const dock = h('div', { class: 'dock' });
   const sample = B.spec(id).wardrobe;
   const paint = () => {
-    const layerBtn = (name, avail) => avail ? h('button', { class: set.layers[name] ? 'on' : '', disabled: name === 'briefs' && !set.layers.bottoms, onclick: () => { set.layers[name] = !set.layers[name]; if (name === 'bottoms' && !set.layers.bottoms) set.layers.briefs = false; paint(); } }, SC.LAYER_LABELS[name][set.layers[name] ? 0 : 1]) : null;
+    const layerBtn = (name, avail) => avail ? h('button', { class: set.layers[name] && set.layers[name] !== 'off' ? 'on' : '', disabled: name === 'briefs' && !set.layers.bottoms, onclick: () => { set.layers[name] = SC.layerNext(name, set.layers[name]); if (name === 'bottoms' && !set.layers.bottoms) set.layers.briefs = false; paint(); } }, SC.layerLabel(name, set.layers[name])) : null;
     dock.replaceChildren(h('h2', {}, d.name), h('div', { class: 'sub' }, 'Choose where and how to begin. Position, implement and what they wear can all be changed once you are under way.'),
       h('h4', {}, 'Position'), h('div', { class: 'tabs' }, SC.POSITIONS.map(([v, l]) => h('button', { class: set.position === v ? 'on' : '', disabled: v === 'spread' && !dual(set.implement), title: POS[v].blurb, onclick: () => { set.position = v; paint(); } }, l))),
       h('div', { class: 'sub' }, POS[set.position].blurb),
@@ -359,7 +359,7 @@ function buildLiveDock(ses, card) {
   const impBtn = h('button', { class: 'wide', onclick: () => { ses.stop(); chooseImplement(ses.implement, ses.position, doImplement); } });
   // layers
   const layerBtns = {}; const avail = ses.layerAvailable();
-  const layers = h('div', { class: 'tabs' }, ['skirt', 'bottoms', 'briefs'].filter(n => avail[n]).map(n => (layerBtns[n] = h('button', { onclick: () => { ses.setLayer(n, !ses.layers[n]); sync(); } }))));
+  const layers = h('div', { class: 'tabs' }, ['skirt', 'bottoms', 'briefs'].filter(n => avail[n]).map(n => (layerBtns[n] = h('button', { onclick: () => { ses.setLayer(n, SC.layerNext(n, ses.layers[n])); sync(); } }))));
   // pace, strength, run length: multipliers with − and +
   const stepper = (label, get, step, title) => {
     const val = h('b', {}, ''), minus = h('button', { onclick: () => { step(-1); sync(); }, 'aria-label': label + ' down' }, '−'), plus = h('button', { onclick: () => { step(1); sync(); }, 'aria-label': label + ' up' }, '+');
@@ -384,7 +384,7 @@ function buildLiveDock(ses, card) {
   const sync = () => {
     cams.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === app.stage.cameraMode));
     posBtn.textContent = 'Change position…  (' + POS[ses.position].label + ')'; impBtn.textContent = 'Change implement…  (' + IMPL[ses.implement].label + ')';
-    for (const [n, b] of Object.entries(layerBtns)) { b.classList.toggle('on', !!ses.layers[n]); b.textContent = SC.LAYER_LABELS[n][ses.layers[n] ? 0 : 1]; b.disabled = n === 'briefs' && !ses.layers.bottoms; }
+    for (const [n, b] of Object.entries(layerBtns)) { b.classList.toggle('on', !!ses.layers[n] && ses.layers[n] !== 'off'); b.textContent = SC.layerLabel(n, ses.layers[n]); b.disabled = n === 'briefs' && !ses.layers.bottoms; }
     steppers.forEach(s => { s.val.textContent = s.get(); });
     steppers[0].minus.disabled = ses.pace <= SC.PACE[0]; steppers[0].plus.disabled = ses.pace >= SC.PACE[SC.PACE.length - 1];
     steppers[1].minus.disabled = ses.strengthMult <= SC.STRENGTH[0]; steppers[1].plus.disabled = ses.strengthMult >= SC.STRENGTH[SC.STRENGTH.length - 1];

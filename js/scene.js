@@ -22,7 +22,12 @@ const IMPLEMENTS = [
   ['rod', 'Willow switch', 'Thin, fast, and leaves stripes. Hardest on a first stroke.'],
   ['paddle', 'Cedar paddle', 'Broad and heavy: both sides at once, a deep ache.'],
 ];
-const LAYER_LABELS = { skirt: ['Skirt down', 'Skirt hitched up'], bottoms: ['Bottoms down', 'Bottoms up'], briefs: ['Briefs down', 'Briefs up'] };
+// Bottoms and briefs are down or up; a skirt is down (it drapes, and is simulated), hitched up at the back, or off.
+const SKIRT_MODES = ['down', 'up', 'off'];
+const skirtMode = v => v === true ? 'down' : !v ? 'off' : SKIRT_MODES.includes(v) ? v : 'down';
+const LAYER_LABELS = { skirt: { down: 'Skirt down', up: 'Skirt hitched up', off: 'Skirt off' }, bottoms: ['Bottoms down', 'Bottoms up'], briefs: ['Briefs down', 'Briefs up'] };
+const layerLabel = (name, v) => name === 'skirt' ? LAYER_LABELS.skirt[skirtMode(v)] : LAYER_LABELS[name][v ? 0 : 1];
+const layerNext = (name, v) => name === 'skirt' ? SKIRT_MODES[(SKIRT_MODES.indexOf(skirtMode(v)) + 1) % SKIRT_MODES.length] : !v;
 const CAMERAS = [['overview', 'Overview'], ['behind', 'Behind'], ['shoulder', 'Over your shoulder'], ['floor', 'From the floor']];
 const PACE = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const STRENGTH = [0.4, 0.6, 0.8, 1, 1.25, 1.5];
@@ -219,7 +224,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   function begin(opts) {
     if (session) session.dispose();
     const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
-      layers: { bottoms: true, briefs: false, skirt: false, ...(opts.layers || {}) }, implement: opts.implement || 'hand', position: opts.position || 'case' };
+      layers: { bottoms: true, briefs: false, skirt: 'down', ...(opts.layers || {}) }, implement: opts.implement || 'hand', position: opts.position || 'case' };
     let g = null, s = null, scn = null, furniture = null, plant = null;
 
     const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
@@ -231,12 +236,18 @@ function createStage(viewEl, { onGLProblem } = {}) {
       for (const c of [g, s]) S.disposeCharacter(c);
       g = s = scn = furniture = plant = null;
     }
-    function applyLayers() {
+    function applyLayers(settle) {
       const L = st.layers;
       S.setLowered(s, 'bottom', !!L.bottoms);
       S.setLowered(s, 'briefs', !!L.bottoms && !!L.briefs);
-      if (s.skirt) S.setSkirtOff(s, !L.skirt);
+      if (!s.skirt) return;
+      const mode = skirtMode(L.skirt), was = s.skirt.off ? 'off' : s.skirt.gathered ? 'up' : 'down';
+      S.setSkirtOff(s, mode === 'off');
+      if (mode !== 'off') S.setSkirtGathered(s, mode === 'up');
+      if (settle && mode !== 'off' && mode !== was) settleSkirt();
     }
+    // The skirt is put on over the pose she is already in: it is dropped and draped (see Starlight.settleSkirt).
+    function settleSkirt() { scn.update(0.016); scn.update(0.016); S.settleSkirt(s, [g], [scn.bench]); }
     function make(cfg = {}) {
       const position = cfg.position || st.position;
       const oldP = scn && scn.pain;
@@ -257,6 +268,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       scn.timing = { ...scn.timing, speed: D.speed };
       furniture = null; plant = furnishScene(scene, scn, s, position, seatTop);
       applyPoseOverrides(scn, position);
+      if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
       if (oldP && scn.pain) {
         for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
         scn.pain.update(cfg.elapsed || 0, false);   // the time it took
@@ -275,7 +287,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       layerAvailable() { const w = s.spec.m.wardrobe || {}; return { skirt: !!s.skirt, bottoms: !!w.bottom, briefs: !!w.briefs }; },
       setLayer(name, on) {
         st.layers[name] = on; if (name === 'bottoms' && !on) st.layers.briefs = false;
-        applyLayers();
+        applyLayers(true);
       },
       // A live change of implement (to or from the hand). Anything else is fetched: see rebuild.
       setImplement(n) { if (st.position === 'spread' && !S.IMPLEMENTS[n].dual) return false; st.implement = n; scn.setImplement(n); scn.setBeat('relaxed'); return true; },
@@ -317,6 +329,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
         if (P && P.tooHarsh && !st.ended) { st.mode = 'idle'; st.tooHarsh = true; }
         const on = [g, s];
         for (const ch of on) S.animateCharacter(ch, dt, t);
+        scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
         scn.update(dt);
         if (plant) holdChairHands(s, plant);   // hands on the chair
         for (const ch of on) S.fadeMarks(ch, dt);
@@ -345,5 +358,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, end, loop, clearMarks, setCamera, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

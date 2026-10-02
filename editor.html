@@ -94,6 +94,8 @@
   <div class="tabs" id="sc-subject"></div>
   <div class="sub" style="margin:8px 0 3px">Position</div>
   <div class="tabs" id="sc-position"></div>
+  <div class="sub" style="margin:8px 0 3px">Skirt (for anyone who wears one): it drapes over the pose as cloth, or is hitched up at the back, or is left off</div>
+  <div class="tabs" id="sc-skirt"></div>
   <div class="sub" style="margin:8px 0 3px">Beat</div>
   <div class="poses" id="sc-beats"></div>
   <div class="row" style="margin-top:8px"><label><span>Swing speed</span><span id="v-t-speed">1.00×</span></label><input id="s-t-speed" type="range" min="0.25" max="3" step="0.05" value="1"></div>
@@ -249,7 +251,7 @@ scene.add(floor);
 const view = { lineup: false, skeleton: false, weights: false, wire: false, spin: false, voxel: 0.010, pose: 'Relaxed', selected: ORDER[0] };
 let chars = {};
 // Discipline scene settings (applied to the engine's scene state when it's built).
-const sc = { sound: true, position: 'lap', implement: 'hand', on: false, giver: 'keeper-a', subject: ORDER[0], beat: 'relaxed', loop: false, side: 'L', timing: { ...S.DEFAULT_TIMING }, palmAim: 0.65 };
+const sc = { sound: true, position: 'lap', implement: 'hand', on: false, giver: 'keeper-a', subject: ORDER[0], beat: 'relaxed', loop: false, side: 'L', timing: { ...S.DEFAULT_TIMING }, palmAim: 0.65, skirt: 'down' };
 let scn = null;   // the engine's scene state while shown
 // Pose editor state (see POSE EDITOR); while `on`, the scene is frozen and edited by hand.
 const PE = { on: false };
@@ -687,6 +689,7 @@ function buildScene() {
   scn = S.createDisciplineScene(scene, g, s, { lower: !!lowered[sc.subject], position: sc.position });
   scn.chairPlant = EDITOR.furnish(scene, scn, s, sc.position, seatTop);   // cottage furniture in place of the engine's cases
   EDITOR.poses(scn, sc.position);                                         // saved pose edits, as the game applies them
+  EDITOR.skirt(scn, sc.skirt);                                            // the subject's skirt, draped over the pose
   if (lowered[sc.giver]) S.setLowered(g, 'bottom', true);
   for (const c of [g, s]) if (briefsDown[c.key]) S.setLowered(c, 'briefs', true);
   scn.onImpact = (side, strength) => Sound.clap(strength);
@@ -770,6 +773,14 @@ Object.keys(S.IMPLEMENTS).forEach(name => {
   b.dataset.impl = name;
   b.onclick = () => { if (PE.on) PE.keep(); sc.implement = name; if (scn) scn.setImplement(name); if (PE.on) PE.settle(); refreshImplements(); };
   document.getElementById('sc-implements').appendChild(b);
+});
+// The skirt in the scene: down (simulated cloth), hitched up at the back, or off.
+[['down', 'Down'], ['up', 'Hitched up'], ['off', 'Off']].forEach(([id, label]) => {
+  const b = document.createElement('button');
+  b.textContent = label; b.dataset.skirt = id;
+  b.onclick = () => { sc.skirt = id; document.querySelectorAll('#sc-skirt button').forEach(x => x.classList.toggle('on', x.dataset.skirt === id)); if (sc.on) buildScene(); };
+  b.classList.toggle('on', sc.skirt === id);
+  document.getElementById('sc-skirt').appendChild(b);
 });
 function refreshImplements() { document.querySelectorAll('#sc-implements button').forEach(b => b.classList.toggle('on', b.dataset.impl === sc.implement)); }
 refreshImplements(); refreshPositions();
@@ -1251,7 +1262,7 @@ function animate() {
     ch.group.position.y += (-(ch.stanceDrop || 0) - ch.group.position.y) * (1 - Math.exp(-dt * 7));
     if (view.spin) ch.group.rotation.y += dt * 0.5;
   }
-  if (scn && !PE.on) { scn.update(dt); if (scn.chairPlant) EDITOR.hold(scn.s, scn.chairPlant); }
+  if (scn && !PE.on) { scn.clothLift = EDITOR.lift(scn); scn.update(dt); if (scn.chairPlant) EDITOR.hold(scn.s, scn.chairPlant); }
   if (PE.on) PE.frame();
   // Marks fade slowly.
   for (const ch of [...Object.values(chars), ...(scn ? [scn.g, scn.s] : [])]) S.fadeMarks(ch, dt);

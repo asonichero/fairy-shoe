@@ -44,7 +44,7 @@ You choose position, implement and what they wear, then everything is live:
 - **Pace** and **Strength** are multipliers with − / + buttons (how fast you swing and how soon the next comes; how hard each lands). **Run** sets how many smacks a run gives.
 - **Change position…** opens a list; a short passage of narration plays while the room is set again. The pain, the marks and the clock carry over. (Over the table, across the lap, hands on head, hands on the chair, bent over with feet apart. The last needs the switch or paddle.)
 - **Change implement…** opens a list. The hand is simply put down; anything else has to be fetched, which is a short exchange: the options on offer, and how the resident answers, depend on their stats and how far along they are (ask politely, tell them, explain what it is for, say nothing and fetch it yourself, or check they are all right to go on). The first exchange of a correction can nudge a stat; the resident then comes back, returns to position, and the new implement is in hand.
-- **Layers** (skirt, bottoms, briefs) are toggled live. Clothing over the struck area cushions the sting, as in the engine's pain model.
+- **Layers** (skirt, bottoms, briefs) are toggled live; the skirt cycles *down* (it drapes as cloth and the palm lands on it), *hitched up* at the back, or *off*. Clothing over the struck area cushions the sting, as in the engine's pain model.
 - **Cameras**: Overview (free to orbit), Behind (on the contact sites), Over your shoulder (the player's own view of them), From the floor (on the resident's face, far enough back to keep their movement in frame).
 
 The engine's pain model (tolerance, resilience, implement, speed, dread, dwell, clothing, tender skin) turns what you
@@ -70,6 +70,16 @@ is already thin (Valued ≤ 3 or Resentment ≥ 5) they use the word on the spot
 ### The room
 
 A bare room in a medieval cottage: boarded floor, lime-washed stone walls, beamed ceiling, a window that lights the scene, a hearth, a door, a broom and a bucket. The furniture is plain joinery built to the engine's dimensions in `js/room.js`: the plank-seated chair the player sits in (which a resident can also bend over, hands on the seat) and a table with a thick plank top (which they bend over at full height).
+
+### Skirts
+
+A skirt is simulated cloth (`SKIRT` and `skirtStep` in `starlight-engine.js`), and in the discipline scene it is back on by default.
+
+- **Weight.** It is stepped at a fixed 120 steps a second whatever the frame rate, under real gravity with very little air drag, with mass that grows toward the hem (a sewn hem), so it falls, swings and settles instead of floating. Dropped 10 cm it falls 4.8 cm in the first 0.1 s (free fall is 4.9) and is at rest within a second, the same at 20, 60 and 120 frames a second.
+- **Folds, not a lampshade.** Stretch is resisted hard and capped at 5%; squashing is resisted much less, so the cloth buckles into folds instead of holding a bell shape; bending is weak; neighbours damp each other so it doesn't ring.
+- **Putting it on.** `settleSkirt` walks the body from standing into the pose with the cloth falling and draping, then restores the pose exactly, so a bent-over subject's skirt hangs and rides the way it would have if she had bent over in it (a short skirt rides up over the back, a longer one falls around the hips) rather than lying on her back.
+- **No clipping.** Collisions are resolved so that bodies and furniture come first, then other people's hands, and the cloth's own body last, with the floor having the last word, so wherever cloth is squeezed (a palm pressing it onto skin) it ends on the skin and never inside it. Particles can't move further than 16 mm in a step, so they can't tunnel through the skin test; the cloth's layers push each other apart; the palm is held a cloth's thickness further out so it lands on the cloth.
+- **Tests.** `tests/skirt-physics.js` checks the fall and its frame-rate independence, and that nothing ends up inside the body, speeds stay sane and the mesh stays finite in every position and with several implements.
 
 ### Goodbyes
 
@@ -130,4 +140,5 @@ js/ui.js              interface and game flow
 tests/rules.test.js   unit tests for the rules, including a long simulated run
 tests/overrides.test.js  pose-report / design parsing, merging, and the implement exchange
 tests/e2e-smoke.js    two days in headless Chromium, including every live control
+tests/skirt-physics.js + skirt.html  the cloth: weight, frame-rate independence, no clipping
 ```
