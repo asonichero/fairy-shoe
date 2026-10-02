@@ -255,3 +255,19 @@ test('a save survives JSON', () => {
   const g2 = JSON.parse(JSON.stringify(g)); assert.deepEqual(g2, g);
   R.assign(g2, 0, 0, 'red');   // still playable
 });
+
+test('farewell scenes: every resident, both kinds, every mood, filled and with a choice', () => {
+  for (const id of C.ORDER) for (const kind of ['moveon', 'word']) for (const mood of ['willing', 'sullen', 'cheeky', 'flustered', 'plain']) for (const why of ['harsh', 'worn']) {
+    const beats = R.farewellScene(kind, id, { why, mood, title: 'Ma\'am' });
+    assert.ok(beats.some(b => b.ask && b.ask.length === 3), id + kind);
+    const text = JSON.stringify(beats);
+    assert.ok(!/\{\w+\}/.test(text), id + ' ' + kind + ' ' + mood + ': ' + (text.match(/\{\w+\}/) || [])[0]);
+    assert.ok(/Ma'am/.test(text) || kind === 'moveon' || kind === 'word');
+  }
+});
+
+test('the word notice carries how they were, captured before the reset', () => {
+  const g = house(['jack', 'red', 'snow']); g.chars.jack.stats.res = 7; g.chars.jack.stats.val = 2;
+  const n = R.useWord(g, 'jack', 'worn');
+  assert.equal(n.mood, 'sullen'); assert.deepEqual(g.chars.jack.stats, C.CHARACTERS.jack.base);
+});

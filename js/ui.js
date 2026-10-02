@@ -116,9 +116,55 @@ function noticeCard(n) {
   if (n.type === 'moveon') return h('div', { class: 'notice' }, h('h3', {}, d.name + ' has moved on'), h('p', { class: 'say' }, fmt(d.lines.leave)), h('p', {}, 'They are in your Collection now, for good. The house will take in someone new.'));
   return h('div', { class: 'notice word' }, h('h3', {}, d.name + ' used the word'), h('p', { class: 'say' }, fmt(C.SAYINGS.word[0])), h('p', {}, 'It stopped, as it should. ' + d.name + ' has packed up and gone, with nothing held against them, and starts again, fresh, if the house is ever theirs again.'));
 }
+// Arrivals are cards; moving on and the word are scenes. Anyone leaving is seen off first, then whoever has come in is shown.
 function showNotices(title, notices, then, label) {
-  const o = $('#overlay'); o.dataset.dismiss = 'no';
-  modal(h('h2', {}, title), notices.map(noticeCard), h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: () => { closeModal(); then(); } }, label || 'Continue')));
+  const scenes = notices.filter(n => n.type === 'moveon' || n.type === 'word'), rest = notices.filter(n => !scenes.includes(n));
+  const showRest = () => {
+    if (!rest.length) return then();
+    const o = $('#overlay'); o.dataset.dismiss = 'no';
+    modal(h('h2', {}, title), rest.map(noticeCard), h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: () => { closeModal(); then(); } }, label || 'Continue')));
+  };
+  if (scenes.length) playScenes(scenes).then(showRest); else showRest();
+}
+async function playScenes(list) { for (const n of list) if (!n.played) await playScene(n); }
+
+// A goodbye: the resident standing in the room, a few beats of narration and talk, and a choice for you. (Lines in content.js SCENES.)
+async function playScene(notice) {
+  notice.played = true;
+  const S = window.Starlight, id = notice.id, d = CH[id], box = $('#scene');
+  teardownLive(); closeModal(); say(null, null); setScreen(h('div'));
+  const stage = await ensureStage();
+  let ch = null;
+  await busy('', async () => {
+    showStage(true);
+    ch = S.buildCharacter(S.clone(B.spec(id)), { voxel: 0.011, key: id });
+    stage.scene.add(ch.group); ch.helper.visible = false; S.resetCharacter(ch, notice.type === 'word' ? 'Downcast' : 'Watch');
+    stage.camera.position.set(0.5, 1.25, 3.4); stage.controls.target.set(0, 0.85, 0); stage.controls.enabled = true; stage.camera.fov = 35; stage.camera.updateProjectionMatrix();
+    stage.loop((dt, t) => { S.animateCharacter(ch, dt, t); ch.group.updateMatrixWorld(true); S.hairStep(ch, dt, S.bodyColliders(ch)); S.faceStep(ch, dt); S.skirtStep(ch, dt, [ch], []); });
+  });
+  const beats = R.farewellScene(notice.type === 'word' ? 'word' : 'moveon', id, { why: notice.why, mood: notice.mood, title: app.title });
+  await new Promise(done => {
+    let i = 0;
+    const show = (who, text, then, extra) => {
+      const line = h('p', { class: 'sline ' + who }, who === 'r' ? [h('b', {}, d.name), ' '] : null, text);
+      box.replaceChildren(line, extra || h('div', { class: 'row' }, h('button', { class: 'primary', onclick: then }, 'Continue')));
+    };
+    const next = () => {
+      if (i >= beats.length) return done();
+      const b = beats[i++];
+      if (b.n) show('n', b.n, next);
+      else if (b.r) show('r', b.r, next);
+      else {
+        box.replaceChildren(h('p', { class: 'sline n' }, 'What do you say?'), h('div', { class: 'picks' }, b.ask.map(a => h('button', { class: 'pick', onclick: () => {
+          box.replaceChildren(h('p', { class: 'sline you' }, a.you), h('p', { class: 'sline r' }, h('b', {}, d.name), ' ', a.r), h('div', { class: 'row' }, h('button', { class: 'primary', onclick: next }, 'Continue')));
+        } }, h('b', {}, a.label)))));
+      }
+    };
+    box.hidden = false; next();
+  });
+  box.hidden = true; box.replaceChildren();
+  stage.loop(null); stage.scene.remove(ch.group, ch.helper); S.disposeCharacter(ch);
+  showStage(false);
 }
 
 // ── Cards for people ────────────────────────────────────────────
@@ -437,7 +483,7 @@ function showResult(snap, { stage }) {
       canAfter ? [h('h4', {}, 'Afterwards'), h('div', { class: 'choices' }, Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
         h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => { const r = R.applyAftercare(g, id, k); if (!r) return; snap.done[k] = true; snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save(); draw(); } },
           h('b', {}, a.name, h('span', { class: 'costtag' }, '● '.repeat(a.cost).trim())), h('span', {}, a.blurb))))] : null,
-      h('div', { class: 'row', style: 'margin-top:14px' }, candle(), h('span', { class: 'grow' }), h('button', { class: 'primary', onclick: () => { wrap.remove(); teardownLive(); showStage(false); say(null, null); save(); renderEvening(); } }, 'Next'))].flat(Infinity).filter(Boolean));
+      h('div', { class: 'row', style: 'margin-top:14px' }, candle(), h('span', { class: 'grow' }), h('button', { class: 'primary', onclick: async () => { wrap.remove(); save(); await playScenes(snap.exits); teardownLive(); showStage(false); say(null, null); renderEvening(); } }, 'Next'))].flat(Infinity).filter(Boolean));
   };
   draw(); wrap.append(body);
   if (!stage) { const s = h('div', { class: 'screen' }, header(candle()), wrap); setScreen(s); } else $('#app').append(wrap);

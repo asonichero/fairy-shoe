@@ -303,6 +303,96 @@ const MOVES = {
   setdown: 'You set the {Impl} aside and rest your hand on {Name}\'s back.',
 };
 
-root.FairyShoeContent = { MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
+// ── Scenes: the goodbyes ─────────────────────────────────────────
+// Each is a few beats shown over the room with the resident standing in it. A beat is narration (`n`), the resident speaking (`r`),
+// or a choice for the player (`ask`): each option has what you say (`you`) and the resident's answer (`r`). Nothing in either scene
+// lets the player talk anyone out of leaving: the word is honoured, and moving on is the end of a good story. {Title} {Name} {Subj} {Obj} {Poss}
+const SCENES = {
+  moveon: {
+    open: [
+      { n: '{Name} is waiting by the door with a bundle over {Poss} shoulder, and has been for some time. The house is very quiet.' },
+    ],
+    // per resident: what they say first, three answers to what you say, and the last image
+    red: {
+      r: '"I\'ve been trying to think of something clever to say, {Title}, and every time I get distracted by the hens."',
+      ask: [
+        { label: 'Tell them you are proud of them', you: '"I\'m proud of you. You know that."', r: '"I stayed on the path the whole way here, you know. Mostly. There was one very good flower."' },
+        { label: 'Ask what they will do first', you: '"What will you do first?"', r: '"Go straight to Grandmother\'s. No — I\'ll go straight there, then stop for flowers on the way back. That\'s allowed, isn\'t it? Stopping on the way back?"' },
+        { label: 'Just open the door', you: '(You open the door, and hold it.)', r: '"Oh. Yes. Thank you." {Subj} laughs, a bit wetly. "I\'m not going to cry. Look at me not crying."' },
+      ],
+      end: '{Name} goes down the path without looking back, which is new, and which {Subj} will tell everyone about for years.',
+    },
+    goldilocks: {
+      r: '"I tried every chair in this house, {Title}. Do you know, I never once wanted to find fault with yours."',
+      ask: [
+        { label: 'Tell them you are proud of them', you: '"I\'m proud of you."', r: '"Don\'t. I\'ll want to stay, and then I\'ll start finding fault with the porridge."' },
+        { label: 'Ask what they will do first', you: '"What will you do first?"', r: '"Knock. First time in my life I intend to knock, and wait to be asked in."' },
+        { label: 'Just open the door', you: '(You open the door, and hold it.)', r: '"Well. It\'s just right, {Title}. It always was."' },
+      ],
+      end: '{Name} knocks on the doorframe on the way out, once, as if to say it was never trespass.',
+    },
+    rapunzel: {
+      r: '"Nobody climbed up, {Title}. I want that said, in case it ever matters: I walked down myself."',
+      ask: [
+        { label: 'Tell them you are proud of them', you: '"I\'m proud of you."', r: '"I think I believe you. That\'s the strange part. I think I actually believe you."' },
+        { label: 'Ask what they will do first', you: '"What will you do first?"', r: '"Eat a proper meal, at a proper table, and not give half of it to whoever happens to ask."' },
+        { label: 'Just open the door', you: '(You open the door, and hold it.)', r: '"The road looks different when you\'ve decided to be on it."' },
+      ],
+      end: '{Name} stops once at the gate, and looks up at the highest window, and then keeps walking.',
+    },
+    jack: {
+      r: '"I had a speech, {Title}. It was a good one. All about how I\'d been a fool and a legend at the same time."',
+      ask: [
+        { label: 'Tell them you are proud of them', you: '"I\'m proud of you."', r: '"Don\'t say that, you\'ll ruin my reputation. — No. Say it again. Slower."' },
+        { label: 'Ask what they will do first', you: '"What will you do first?"', r: '"Pay back every bean I ever owed. Then, I don\'t know. Climb something. Come down again, on purpose."' },
+        { label: 'Just open the door', you: '(You open the door, and hold it.)', r: '"No quip. See? Growth." {Subj} grins, and means it differently than {Subj} used to.' },
+      ],
+      end: '{Name} whistles all the way to the road, and stops whistling when {Subj} thinks no one can hear, and just walks.',
+    },
+    hans: {
+      r: '"I\'m told this is where I\'m supposed to feel something, {Title}. I do, as it happens. I think it might be the shivers."',
+      ask: [
+        { label: 'Tell them you are proud of them', you: '"I\'m proud of you."', r: '"Say it again. I want to feel it go down my back."' },
+        { label: 'Ask what they will do first', you: '"What will you do first?"', r: '"Sit by a fire and notice that I\'m cold. That\'s the plan. It sounds small. I\'ve wanted it all my life."' },
+        { label: 'Just open the door', you: '(You open the door, and hold it.)', r: '"The air\'s sharp." {Subj} breathes it in. "Look at that. Gooseflesh."' },
+      ],
+      end: '{Name} pulls {Poss} collar up against the morning, and smiles at being cold, and goes.',
+    },
+    snow: {
+      r: '"I wrote down what I want, {Title}. Three things. I\'ve never had three things before."',
+      ask: [
+        { label: 'Tell them you are proud of them', you: '"I\'m proud of you."', r: '"I don\'t need you to say it for me to know it. But thank you. I\'d like to hear it anyway."' },
+        { label: 'Ask what they will do first', you: '"What will you do first?"', r: '"Say no to something small. A cake, perhaps. And then, if it goes well, something bigger."' },
+        { label: 'Just open the door', you: '(You open the door, and hold it.)', r: '"I\'m choosing to go. Nobody\'s told me to. That feels — I\'ll tell you how it feels when I\'m further down the road."' },
+      ],
+      end: '{Name} walks out with {Poss} head up, not waiting for anyone to say that it is all right.',
+    },
+  },
+  // The word. Whatever you say, it is honoured; the options only colour the farewell.
+  word: {
+    why: {
+      harsh: '{Name} has stopped, and is standing up out of position. {Subj} is trembling a little, and perfectly clear.',
+      worn: 'In the grey of the morning {Name} is standing at the foot of the stairs, with {Poss} bundle already packed. It is not a decision made in a hurry.',
+    },
+    r: '"{Title}. The word. I\'m using the word."',
+    n: 'It stops, entirely, the way it was always going to.',
+    ask: [
+      { label: 'Thank them for telling you', you: '"Thank you for telling me. Of course. It\'s done."', r: { willing: '"Thank you for stopping. I mean it."', sullen: '"…Thank you. I wasn\'t sure you would."', cheeky: '"Good. I wasn\'t sure how I\'d say it twice."', flustered: '"Thank you — thank you. I\'m sorry, I\'m not — thank you."', plain: '"Thank you. That\'s all I needed."' } },
+      { label: 'Ask if they need anything before they go', you: '"Is there anything you need before you go? Anything at all."', r: { willing: '"A glass of water, if it\'s no trouble. And ten minutes on my own."', sullen: '"Nothing. Just the door, please."', cheeky: '"My boots. And a bit of quiet, which I know isn\'t like me."', flustered: '"Somewhere to sit. For a minute. Then I\'ll go."', plain: '"A moment on my own, and my coat."' } },
+      { label: 'Step back and open the door', you: '(You step back, and open the door for them.)', r: { willing: '"…Thank you, {Title}."', sullen: '{Subj} goes through it without a word, which is its own kind of answer.', cheeky: '"Nice manners." It\'s not quite a joke.', flustered: '{Subj} nods, over and over, and cannot seem to stop.', plain: '{Subj} nods once, and goes.' } },
+    ],
+    end: {
+      red: '{Name} goes out into the lane, and for once does not stop to look at a single flower.',
+      goldilocks: '{Name} leaves the chair exactly where it was. That, at least, is new.',
+      rapunzel: '{Name} takes {Poss} bundle and goes, and nobody follows. That is rather the point.',
+      jack: '{Name} does not look back and does not whistle, and is gone down the road before the door has closed.',
+      hans: '{Name} goes out into the cold, and this time seems to feel it.',
+      snow: '{Name} goes without asking anyone whether it is all right to. It is, and nobody holds it against {Obj}.',
+    },
+    last: 'Nothing is held against them, or written down. The house keeps no grudge; if it ever takes them in again, it will be as if they had never gone.',
+  },
+};
+
+root.FairyShoeContent = { SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

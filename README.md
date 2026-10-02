@@ -71,6 +71,15 @@ is already thin (Valued ≤ 3 or Resentment ≥ 5) they use the word on the spot
 
 A bare room in a medieval cottage: boarded floor, lime-washed stone walls, beamed ceiling, a window that lights the scene, a hearth, a door, a broom and a bucket. The furniture is plain joinery built to the engine's dimensions in `js/room.js`: the plank-seated chair the player sits in (which a resident can also bend over, hands on the seat) and a table with a thick plank top (which they bend over at full height).
 
+### Goodbyes
+
+Moving on and using the word are scenes, not cards: the resident stands in the cottage room, a few beats of narration and talk play over it, and you get one choice that colours the parting. They play wherever it happens (after a result card, during the day, or overnight), before anyone new is introduced.
+
+- **Moving on**: each resident has their own opening, three answers to what you say (proud of them / what will they do first / just open the door), and a last image. Their closing line is the one from the Collection.
+- **The word**: the narration differs for a resident brought too far and one who has quietly reached the end of their patience. The options (thank them, ask if they need anything, step back and open the door) never try to talk anyone out of it, and the resident's replies follow how they were feeling (willing, sullen, cheeky, flustered, plain). It always ends with nothing held against them.
+
+All of it is data in `js/content.js` (`SCENES`), assembled by `farewellScene` in `js/rules.js`.
+
 ### Candle (replaces the card hand)
 
 Corrections are free; reprieves and aftercare are paid from five marks of candle per evening: reprieves cost 2,

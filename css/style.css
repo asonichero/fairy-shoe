@@ -203,3 +203,14 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
 
 a.linkbtn { color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; text-decoration: none; }
 a.linkbtn:hover { color: var(--ink); background: #2e2837; }
+
+/* goodbye scenes */
+.scenebox { position: fixed; z-index: 6; left: 50%; bottom: 18px; transform: translateX(-50%); width: min(720px, calc(100vw - 24px)); background: rgba(241,231,210,.96); color: var(--paper-ink); border: 2px solid var(--paper-line); border-radius: 14px; padding: 16px 20px; box-shadow: 0 10px 40px rgba(0,0,0,.55); }
+.scenebox .sline { font-family: var(--serif); font-size: 18px; line-height: 1.55; margin: 0 0 12px; }
+.scenebox .sline.n { font-style: italic; color: #4a3d34; }
+.scenebox .sline.you { color: #7a5a22; }
+.scenebox .sline.r b { font-family: var(--sans); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; color: #7a5a22; margin-right: 4px; }
+.scenebox .row { justify-content: flex-end; }
+.scenebox .pick { background: #e5d8bb; color: var(--paper-ink); border-color: var(--paper-line); }
+.scenebox .pick:hover { background: #eadfc4; }
+@media (max-width: 800px) { .scenebox { bottom: 8px; padding: 12px 14px; } .scenebox .sline { font-size: 16px; } }

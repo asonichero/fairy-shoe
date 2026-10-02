@@ -94,11 +94,12 @@ function moveOn(g, id) {
   g.notices.push(n); return n;
 }
 function useWord(g, id, why) {
+  const mood = fetchMood(stats(g, id));   // how they were, for the goodbye (their stats are reset below)
   leave(g, id);
   g.chars[id] = { ...freshChar(id), visits: g.chars[id].visits, moveOns: g.chars[id].moveOns };
   if (!g.unseen.includes(id)) g.unseen.push(id);   // back in the pool, fully new; no fanfare, no memory
   for (const o of ORDER) delete g.rapport[pairKey(id, o)];
-  const n = { type: 'word', id, why, text: CHARACTERS[id].name + ' used the word and left.' };
+  const n = { type: 'word', id, why, mood, text: CHARACTERS[id].name + ' used the word and left.' };
   g.notices.push(n); return n;
 }
 // After any change: whoever has met their threshold moves on at once (not telegraphed).
@@ -435,6 +436,20 @@ function applyFetch(g, id, optId) {
   return { changes: rec };   // (anyone who crosses their line moves on when the correction ends)
 }
 
+// ── The goodbyes ────────────────────────────────────────────────
+// The beats of a farewell scene, text filled for this resident: { n } narration, { r } the resident speaking, { ask: [{ label, you, r }] }
+// a choice for the player. Nothing lets you talk anyone out of going; the options only colour the parting.
+function farewellScene(kind, id, { why = 'worn', mood = 'plain', title = '' } = {}) {
+  const def = CHARACTERS[id], ctx = { name: def.name, pron: def.pronouns, title }, f = t => fillTemplate(t, ctx), SC = C.SCENES;
+  if (kind === 'moveon') {
+    const o = SC.moveon[id];
+    return [{ n: f(SC.moveon.open[0].n) }, { r: f(o.r) }, { ask: o.ask.map(a => ({ label: a.label, you: f(a.you), r: f(a.r) })) }, { r: f(def.lines.leave) }, { n: f(o.end) }];
+  }
+  const W = SC.word;
+  return [{ n: f(W.why[why] || W.why.worn) }, { r: f(W.r) }, { n: f(W.n) },
+    { ask: W.ask.map(a => ({ label: a.label, you: f(a.you), r: f(a.r[mood] || a.r.plain) })) }, { n: f(W.end[id]) }, { n: f(W.last) }];
+}
+
 // ── Evening → next morning ──────────────────────────────────────
 const pendingCards = g => g.cards.filter(c => !c.done && g.roster.includes(c.id));
 function endEvening(g, rng) {
@@ -450,7 +465,7 @@ const api = { mulberry32, pick, shuffle, weighted, clamp, HOUSE_SIZE, EVENING_CA
   newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, sweepMoveOns, moveOn, useWord, backfill,
   generateChores, startMorning, assign, unassign, allAssigned, choreOf, choreBand, choreEffective, applyChoreBand, resolveChores, resolveDay,
   occurrence, categoryWeights, fillTemplate, makeEvent, applyEvent, rollEvents, situationalModifier, buildCards,
-  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, fetchMood, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
+  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, farewellScene, fetchMood, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
   getRapport, addRapport };
 root.FairyShoeRules = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
