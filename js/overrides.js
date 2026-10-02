@@ -81,7 +81,7 @@ function entry(position, who, beat, bones, label) {
 const nums = s => s.split(',').map(x => parseFloat(x));
 // The viewer's pose-editor report. Each section is
 //   == Arm raised · Hairbrush ==
-//   [Over the case. ]Disciplinarian X, subject Y, palm angle N%.
+//   [Position: chair. ]Disciplinarian X, subject Y, palm angle N%.   (older reports say “Over the case.” for the table)
 //   Disciplinarian:  /  Subject:
 //     bone: [x, y, z] → [x, y, z], turned …; local Δ […]; table [x, y, z] (the scene changes it)   or   … scene = table
 // Where the scene changes a bone (IK), the pose table's own value is the one to keep; otherwise the edited value.
@@ -98,7 +98,9 @@ function parseReport(text, defaultPosition) {
       out.push(sec); continue;
     }
     if (!sec) continue;
-    if (/Over the case\./.test(line)) { if (!defaultPosition) sec.position = 'case'; continue; }
+    let pm = /^Position:\s*(\w+)\./.exec(line);
+    if (pm && POSITIONS.includes(pm[1])) { if (!defaultPosition) sec.position = pm[1]; continue; }
+    if (/Over the (case|table)\./.test(line)) { if (!defaultPosition) sec.position = 'case'; continue; }
     if (/^Disciplinarian:\s*$/.test(line)) { who = 'giver'; continue; }
     if (/^Subject:\s*$/.test(line)) { who = 'subject'; continue; }
     m = /^\s+(\w+):\s*\[([^\]]+)\]\s*→\s*\[([^\]]+)\]/.exec(line);

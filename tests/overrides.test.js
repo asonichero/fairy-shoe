@@ -90,3 +90,9 @@ test('asking for an implement: options follow the resident, replies are filled, 
   const g2 = { ...g, chars: { red: { stats: { ...bitter }, carry: {} } } };
   R.applyFetch(g2, 'red', 'self'); assert.equal(g2.chars.red.stats.val, 1);
 });
+
+test('a report names its position ("Position: chair."); the old "Over the case." still means the table', () => {
+  const r = REPORT.replace(/Over the case\. /g, 'Position: chair. ');
+  assert.ok(Ov.parsePoses(r, { position: 'auto' }).entries.every(e => e.position === 'chair'));
+  assert.ok(Ov.parsePoses(REPORT.replace(/Over the case\. /g, 'Over the table. '), { position: 'auto' }).entries.every(e => e.position === 'case'));
+});

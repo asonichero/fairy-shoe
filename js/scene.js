@@ -93,6 +93,44 @@ function mirrorQ(q) {
   return out;
 }
 
+// ── Furniture ───────────────────────────────────────────────────
+// The furniture the engine builds (a road case) is swapped for the room's own, built to the same size and put in the same place.
+// For the hands-on-the-chair position there is none to swap: the chair the player sits in is set square in front of the subject,
+// and the returned `plant` holds where each palm goes on its seat (see holdChairHands).
+function chairSeatTop(g) {
+  const probe = S.seatGiver(g), top = new T.Box3().setFromObject(probe.bench).max.y;
+  Room.disposeGroup(probe.bench); return top;
+}
+function furnishScene(parent, scn, s, position, seatTop) {
+  const old = scn.bench; let made = null, plant = null;
+  if (old) {
+    const b = new T.Box3().setFromObject(old); parent.remove(old); Room.disposeGroup(old);
+    if (position === 'lap') { made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
+    else made = Room.buildTable(b.max.y, b.min.x, b.max.x, b.max.z - b.min.z);
+  } else if (position === 'chair') {
+    made = new T.Group(); const chair = Room.buildChair(seatTop); chair.rotation.y = -Math.PI / 2; made.add(chair);
+    for (let i = 0; i < 2; i++) scn.update(0.016);
+    plant = {}; let cx = 0;
+    for (const side of ['L', 'R']) {
+      const sh = s.bones['upperArm' + side].getWorldPosition(new T.Vector3());
+      const targetY = seatTop + 0.0085 * s.spec.H + 0.004, dy = Math.max(0, sh.y - targetY), r = S.armReach(s, side) * 0.9;
+      const dx = Math.sqrt(Math.max(0.0025, r * r - dy * dy));
+      plant[side] = new V3(sh.x + dx, targetY, clamp(sh.z, -0.15, 0.15));
+      cx = Math.max(cx, plant[side].x);
+    }
+    chair.position.set(cx + 0.07, 0, 0);
+  }
+  if (made) { scn.bench = made; parent.add(made); made.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
+  return plant;
+}
+// Hands on the chair: planted on the seat however the body moves. Call each frame after the scene's own update.
+function holdChairHands(s, plant) {
+  for (const side of ['L', 'R']) {
+    const sh = s.bones['upperArm' + side].getWorldPosition(new T.Vector3()), out = side === 'L' ? -1 : 1;
+    S.armIK(s, side, plant[side], sh.clone().add(new V3(-0.1, 0.05, out * 0.5)), new V3(0, 1, 0), new V3(1, 0, 0));
+  }
+}
+
 // ── The stage ───────────────────────────────────────────────────
 function createStage(viewEl, { onGLProblem } = {}) {
   const renderer = new T.WebGLRenderer({ antialias: true });
@@ -199,33 +237,6 @@ function createStage(viewEl, { onGLProblem } = {}) {
       S.setLowered(s, 'briefs', !!L.bottoms && !!L.briefs);
       if (s.skirt) S.setSkirtOff(s, !L.skirt);
     }
-    // The furniture the engine builds (a road case) is swapped for the room's own, built to the same size and put in the same place.
-    function furnish(position, seatTop) {
-      const old = scn.bench;
-      let made = null;
-      if (old) {
-        const b = new T.Box3().setFromObject(old); scene.remove(old); Room.disposeGroup(old);
-        if (position === 'lap') { made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
-        else { made = Room.buildTable(b.max.y, b.min.x, b.max.x, b.max.z - b.min.z); }
-      } else if (position === 'chair') {
-        // The chair the player sits in, set square in front of the subject with its back away from them: the hands go on its seat.
-        made = new T.Group(); const chair = Room.buildChair(seatTop); chair.rotation.y = -Math.PI / 2; made.add(chair); furniture = chair;
-        for (let i = 0; i < 2; i++) scn.update(0.016);
-        plant = {};
-        let cx = 0;
-        for (const side of ['L', 'R']) {
-          const sh = s.bones['upperArm' + side].getWorldPosition(new T.Vector3());
-          const targetY = seatTop + 0.0085 * s.spec.H + 0.004, dy = Math.max(0, sh.y - targetY), r = S.armReach(s, side) * 0.9;
-          const dx = Math.sqrt(Math.max(0.0025, r * r - dy * dy));
-          plant[side] = new V3(sh.x + dx, targetY, clamp(sh.z, -0.15, 0.15) * 1);
-          cx = Math.max(cx, plant[side].x);
-        }
-        chair.position.set(cx + 0.07, 0, 0);
-        plant.cx = cx;
-      }
-      if (made) { scn.bench = made; scene.add(made); made.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
-    }
-
     function make(cfg = {}) {
       const position = cfg.position || st.position;
       const oldP = scn && scn.pain;
@@ -236,8 +247,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
       const sv = marks[opts.subjectId];
       if (sv) { s.marks = sv.marks; s.stripes = sv.stripes; S.copyMarks(s, s); }
-      let seatTop = 0.45;
-      if (position === 'chair') { const probe = S.seatGiver(g); seatTop = new T.Box3().setFromObject(probe.bench).max.y; Room.disposeGroup(probe.bench); }
+      const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
       const D = derive();
       scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
       applyLayers();
@@ -245,7 +255,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
       st.implement = impl; scn.setImplement(impl); scn.setBeat('relaxed');
       scn.timing = { ...scn.timing, speed: D.speed };
-      furnish(position, seatTop);
+      furniture = null; plant = furnishScene(scene, scn, s, position, seatTop);
       applyPoseOverrides(scn, position);
       if (oldP && scn.pain) {
         for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
@@ -308,12 +318,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
         const on = [g, s];
         for (const ch of on) S.animateCharacter(ch, dt, t);
         scn.update(dt);
-        if (plant) {   // hands on the chair: planted on the seat however the body moves
-          for (const side of ['L', 'R']) {
-            const sh = s.bones['upperArm' + side].getWorldPosition(new T.Vector3()), out = side === 'L' ? -1 : 1;
-            S.armIK(s, side, plant[side], sh.clone().add(new V3(-0.1, 0.05, out * 0.5)), new V3(0, 1, 0), new V3(1, 0, 0));
-          }
-        }
+        if (plant) holdChairHands(s, plant);   // hands on the chair
         for (const ch of on) S.fadeMarks(ch, dt);
         for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
         for (const ch of on) S.bustContact(ch, on);
@@ -340,5 +345,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, end, loop, clearMarks, setCamera, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

@@ -96,11 +96,23 @@ reading over-correction as abandonment, Goldilocks reading a reprieve as no cons
 
 ## Character editor
 
-`editor.html` (linked from the title screen) previews any resident, or the player's own look, standing or in the correction scene (any position, implement and beat, with a "hold struck pose" switch), and takes pasted changes:
+`editor.html` (linked from the title screen) is the Starlight character viewer, with the Fairy Shoe's cast in place of the stock bodies and no environment: just the figures on a plain floor. It has everything the viewer has:
 
-- **Design**: a JSON object, either a few fields (`{"height":172,"outfit":{"hair":"#5a1e12"}}`) or a whole preset as the character viewer's *Show JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`. *Show current* prints the design as the game builds it.
-- **Poses**: the character viewer's pose-editor *report* pasted as it is, or JSON (`{"position":"case","who":"subject","beat":"base","bones":{"neck":[-40,0,0]}}`, an array, or `{position, giver:{…}, subject:{…}, beat}`). Angles are the engine's pose-table Euler degrees. Where the scene itself drives a bone (the swinging arm's IK) the report's table value is used. The subject's *base* pose and *contact* (struck) pose, and the player's relaxed / raised / contact beats, can each be edited, per position.
-- Changes are saved in the browser (`localStorage`) and used by the game whenever a scene is next built. *Export all* / *Import* move them elsewhere, *Undo last change* steps back, *Reset everything* returns to the built-in designs.
+- **Characters**: the six residents and the four looks the player can have, one at a time or in a line-up.
+- **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.
+- **View**: skeleton, weights, wireframe, turntable, head camera.
+- **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The furniture is the game's cottage chair and table.
+- **Pose editor**: freeze the scene at a beat, drag joints or the implement, pin hands, and print a **Report**.
+- **Measurements, face and expression sliders**, voxel size, and the design's JSON.
+
+(The dance library is not part of this game, so that section is gone.)
+
+What it adds is **Save to the game**. Everything above is a preview until saved; saved changes are kept in the browser (`localStorage`) and used whenever the game next builds a scene.
+
+- **Save this look** stores what you changed about the selected character (as a patch over the built-in design: if you only moved the height, only the height is saved). *Remove its saved changes* and *Reset everything* go back to the built-in designs.
+- **Paste a design**: a few fields as JSON (`{"height":172,"outfit":{"hair":"#5a1e12"}}`), or a whole preset as *Show JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`.
+- **Paste poses**: the pose editor's report as it is (it names its position, e.g. `Position: chair.`; older reports saying `Over the case.` mean the table), or JSON (`{"position":"case","who":"subject","beat":"base","bones":{"neck":[-40,0,0]}}`, a list, or `{position, giver:{…}, subject:{…}, beat}`). Angles are the engine's pose-table Euler degrees; where the scene itself drives a bone (the swinging arm's IK) the report's table value is used. **Save pose-editor edits** parses the Report you have just made without a paste. The subject's *base* and *contact* poses and the player's relaxed / raised / contact beats can be edited, per position.
+- *Export all*, *Import* and *Undo* move and step through the saved changes.
 
 ## Layout
 
@@ -113,7 +125,7 @@ js/overrides.js       design and pose edits from the editor (storage, parsing, m
 js/room.js            the cottage room, the chair and the table
 js/bodies.js          the residents' (and the player's) bodies, as Starlight presets
 js/scene.js           the live-correction wrapper: cameras, rebuild-in-place, layers, pace and strength
-editor.html           the character editor (js/editor.js, css/editor.css)
+editor.html           the character editor: the Starlight viewer plus Save to the game (js/editor-setup.js gives it the cast)
 js/ui.js              interface and game flow
 tests/rules.test.js   unit tests for the rules, including a long simulated run
 tests/overrides.test.js  pose-report / design parsing, merging, and the implement exchange
