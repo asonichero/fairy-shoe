@@ -82,7 +82,8 @@ function showIntro() {
     h('div', { class: 'panel' }, h('h3', {}, 'Your hands'), h('p', {}, 'Who you appear as in the room.'), keepers),
     h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => { saveSettings(); startNew(); } }, 'Open the door'),
-      saved ? h('button', { onclick: () => { saveSettings(); continueGame(saved); } }, 'Continue (Day ' + saved.g.day + ')') : null))));
+      saved ? h('button', { onclick: () => { saveSettings(); continueGame(saved); } }, 'Continue (Day ' + saved.g.day + ')') : null,
+      h('a', { class: 'linkbtn', href: 'editor.html', target: '_blank', rel: 'noopener' }, 'Character editor')))));
 }
 function leaveToMenu() { teardownLive(); save(); showIntro(); }
 
@@ -214,15 +215,54 @@ function doReprieve(card, kind) {
   showResult(snap, { stage: false });
 }
 
+// ── Choosing from a list (position, implement) ──────────────────
+function choose({ title, intro, items, onPick }) {
+  const list = h('div', { class: 'picks' }, items.map(it => h('button', {
+    class: 'pick' + (it.current ? ' cur' : ''), disabled: it.disabled || it.current,
+    onclick: () => { closeModal(); onPick(it.id); },
+  }, h('b', {}, it.label, it.current ? h('em', {}, ' (now)') : null), h('span', {}, it.disabled && it.note ? it.note : it.blurb))));
+  modal(h('h2', {}, title), intro ? h('p', { style: 'color:var(--muted);margin-top:0' }, intro) : null, list,
+    h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { onclick: closeModal }, 'Cancel')));
+}
+const IMPL = Object.fromEntries(SC.IMPLEMENTS.map(([id, label, blurb]) => [id, { label, blurb }]));
+const POS = Object.fromEntries(SC.POSITIONS.map(([id, label, blurb]) => [id, { label, blurb }]));
+const dual = id => window.Starlight.IMPLEMENTS[id].dual;
+function chooseImplement(current, position, onPick) {
+  choose({ title: 'Which implement?', intro: position === 'spread' ? 'This position only takes a wide implement.' : null,
+    items: SC.IMPLEMENTS.map(([id, label, blurb]) => ({ id, label, blurb, current: id === current, disabled: position === 'spread' && !dual(id), note: 'Not in this position.' })), onPick });
+}
+function choosePosition(current, implement, onPick) {
+  choose({ title: 'Which position?', items: SC.POSITIONS.map(([id, label, blurb]) => ({ id, label, blurb, current: id === current, disabled: id === 'spread' && !dual(implement), note: 'Needs the switch or paddle.' })), onPick });
+}
+// A veil with a line or two of narration while the room is rebuilt behind it.
+async function transition(lines, minMs, work) {
+  const v = $('#veil'); v.replaceChildren(...lines.map(t => h('p', {}, t))); v.hidden = false;
+  requestAnimationFrame(() => v.classList.add('on'));
+  const t0 = performance.now(); await delay(500);
+  try { await work(); } finally {
+    const rest = minMs - (performance.now() - t0); if (rest > 0) await delay(rest);
+    v.classList.remove('on'); await delay(450); v.hidden = true;
+  }
+}
+const ctxFor = id => ({ name: CH[id].name, pron: CH[id].pronouns, title: app.title });
+const tell = (text, id, extra) => R.fillTemplate(text, { ...ctxFor(id), ...extra });
+// Pre-sitting layer choices: what the resident wears for it (the rest can be changed as you go).
+const defaultLayers = () => ({ bottoms: true, briefs: false, skirt: false });
+
 // ── Setting up the correction ───────────────────────────────────
 function renderSetup(card) {
   const id = card.id, d = CH[id];
-  const set = app.setup && app.setup.id === id ? app.setup : (app.setup = { id, position: 'case', clothing: 'bottoms', implement: 'hand' });
+  const set = app.setup && app.setup.id === id ? app.setup : (app.setup = { id, position: 'case', implement: 'hand', layers: defaultLayers() });
   const dock = h('div', { class: 'dock' });
+  const sample = B.spec(id).wardrobe;
   const paint = () => {
-    const tabs = (items, key, onPick) => h('div', { class: 'tabs' }, items.map(([v, l]) => h('button', { class: set[key] === v ? 'on' : '', disabled: key === 'implement' && set.position === 'spread' && !window.Starlight.IMPLEMENTS[v].dual, onclick: () => { set[key] = v; if (key === 'position' && v === 'spread' && !window.Starlight.IMPLEMENTS[set.implement].dual) set.implement = 'paddle'; paint(); } }, l)));
-    dock.replaceChildren(h('h2', {}, d.name), h('div', { class: 'sub' }, 'You decide the position, what they wear for it and what you use. Once you begin you cannot change position or clothing; the rest you can change as you go.'),
-      h('h4', {}, 'Position'), tabs(SC.POSITIONS, 'position'), h('h4', {}, 'Clothing'), tabs(SC.CLOTHING, 'clothing'), h('h4', {}, 'To begin with'), tabs(SC.IMPLEMENTS, 'implement'),
+    const layerBtn = (name, avail) => avail ? h('button', { class: set.layers[name] ? 'on' : '', disabled: name === 'briefs' && !set.layers.bottoms, onclick: () => { set.layers[name] = !set.layers[name]; if (name === 'bottoms' && !set.layers.bottoms) set.layers.briefs = false; paint(); } }, SC.LAYER_LABELS[name][set.layers[name] ? 0 : 1]) : null;
+    dock.replaceChildren(h('h2', {}, d.name), h('div', { class: 'sub' }, 'Choose where and how to begin. Position, implement and what they wear can all be changed once you are under way.'),
+      h('h4', {}, 'Position'), h('div', { class: 'tabs' }, SC.POSITIONS.map(([v, l]) => h('button', { class: set.position === v ? 'on' : '', disabled: v === 'spread' && !dual(set.implement), title: POS[v].blurb, onclick: () => { set.position = v; paint(); } }, l))),
+      h('div', { class: 'sub' }, POS[set.position].blurb),
+      h('h4', {}, 'Implement'), h('button', { class: 'wide', onclick: () => chooseImplement(set.implement, set.position, v => { set.implement = v; paint(); }) }, IMPL[set.implement].label + '  ▸'),
+      h('div', { class: 'sub' }, IMPL[set.implement].blurb),
+      h('h4', {}, 'What they wear'), h('div', { class: 'tabs' }, layerBtn('skirt', !!sample.skirt), layerBtn('bottoms', !!sample.bottom), layerBtn('briefs', !!sample.briefs)),
       h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. If ' + d.name + ' calls it, or is brought too far, it stops.'),
       h('button', { class: 'primary big', onclick: () => startLive(card, set) }, 'Bring them in'),
       h('button', { class: 'quiet big', onclick: () => { dock.remove(); } }, 'Back'));
@@ -236,27 +276,28 @@ function teardownLive() {
   if (app.live) { try { app.live.onChange = null; app.live.onImpact = null; } catch (e) { /* */ } }
   if (app.stage && app.stage.session) app.stage.end();
   app.live = null; app.refreshGuidance = null; document.removeEventListener('keydown', onKey);
+  const v = $('#veil'); if (v) { v.hidden = true; v.classList.remove('on'); }
 }
 function onKey(e) {
-  const s = app.live; if (!s || e.target.tagName === 'INPUT' || e.code !== 'Space') return;
-  e.preventDefault(); if (s.st.raised) s.strikeNow(); else s.smack();
+  const s = app.live; if (!s || e.target.tagName === 'INPUT' || e.code !== 'Space' || !$('#overlay').hidden) return;
+  e.preventDefault(); s.smack();
 }
 async function startLive(card, set) {
-  const id = card.id, g = app.g, d = CH[id];
+  const id = card.id, d = CH[id];
   await busy('Setting the room…', async () => {
     const stage = await ensureStage();
     showStage(true); setScreen(h('div'));
-    app.live = stage.begin({ giver: B.keeper(app.keeper), subject: B.spec(id), subjectId: id, position: set.position, implement: set.implement, clothing: set.clothing, pain: { ...d.pain } });
+    app.live = stage.begin({ giver: B.keeper(app.keeper), subject: B.spec(id), subjectId: id, position: set.position, implement: set.implement, layers: { ...set.layers }, pain: { ...d.pain } });
+    stage.setCamera(app.camera || 'overview');
   });
   const ses = app.live; SC.Sound.set(app.settings.sound);
-  say(id, C.CHARACTERS[id].lines.open[Math.floor(app.rng() * d.lines.open.length)]);
-  ses.card = card; ses.setup = set;
-  buildLiveDock(ses, card, set);
+  say(id, d.lines.open[Math.floor(app.rng() * d.lines.open.length)]);
+  ses.card = card; ses.talked = false; ses.talkChanges = [];
+  buildLiveDock(ses, card);
   document.addEventListener('keydown', onKey);
 }
-function buildLiveDock(ses, card, set) {
-  const id = card.id, d = CH[id], g = app.g, P = ses.pain;
-  const posName = SC.POSITIONS.find(p => p[0] === set.position)[1], clothName = SC.CLOTHING.find(p => p[0] === set.clothing)[1];
+function buildLiveDock(ses, card) {
+  const id = card.id, d = CH[id], g = app.g;
   const expected = R.expectedBand(g.chars[id].stats, card), cuts = R.BAND_CUTS, SCALE = 1.5;
   const lo = expected === 0 ? 0 : cuts[expected - 1], hi = cuts[expected];
   const fill = h('div', { class: 'fill' }), aim = h('div', { class: 'aim', style: 'left:' + (lo / SCALE * 100) + '%;width:' + ((hi - lo) / SCALE * 100) + '%' });
@@ -265,37 +306,46 @@ function buildLiveDock(ses, card, set) {
   app.refreshGuidance = () => { aim.hidden = !app.settings.guidance; aimText.textContent = app.settings.guidance ? 'You are aiming for: ' + R.BANDS[expected] + ' (shaded). The white tick is the edge of resistance.' : ''; };
   app.refreshGuidance();
 
-  const tabs = h('div', { class: 'tabs' }, SC.IMPLEMENTS.map(([v, l]) => h('button', { 'data-v': v, onclick: () => { ses.setImplement(v); sync(); } }, l)));
-  const sev = h('div', { class: 'tabs' }, SC.SEVERITY.map((v, i) => h('button', { 'data-v': i, onclick: () => { ses.setSeverity(i); st.runLen = v.count; sync(); } }, v.name)));
-  const st = { runLen: SC.SEVERITY[ses.severityIndex].count };
-  const slider = (label, key, min, max, step, fmtv) => {
-    const val = h('span', {}, ''), inp = h('input', { type: 'range', min, max, step, value: ses.st.strike[key] });
-    inp.oninput = () => { ses.setStrike(key, +inp.value); val.textContent = fmtv(+inp.value); };
-    inp.dataset.key = key; val.textContent = fmtv(ses.st.strike[key]);
-    return { el: h('div', { class: 'sl' }, h('label', {}, h('span', {}, label), val), inp), inp, val, key, fmtv };
+  // cameras
+  const cams = h('div', { class: 'tabs' }, SC.CAMERAS.map(([v, l]) => h('button', { 'data-v': v, onclick: () => { app.camera = v; app.stage.setCamera(v); sync(); } }, l)));
+  // position and implement: each opens a list
+  const posBtn = h('button', { class: 'wide', onclick: () => { ses.stop(); choosePosition(ses.position, ses.implement, doPosition); } });
+  const impBtn = h('button', { class: 'wide', onclick: () => { ses.stop(); chooseImplement(ses.implement, ses.position, doImplement); } });
+  // layers
+  const layerBtns = {}; const avail = ses.layerAvailable();
+  const layers = h('div', { class: 'tabs' }, ['skirt', 'bottoms', 'briefs'].filter(n => avail[n]).map(n => (layerBtns[n] = h('button', { onclick: () => { ses.setLayer(n, !ses.layers[n]); sync(); } }))));
+  // pace, strength, run length: multipliers with − and +
+  const stepper = (label, get, step, title) => {
+    const val = h('b', {}, ''), minus = h('button', { onclick: () => { step(-1); sync(); }, 'aria-label': label + ' down' }, '−'), plus = h('button', { onclick: () => { step(1); sync(); }, 'aria-label': label + ' up' }, '+');
+    return { el: h('div', { class: 'step', title }, h('span', {}, label), minus, val, plus), val, minus, plus, get };
   };
-  const sliders = [slider('Speed of the swing', 'speed', 0.5, 2, 0.05, v => v.toFixed(2) + '×'), slider('Hold before the swing', 'hold', 0, 3, 0.05, v => v.toFixed(2) + ' s'), slider('Hold after contact', 'dwell', 0, 3, 0.05, v => v.toFixed(2) + ' s')];
-  const runInp = h('input', { type: 'range', min: 1, max: 200, step: 1, value: st.runLen }), runVal = h('span', {}, st.runLen);
-  runInp.oninput = () => { st.runLen = +runInp.value; runVal.textContent = st.runLen; };
-  const smack = h('button', { onclick: () => ses.smack() }, 'Smack'), raise = h('button', { onclick: () => { if (ses.st.raised) ses.strikeNow(); else ses.raise(); } }, 'Raise');
-  const run = h('button', { onclick: () => { if (ses.running) ses.stop(); else ses.run(st.runLen); } }, 'Run');
-  const lower = h('button', { class: 'quiet', onclick: () => ses.lower() }, 'Lower the arm');
+  const steppers = [
+    stepper('Pace', () => '×' + ses.pace, d => ses.stepPace(d), 'How fast you swing, and how soon the next one comes'),
+    stepper('Strength', () => '×' + ses.strengthMult, d => ses.stepStrength(d), 'How hard each one lands'),
+    stepper('Run', () => ses.runLength + ' smacks', d => ses.stepRun(d), 'How many a run gives before it stops by itself'),
+  ];
+  const smack = h('button', { onclick: () => ses.smack() }, 'Smack');
+  const run = h('button', { onclick: () => { if (ses.running) ses.stop(); else ses.run(); } }, 'Run');
   const info = h('div', { class: 'sub' }), end = h('button', { class: 'primary big', onclick: () => finishLive(ses, card) }, 'End the correction');
   const dock = h('div', { class: 'dock' },
-    h('h2', {}, d.name), h('div', { class: 'sub' }, posName + ' · ' + clothName), h('h4', {}, 'How they are'), reading, meter, aimText,
-    h('h4', {}, 'What you use'), tabs, h('h4', {}, 'How hard'), sev, ...sliders.map(s => s.el),
-    h('h4', {}, 'Your hand'), h('div', { class: 'pair' }, smack, raise), h('div', { class: 'pair' }, run, lower),
-    h('div', { class: 'sl' }, h('label', {}, h('span', {}, 'Smacks in a run'), runVal), runInp), info,
-    h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. ', 'Space smacks, or strikes if the arm is raised.'), end);
+    h('h2', {}, d.name), h('div', { class: 'sub', id: 'subline' }), h('h4', {}, 'How they are'), reading, meter, aimText,
+    h('h4', {}, 'Where you are looking from'), cams,
+    h('h4', {}, 'Position'), posBtn, h('h4', {}, 'Implement'), impBtn, h('h4', {}, 'What they wear'), layers,
+    h('h4', {}, 'Your hand'), ...steppers.map(s => s.el), h('div', { class: 'pair' }, smack, run), info,
+    h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. ', 'Space smacks.'), end);
   setScreen(dock);
 
   const sync = () => {
-    tabs.querySelectorAll('button').forEach(b => { b.classList.toggle('on', b.dataset.v === ses.implement); b.disabled = set.position === 'spread' && !window.Starlight.IMPLEMENTS[b.dataset.v].dual; });
-    sev.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.v === ses.severityIndex));
-    sliders.forEach(s => { s.inp.value = ses.st.strike[s.key]; s.val.textContent = s.fmtv(ses.st.strike[s.key]); });
-    runInp.value = st.runLen; runVal.textContent = st.runLen;
+    cams.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === app.stage.cameraMode));
+    posBtn.textContent = 'Change position…  (' + POS[ses.position].label + ')'; impBtn.textContent = 'Change implement…  (' + IMPL[ses.implement].label + ')';
+    for (const [n, b] of Object.entries(layerBtns)) { b.classList.toggle('on', !!ses.layers[n]); b.textContent = SC.LAYER_LABELS[n][ses.layers[n] ? 0 : 1]; b.disabled = n === 'briefs' && !ses.layers.bottoms; }
+    steppers.forEach(s => { s.val.textContent = s.get(); });
+    steppers[0].minus.disabled = ses.pace <= SC.PACE[0]; steppers[0].plus.disabled = ses.pace >= SC.PACE[SC.PACE.length - 1];
+    steppers[1].minus.disabled = ses.strengthMult <= SC.STRENGTH[0]; steppers[1].plus.disabled = ses.strengthMult >= SC.STRENGTH[SC.STRENGTH.length - 1];
+    steppers[2].minus.disabled = ses.runLength <= SC.RUN[0]; steppers[2].plus.disabled = ses.runLength >= SC.RUN[SC.RUN.length - 1];
+    $('#subline').textContent = POS[ses.position].label + ' · ' + IMPL[ses.implement].label;
   };
-  sync();
+  ses.syncDock = sync; sync();
   let spoke = false, last = 0;
   ses.onChange = () => {
     const now = performance.now(); if (now - last < 80) return; last = now;
@@ -304,20 +354,53 @@ function buildLiveDock(ses, card, set) {
     fill.style.background = dist < 0.3 ? '#6b9e5a' : dist < 0.6 ? '#b4a24a' : dist < 0.9 ? '#c8803c' : dist < 1 ? '#c24a3a' : dist < 1.5 ? '#b08ad0' : '#7a1f1f';
     reading.replaceChildren(cap(ses.band()), h('small', {}, ses.st.smacks + (ses.st.smacks === 1 ? ' smack' : ' smacks')));
     const can = ses.canStrike();
-    smack.disabled = !can || ses.st.raised || ses.running;
-    raise.textContent = ses.st.raised ? 'Strike now' : 'Raise'; raise.disabled = ses.running || (ses.st.raised ? ses.busy : !can);
-    run.textContent = ses.running ? 'Stop' : 'Run ' + st.runLen; run.disabled = !can && !ses.running;
-    lower.disabled = ses.running;
+    smack.disabled = !can || ses.running;
+    run.textContent = ses.running ? 'Stop' : 'Run ' + ses.runLength; run.disabled = !can && !ses.running;
     // Past the point of no return they stop: nothing further is struck.
     if (ses.st.tooHarsh && !spoke) { spoke = true; info.textContent = d.name + ' has been brought too far. Nothing more will be struck.'; say(id, C.SAYINGS.harsh[0]); end.textContent = 'End it'; }
-    // Position and clothing are fixed once you begin (they would need the room rebuilt).
   };
   ses.onChange(ses);
+}
+
+// Changing position: pick one, a line of narration while the room is set again, then on with it. The pain carries over.
+async function doPosition(pos) {
+  const ses = app.live, id = ses.card.id, d = ses.distress();
+  const leaving = C.MOVES.leaving[d < 0.3 ? 'calm' : d < 0.9 ? 'sore' : 'spent'];
+  say(null, null);
+  await transition([tell(leaving, id), tell(C.MOVES.to[pos], id)], 3400, () => { ses.rebuild({ position: pos, elapsed: 6 }); });
+  ses.syncDock(); say(id, C.SAYINGS.nothing[0]); setTimeout(() => say(null, null), 2500);
+}
+// Changing implement: the hand is simply put down; anything else is sent for, which takes a short exchange.
+async function doImplement(impl) {
+  const ses = app.live, id = ses.card.id;
+  if (impl === 'hand') { ses.setImplement('hand'); ses.syncDock(); say(id, null); return; }
+  fetchTalk(ses, id, impl);
+}
+function fetchTalk(ses, id, impl) {
+  const s = app.g.chars[id].stats, d = CH[id], name = IMPL[impl].label.toLowerCase();
+  const o = $('#overlay'); o.dataset.dismiss = 'no';
+  const body = h('div', {}, h('p', { class: 'narr' }, tell('You let {Name} straighten up. {Subj} waits to hear what you want.', id)));
+  const opts = R.fetchOptions(s, name);
+  const choices = h('div', { class: 'picks' }, opts.map(opt => h('button', { class: 'pick', onclick: () => answer(opt) }, h('b', {}, opt.label), h('span', {}, opt.line))));
+  body.append(choices, h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'quiet', onclick: closeModal }, 'Never mind')));
+  modal(h('h2', {}, 'Fetching the ' + IMPL[impl].label.toLowerCase()), body);
+  o.dataset.dismiss = 'no';
+  function answer(opt) {
+    const reply = R.fetchReply(opt.id, s, id, app.title, ses.distress());
+    if (!ses.talked) { ses.talked = true; const r = R.applyFetch(app.g, id, opt.id); ses.talkChanges.push(...r.changes); }
+    body.replaceChildren(h('p', { class: 'say you' }, opt.line), h('p', { class: 'narr' }, fmt(reply)),
+      h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: async () => {
+        closeModal(); say(null, null);
+        await transition([tell(C.MOVES.fetched, id, { Impl: name }), tell(C.MOVES.to[ses.position], id)], 3400, () => { ses.rebuild({ implement: impl, elapsed: 8 }); });
+        ses.syncDock();
+      } }, 'Continue')));
+  }
 }
 function finishLive(ses, card) {
   const g = app.g, id = card.id;
   const done = ses.finish();
   const snap = R.applyCorrection(g, id, done);
+  snap.changes = (ses.talkChanges || []).concat(snap.changes);
   document.removeEventListener('keydown', onKey);
   save();
   // keep the room and the bodies on screen behind the result
@@ -387,7 +470,7 @@ function showRules() {
     h('h3', {}, 'Six measures'),
     h('ul', {}, h('li', {}, 'Wilfulness and Resentment are the trouble. Satisfaction, Valued and Composure are what holds a person steady. Attention is how well they work.'), h('li', {}, 'Low Valued makes a correction read as punishment. Resentment at the top with Valued at the bottom is when someone uses the word.')),
     h('h3', {}, 'The correction is yours'),
-    h('p', {}, 'You choose the position, the clothing and the implement, then everything else is live: raise, strike, run a few, wait, stop. The meter shows how far you have brought them; the white tick is their edge of resistance. A resident needs a different amount depending on their Wilfulness and on what happened that day: more for a bold or troublesome one, more again after a bad day or a bad event. Too little does not land; too much costs trust. A few kinds of trouble are better met with a kind word than a hand.'),
+    h('p', {}, 'You choose the position, what they wear and the implement to begin with, then everything is live: smack, run a few, wait, stop. Change position or implement whenever you like (a new implement has to be fetched, which means a word with them), take layers off or put them back, move the pace and strength up or down, and look from behind, over your shoulder or from the floor. The meter shows how far you have brought them; the white tick is their edge of resistance. A resident needs a different amount depending on their Wilfulness and on what happened that day: more for a bold or troublesome one, more again after a bad day or a bad event. Too little does not land; too much costs trust. A few kinds of trouble are better met with a kind word than a hand.'),
     h('p', {}, 'The highest distress you bring them to counts, not where they end up. Stop at the right moment. Beyond too harsh, nothing more is struck, and a resident whose trust is thin will use the word.'),
     h('h3', {}, 'Candle'),
     h('p', {}, 'Corrections cost nothing, but aftercare (corner time, lines, held after, warm words) and reprieves (a stern, kind or written word) are paid from the evening\'s candle, and there is never enough for everything.'),
@@ -397,6 +480,6 @@ function showRules() {
 }
 
 window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro };
-window.addEventListener('DOMContentLoaded', showIntro);
-if (document.readyState !== 'loading') showIntro();
+function boot() { if (window.FairyShoeOverrides) window.FairyShoeOverrides.load(); showIntro(); }
+if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot); else boot();
 })();

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Fairy Shoe — Character editor</title>
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+<div id="stage" class="stage on"></div>
+<div id="glbanner" class="glbanner" hidden></div>
+<aside id="panel" class="dock editor">
+  <h2>Character editor</h2>
+  <div class="sub">Paste changes to a resident's design, or to the poses of the correction scene, and see them here. Saved changes are used by <a href="index.html">the game</a> the next time a scene is built, in this browser.</div>
+
+  <h4>Who</h4>
+  <select id="who"></select>
+  <h4>Preview</h4>
+  <div class="tabs" id="mode"><button data-v="stand" class="on">Standing</button><button data-v="scene">In the scene</button></div>
+  <div id="standOpts"><div class="tabs" id="poses"></div></div>
+  <div id="sceneOpts" hidden>
+    <div class="tabs" id="pos"></div>
+    <div class="tabs" id="impl"></div>
+    <div class="tabs" id="beat"><button data-v="relaxed" class="on">Relaxed</button><button data-v="raised">Arm raised</button><button data-v="contact">Contact</button><button id="hold">Hold struck pose</button></div>
+    <div class="tabs" id="cams"></div>
+  </div>
+
+  <h4>Design</h4>
+  <div class="sub">A JSON object with only the fields to change (<code>{"height":172,"outfit":{"hair":"#5a1e12"}}</code>), or a whole preset as the character viewer's “Show JSON” prints it. Colours may be numbers, <code>0xrrggbb</code> or <code>"#rrggbb"</code>. Objects merge; arrays replace; <code>null</code> removes a field.</div>
+  <textarea id="design" spellcheck="false" placeholder='{ "height": 172, "outfit": { "hair": "#5a1e12", "hairStyle": "long" } }'></textarea>
+  <div class="tabs">
+    <button class="primary" id="applyDesign">Apply and save</button>
+    <button id="showDesign">Show current</button>
+    <button id="clearDesign" class="danger">Clear this resident's design changes</button>
+  </div>
+
+  <h4>Poses</h4>
+  <div class="sub">Paste the character viewer's <b>pose-editor report</b>, or JSON like <code>{"position":"case","who":"subject","beat":"base","bones":{"neck":[-40,0,0]}}</code> (an array also works). Angles are the engine's pose-table Euler degrees [x, y, z]. Where the scene itself drives a joint (the swinging arm's IK), the report's table value is used. Positions: lap, case, head, chair, spread.</div>
+  <div class="tabs"><label class="sub" style="margin:0">Position for a report <select id="posDefault"><option value="auto">from the report</option></select></label></div>
+  <textarea id="poseText" spellcheck="false" placeholder="Starlight pose editor report…  or  { &quot;position&quot;: &quot;case&quot;, … }"></textarea>
+  <div class="tabs"><button class="primary" id="applyPoses">Add poses</button><button id="clearPoses" class="danger">Remove all saved poses</button></div>
+  <div id="poseList" class="plist"></div>
+
+  <h4>Everything</h4>
+  <div class="tabs"><button id="exportAll">Export all</button><button id="importAll">Import</button><button id="undo">Undo last change</button><button id="resetAll" class="danger">Reset everything</button></div>
+  <textarea id="blob" spellcheck="false" hidden></textarea>
+  <div id="msg" class="msg" role="status"></div>
+</aside>
+<div id="loading" class="loading" hidden><div><div class="spinner"></div><p id="loading-text">Building…</p></div></div>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="starlight-engine.js"></script>
+<script src="js/content.js"></script>
+<script src="js/overrides.js"></script>
+<script src="js/room.js"></script>
+<script src="js/bodies.js"></script>
+<script src="js/scene.js"></script>
+<script src="js/editor.js"></script>
+</body>
+</html>

@@ -285,6 +285,24 @@ const SAYINGS = {
   nothing: ['"…Oh. All right, {Title}."'],
 };
 
-root.FairyShoeContent = { STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
+// ── Moving them about the room. {Name} {Subj} {Obj} {Poss} {Impl} ─
+const MOVES = {
+  leaving: {
+    calm: 'You step back and let {Name} straighten up.',
+    sore: '{Name} straightens up slowly, rubbing the sting out with the heel of a hand.',
+    spent: '{Name} comes up shakily, and you keep a hand on {Poss} arm until {Subj} is steady.',
+  },
+  to: {
+    lap: 'You sit, and pat your knee. {Name} crosses to you and lets you draw {Obj} down across your lap.',
+    case: 'You steer {Name} to the table. {Subj} bends at the hips and lays {Poss} palms flat on the boards.',
+    head: 'You stand {Name} in the middle of the room and tell {Obj} to put {Poss} hands on {Poss} head, fingers laced.',
+    chair: 'You pull your chair out and set it square in front of {Name}. {Subj} bends forward and takes hold of the seat.',
+    spread: 'You nudge {Name}\'s feet apart with your own and wait while {Subj} settles, bent forward, palms on {Poss} thighs.',
+  },
+  fetched: '{Name} comes back with the {Impl}, hands it over, and takes {Poss} place again.',
+  setdown: 'You set the {Impl} aside and rest your hand on {Name}\'s back.',
+};
+
+root.FairyShoeContent = { MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

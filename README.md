@@ -38,10 +38,14 @@ Any static server works; there is no build step. Progress autosaves in `localSto
 
 ## The live correction
 
-You choose position, clothing and starting implement, then everything is live: **raise** the arm and hold it (dread
-builds), **strike** when you choose, **smack** once, **run** a number of smacks and **stop** whenever you like, change
-the implement, how hard, the swing speed, the hold before and after contact, and **end it** when you decide it is done.
-Position and clothing are fixed once you begin.
+You choose position, implement and what they wear, then everything is live:
+
+- **Smack** once, or **Run** a number and **Stop** whenever you like (Space also smacks), then **End the correction** when you decide it is done.
+- **Pace** and **Strength** are multipliers with − / + buttons (how fast you swing and how soon the next comes; how hard each lands). **Run** sets how many smacks a run gives.
+- **Change position…** opens a list; a short passage of narration plays while the room is set again. The pain, the marks and the clock carry over. (Over the table, across the lap, hands on head, hands on the chair, bent over with feet apart. The last needs the switch or paddle.)
+- **Change implement…** opens a list. The hand is simply put down; anything else has to be fetched, which is a short exchange: the options on offer, and how the resident answers, depend on their stats and how far along they are (ask politely, tell them, explain what it is for, say nothing and fetch it yourself, or check they are all right to go on). The first exchange of a correction can nudge a stat; the resident then comes back, returns to position, and the new implement is in hand.
+- **Layers** (skirt, bottoms, briefs) are toggled live. Clothing over the struck area cushions the sting, as in the engine's pain model.
+- **Cameras**: Overview (free to orbit), Behind (on the contact sites), Over your shoulder (the player's own view of them), From the floor (on the resident's face, far enough back to keep their movement in frame).
 
 The engine's pain model (tolerance, resilience, implement, speed, dread, dwell, clothing, tender skin) turns what you
 do into a **distress** reading for that resident. The *highest* distress you bring them to is scored against the band
@@ -63,6 +67,10 @@ is already thin (Valued ≤ 3 or Resentment ≥ 5) they use the word on the spot
 
 **Guidance** (on by default, toggle in the header) shades the band the resident needs on the meter.
 
+### The room
+
+A bare room in a medieval cottage: boarded floor, lime-washed stone walls, beamed ceiling, a window that lights the scene, a hearth, a door, a broom and a bucket. The furniture is plain joinery built to the engine's dimensions in `js/room.js`: the plank-seated chair the player sits in (which a resident can also bend over, hands on the seat) and a table with a thick plank top (which they bend over at full height).
+
 ### Candle (replaces the card hand)
 
 Corrections are free; reprieves and aftercare are paid from five marks of candle per evening: reprieves cost 2,
@@ -77,6 +85,14 @@ severity, Snow White's doubled Valued and sluggish Satisfaction, Jack shrugging 
 reading over-correction as abandonment, Goldilocks reading a reprieve as no consequence) live in `js/content.js` and
 `changeStat` in `js/rules.js`.
 
+## Character editor
+
+`editor.html` (linked from the title screen) previews any resident, or the player's own look, standing or in the correction scene (any position, implement and beat, with a "hold struck pose" switch), and takes pasted changes:
+
+- **Design**: a JSON object, either a few fields (`{"height":172,"outfit":{"hair":"#5a1e12"}}`) or a whole preset as the character viewer's *Show JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`. *Show current* prints the design as the game builds it.
+- **Poses**: the character viewer's pose-editor *report* pasted as it is, or JSON (`{"position":"case","who":"subject","beat":"base","bones":{"neck":[-40,0,0]}}`, an array, or `{position, giver:{…}, subject:{…}, beat}`). Angles are the engine's pose-table Euler degrees. Where the scene itself drives a bone (the swinging arm's IK) the report's table value is used. The subject's *base* pose and *contact* (struck) pose, and the player's relaxed / raised / contact beats, can each be edited, per position.
+- Changes are saved in the browser (`localStorage`) and used by the game whenever a scene is next built. *Export all* / *Import* move them elsewhere, *Undo last change* steps back, *Reset everything* returns to the built-in designs.
+
 ## Layout
 
 ```
@@ -84,9 +100,13 @@ index.html            page shell
 css/style.css
 js/content.js         the cast, chores, event templates, lines (pure data)
 js/rules.js           the rules (pure functions over JSON state; runs in Node)
+js/overrides.js       design and pose edits from the editor (storage, parsing, merging)
+js/room.js            the cottage room, the chair and the table
 js/bodies.js          the residents' (and the player's) bodies, as Starlight presets
-js/scene.js           the live-correction wrapper around the engine's discipline scene
+js/scene.js           the live-correction wrapper: cameras, rebuild-in-place, layers, pace and strength
+editor.html           the character editor (js/editor.js, css/editor.css)
 js/ui.js              interface and game flow
 tests/rules.test.js   unit tests for the rules, including a long simulated run
-tests/e2e-smoke.js    two days in headless Chromium
+tests/overrides.test.js  pose-report / design parsing, merging, and the implement exchange
+tests/e2e-smoke.js    two days in headless Chromium, including every live control
 ```

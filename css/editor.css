@@ -1,0 +1,12 @@
+.dock.editor { width: 420px; }
+.editor select { width: 100%; font: inherit; color: var(--ink); background: #14111a; border: 1px solid #50475c; border-radius: 6px; padding: 7px 10px; }
+.editor textarea { width: 100%; min-height: 110px; margin: 6px 0; box-sizing: border-box; background: #100d14; color: #d8d0c0; border: 1px solid #3a3343; border-radius: 6px; padding: 8px; font: 12px/1.45 ui-monospace, Consolas, monospace; resize: vertical; }
+.editor code { background: #100d14; padding: 1px 4px; border-radius: 3px; font-size: 11.5px; color: #e8cf8a; }
+.editor a { color: var(--gold); }
+.editor .tabs { margin: 6px 0; }
+.msg { margin-top: 10px; font-size: 13px; min-height: 2.4em; color: var(--muted); white-space: pre-wrap; }
+.msg.bad { color: #f1a39b; } .msg.ok { color: #b9d9a5; }
+.plist .item { display: flex; gap: 8px; align-items: baseline; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; margin: 4px 0; font-size: 12.5px; }
+.plist .item span { flex: 1; color: #cfc6d4; } .plist .item small { color: var(--muted); display: block; }
+.plist .item button { padding: 2px 8px; font-size: 12px; }
+@media (max-width: 800px) { .dock.editor { width: 100%; } }

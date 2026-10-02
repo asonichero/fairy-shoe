@@ -97,5 +97,8 @@ const KEEPERS = {
   d: { label: 'Slim, short brown hair', make: () => { const m = S.clone(S.PRESETS.haru); m.name = 'You'; return m; } },
 };
 
-root.FairyShoeBodies = { BODIES, KEEPERS, spec: id => BODIES[id](), keeper: k => (KEEPERS[k] || KEEPERS.a).make() };
+// Edits from the character editor (see overrides.js) are merged over the built-in designs.
+const Ov = root.FairyShoeOverrides;
+const withOverrides = (spec, key) => Ov ? Ov.applyDesign(spec, key) : spec;
+root.FairyShoeBodies = { BODIES, KEEPERS, spec: id => withOverrides(BODIES[id](), id), keeper: k => withOverrides((KEEPERS[k] || KEEPERS.a).make(), 'keeper-' + (KEEPERS[k] ? k : 'a')) };
 })(window);

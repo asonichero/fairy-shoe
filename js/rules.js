@@ -371,6 +371,70 @@ function applyAftercare(g, id, kind) {
   return { id, kind, name: A.name, changes: rec, exits };
 }
 
+// ── Asking for a new implement ──────────────────────────────────
+// To change implement the player sends the resident for the new one: a short exchange whose options and answers depend on how
+// the resident is (distress now, and their stats). Only the first exchange of a correction moves anything.
+function fetchMood(s) { return s.res >= 5 ? 'sullen' : s.wil >= 6 ? 'cheeky' : s.val >= 4 ? 'willing' : s.com <= 2 ? 'flustered' : 'plain'; }
+function fetchOptions(s, implName) {
+  const opts = [
+    { id: 'ask', label: 'Ask them to bring it, politely', line: '"Would you fetch the ' + implName + ' for me, please?"' },
+    { id: 'tell', label: 'Tell them to bring it', line: '"Fetch the ' + implName + '."' },
+  ];
+  if (s.val >= 3 && s.res <= 4) opts.push({ id: 'explain', label: 'Explain what it is for, then ask', line: '"I think this wants more than a hand can give. Would you bring me the ' + implName + '?"' });
+  if (s.res >= 5 || s.val <= 2) opts.push({ id: 'self', label: 'Say nothing and fetch it yourself', line: '(You get up, and fetch the ' + implName + ' yourself.)' });
+  opts.push({ id: 'checkin', label: 'Check they are all right to go on', line: '"Before I do: are you all right to go on?"' });
+  return opts;
+}
+const FETCH_REPLIES = {
+  ask: {
+    willing: ['"Of course, {Title}." {Name} goes at once, and sets it in your hand like something precious.'],
+    sullen: ['{Name} looks at you for a long moment, then goes, and comes back without a word.'],
+    cheeky: ['"Since you ask so nicely." {Name} takes the long way round, and is back with a grin.'],
+    flustered: ['"Yes — yes, which one? The — yes." {Name} comes back at a half-run, a little out of breath.'],
+    plain: ['"All right." {Name} fetches it and holds it out.'],
+  },
+  tell: {
+    willing: ['"Yes, {Title}." {Name} is back before the word has gone cold.'],
+    sullen: ['"Fine." {Name} goes, and the door is closed a little harder than it needs to be.'],
+    cheeky: ['"Is that an order?" {Name} goes, in no hurry, and is back with a look that says the answer is yes.'],
+    flustered: ['{Name} nods too many times and goes. It is plainly easier, somehow, to be told.'],
+    plain: ['{Name} goes without comment and brings it back.'],
+  },
+  explain: {
+    willing: ['{Name} listens, and nods slowly. "I understand, {Title}." {Subj} goes to get it.'],
+    plain: ['{Name} listens, and nods slowly. "All right. I see." {Subj} goes to fetch it.'],
+    cheeky: ['{Name} listens, and the grin fades a little. "Fair enough, {Title}." {Subj} goes.'],
+    flustered: ['{Name} listens to every word, and seems steadier for having heard it. {Subj} goes.'],
+    sullen: ['{Name} listens, and for once does not argue. {Subj} goes.'],
+  },
+  self: {
+    willing: ['{Name} watches you go, and says nothing. When you come back the silence has settled.'],
+    sullen: ['{Name} watches you go, and says nothing. When you come back the silence is colder.'],
+    cheeky: ['{Name} watches you go, and for once has nothing to say.'],
+    flustered: ['{Name} watches you go, hands wrung together, and does not know where to look.'],
+    plain: ['{Name} waits, and watches you go, and says nothing.'],
+  },
+};
+function fetchReply(id, s, charId, title, distress) {
+  const def = CHARACTERS[charId], ctx = { name: def.name, pron: def.pronouns, title };
+  if (id === 'checkin') {
+    const d = distress || 0;
+    const t = d >= 1.1 ? '"Honestly? I\'m near the end of what I can take, {Title}. But I\'m still here."' : d >= 0.8 ? '"I can go on, {Title}. Not for long."' : d >= 0.4 ? '"I\'m all right. Thank you for asking, {Title}."' : '"I\'m fine, {Title}. Go on."';
+    return fillTemplate(t + ' {Name} goes to bring it, steadier for having been asked.', ctx);
+  }
+  const pool = FETCH_REPLIES[id][fetchMood(s)] || FETCH_REPLIES[id].plain;
+  return fillTemplate(pool[0], ctx);
+}
+function applyFetch(g, id, optId) {
+  const s = stats(g, id), rec = [];
+  if (optId === 'ask' && s.res < 5 && s.val <= 4) changeStat(g, id, 'val', 1, 'conversation', rec);
+  else if (optId === 'tell') { if (s.com <= 3) changeStat(g, id, 'com', 1, 'conversation', rec); if (s.res >= 5) changeStat(g, id, 'res', 1, 'conversation', rec); }
+  else if (optId === 'explain' && s.val <= 5) changeStat(g, id, 'val', 1, 'conversation', rec);
+  else if (optId === 'self' && s.val <= 3) changeStat(g, id, 'val', -1, 'conversation', rec);
+  else if (optId === 'checkin' && s.val <= 5) changeStat(g, id, 'val', 1, 'conversation', rec);
+  return { changes: rec };   // (anyone who crosses their line moves on when the correction ends)
+}
+
 // ── Evening → next morning ──────────────────────────────────────
 const pendingCards = g => g.cards.filter(c => !c.done && g.roster.includes(c.id));
 function endEvening(g, rng) {
@@ -386,7 +450,7 @@ const api = { mulberry32, pick, shuffle, weighted, clamp, HOUSE_SIZE, EVENING_CA
   newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, sweepMoveOns, moveOn, useWord, backfill,
   generateChores, startMorning, assign, unassign, allAssigned, choreOf, choreBand, choreEffective, applyChoreBand, resolveChores, resolveDay,
   occurrence, categoryWeights, fillTemplate, makeEvent, applyEvent, rollEvents, situationalModifier, buildCards,
-  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, pendingCards, endEvening,
+  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, fetchMood, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
   getRapport, addRapport };
 root.FairyShoeRules = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
