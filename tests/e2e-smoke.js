@@ -7,7 +7,7 @@ const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`,
 // Everything the live dock offers, once: cameras, layers, pace and strength, a change of position, a fetched implement.
 async function liveControls(p) {
   const dock = '.dock';
-  for (const cam of ['Behind', 'Over your shoulder', 'From the floor', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
+  for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
   await p.click(`${dock} >> button:text-is("Bottoms down")`);                        // layers are live: bottoms up
   await p.click(`${dock} >> button:text-is("Bottoms up")`);
   await p.click(`${dock} >> button[aria-label="Pace up"]`); await p.click(`${dock} >> button[aria-label="Strength up"]`);

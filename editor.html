@@ -412,17 +412,6 @@ function buildClothing() {
     };
     el.appendChild(b);
   }
-  // A skirt can be gathered up at the waist behind, as at the wall in Kenji's scene.
-  if (Object.values(m.wardrobe).some(L => L.kind === 'skirt')) {
-    const b = document.createElement('button');
-    b.textContent = 'Gather skirt at back'; b.id = 'c-gather'; b.style.marginTop = '4px';
-    b.classList.toggle('on', !!gathered[k]);
-    b.onclick = () => {
-      gathered[k] = !gathered[k]; b.classList.toggle('on', gathered[k]);
-      builtFrom(k).forEach(c => S.setSkirtGathered(c, gathered[k]));
-    };
-    el.appendChild(b);
-  }
   const sw = document.getElementById('skins');
   sw.innerHTML = '';
   const setSkin = v => { m.skin = v; builtFrom(k).forEach(c => S.setSkin(c, v)); refreshJson(); buildClothing(); };
@@ -1277,7 +1266,8 @@ function animate() {
   const colliders = onStage.flatMap(S.bodyColliders);
   for (const ch of onStage) S.hairStep(ch, dt, colliders);
   for (const ch of onStage) S.faceStep(ch, view.faceLife === false ? 0 : dt);   // expression, blinks, eye movements
-  for (const ch of onStage) S.skirtStep(ch, dt, onStage, [scn && scn.bench]);
+  if (scn && scn.tool && scn.tool.grp) scn.tool.grp.userData.obb = true;
+  for (const ch of onStage) S.skirtStep(ch, dt, onStage, [scn && scn.bench, scn && scn.tool && scn.tool.grp]);
   for (const ch of onStage) S.bunchStep(ch);   // lowered garments' gathered waistbands
   followHead();
   controls.update();

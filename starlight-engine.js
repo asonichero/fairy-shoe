@@ -3609,7 +3609,7 @@ function updateScene(scn, dt) {
   // A wide implement rests across both sites, flat on the seat (its fit's `rest`), lifted
   // off the skin to REST_GAP (no compression), plus its own correction learnt at rest.
   const wideRest = wide ? strikeFit.rest : null;
-  if (wide) restAt = wideRest.palmC.clone().addScaledVector(wideRest.n, scn.wideRest ? 0 : WIDE_DEPTH + REST_GAP)
+  if (wide) restAt = wideRest.palmC.clone().addScaledVector(wideRest.n, scn.wideRest ? 0 : WIDE_DEPTH + REST_GAP + (scn.clothLift || 0))
     .add(scn.toolFix[scn.implement + 'rest'] || new THREE.Vector3());
   else if (tool) {
     const thumbR = fingersFwd.clone().cross(thighN.clone().negate()).normalize();
@@ -3760,7 +3760,7 @@ function updateScene(scn, dt) {
         : -seatExcess(seatPoints(scn), faceW, n, F.a, tool);
       const plan = onSkin ? strikeFit.face : wideRest.faceRest;
       const across = plan.clone().sub(faceW); across.addScaledVector(n, -across.dot(n));
-      const err = across.addScaledVector(n, (onSkin ? -(tool.rod ? ROD_DEPTH : scn.wideContact.depth) : REST_GAP) - low);
+      const err = across.addScaledVector(n, (onSkin ? -((tool.rod ? ROD_DEPTH : scn.wideContact.depth) - (scn.clothLift || 0)) : REST_GAP) - low);
       const key = scn.implement + (onSkin ? 'B' : 'rest'), cur = scn.toolFix[key] || new THREE.Vector3();
       if (err.length() < 0.15) scn.toolFix[key] = cur.addScaledVector(err, 0.5).clampLength(0, 0.1);
     }
@@ -4432,7 +4432,7 @@ function wideFit(scn, posed, shR, palm) {
   }
   const contactCands = [];
   const ca = line.clone().applyAxisAngle(cn, W_.yaw * DEG);
-  armCands(contactCands, { yaw: W_.yaw, slide: W_.slide, a: ca, n: cn, Q: handQuat(ca, cn), face: cc.addScaledVector(cn, hi - (T.rod ? ROD_DEPTH : W_.depth)), roll: W_.roll, pose: 0 }, 1, true);
+  armCands(contactCands, { yaw: W_.yaw, slide: W_.slide, a: ca, n: cn, Q: handQuat(ca, cn), face: cc.addScaledVector(cn, hi - ((T.rod ? ROD_DEPTH : W_.depth) - (scn.clothLift || 0))), roll: W_.roll, pose: 0 }, 1, true);
   const Epref = shR.clone().addScaledVector(new THREE.Vector3(...W_.elbow).normalize().applyQuaternion(torsoQ.clone().invert()), L1);
   const fit = contactCands.reduce((m, c) => !m || c.E.distanceTo(Epref) < m.E.distanceTo(Epref) ? c : m, null);
   Object.assign(fit, { p: fit.P, palmC: fit.P, skin: mid, skinL: sL.skin, skinR: sR.skin, tiltDeg: 0, rest, ms: performance.now() - t0 });
@@ -5269,6 +5269,66 @@ function skinPoints(ch, S) {
     let cell = S.grid.get(key); if (!cell) S.grid.set(key, cell = []); cell.push(k);
   }
 }
+// Another body's skin, as the cloth sees it: the same thing as the wearer's (re-skinned vertices with their normals, bucketed in a grid),
+// so cloth reacts to a disciplinarian's hand, thigh or arm exactly as it does to its own body, only the vertices near the cloth are
+// skinned (those whose strongest bone is within a metre of the hips).
+function prepOtherSkin(o) {
+  const g = o.mesh.geometry, pa = g.attributes.position.array, na = g.attributes.normal.array, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array;
+  const pick = []; for (let v = 0; v < pa.length / 3; v += 2) pick.push(v);
+  const n = pick.length, C = { n, p: new Float32Array(n * 3), nr: new Float32Array(n * 3), i: new Uint16Array(n * 4), w: new Float32Array(n * 4), dom: new Uint16Array(n), wp: new Float32Array(n * 3), wn: new Float32Array(n * 3) };
+  pick.forEach((v, k) => {
+    let best = -1, bw = -1;
+    for (let a = 0; a < 3; a++) { C.p[3 * k + a] = pa[3 * v + a]; C.nr[3 * k + a] = na[3 * v + a]; }
+    for (let a = 0; a < 4; a++) { C.i[4 * k + a] = si[4 * v + a]; C.w[4 * k + a] = sw[4 * v + a]; if (sw[4 * v + a] > bw) { bw = sw[4 * v + a]; best = si[4 * v + a]; } }
+    C.dom[k] = best;
+  });
+  return C;
+}
+const _bv = new THREE.Vector3();
+function otherSkin(o, hip) {
+  const C = o._clothSkin || (o._clothSkin = prepOtherSkin(o)), bones = o.mesh.skeleton.bones, inv = o.mesh.skeleton.boneInverses;
+  const M = bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, inv[i]).elements);
+  const near = new Uint8Array(bones.length);
+  bones.forEach((b, i) => { b.getWorldPosition(_bv); near[i] = _bv.distanceToSquared(hip) < 1 ? 1 : 0; });
+  const grid = new Map(); let m = 0;
+  for (let k = 0; k < C.n; k++) {
+    if (!near[C.dom[k]]) continue;
+    let x = 0, y = 0, z = 0, nx = 0, ny = 0, nz = 0;
+    const px = C.p[3 * k], py = C.p[3 * k + 1], pz = C.p[3 * k + 2], qx = C.nr[3 * k], qy = C.nr[3 * k + 1], qz = C.nr[3 * k + 2];
+    for (let a = 0; a < 4; a++) {
+      const w = C.w[4 * k + a]; if (!w) continue;
+      const e = M[C.i[4 * k + a]];
+      x += w * (e[0] * px + e[4] * py + e[8] * pz + e[12]); y += w * (e[1] * px + e[5] * py + e[9] * pz + e[13]); z += w * (e[2] * px + e[6] * py + e[10] * pz + e[14]);
+      nx += w * (e[0] * qx + e[4] * qy + e[8] * qz); ny += w * (e[1] * qx + e[5] * qy + e[9] * qz); nz += w * (e[2] * qx + e[6] * qy + e[10] * qz);
+    }
+    const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    C.wp[3 * m] = x; C.wp[3 * m + 1] = y; C.wp[3 * m + 2] = z; C.wn[3 * m] = nx / nl; C.wn[3 * m + 1] = ny / nl; C.wn[3 * m + 2] = nz / nl;
+    const key = cellKey(Math.floor(x / SKIN_CELL), Math.floor(y / SKIN_CELL), Math.floor(z / SKIN_CELL));
+    let cell = grid.get(key); if (!cell) grid.set(key, cell = []); cell.push(m++);
+  }
+  return { wp: C.wp, wn: C.wn, grid };
+}
+// The skin-plane test, for any body: the plane through the nearest skin point, and through the next nearest (a crease, the cleft
+// between thighs, the web of a hand has two surfaces; being outside one is not enough). Moves q out; true if it did.
+function skinPush(wp, wn, grid, q) {
+  const cs = SKIN_CELL, cx = Math.round(q[0] / cs), cy = Math.round(q[1] / cs), cz = Math.round(q[2] / cs);
+  let n1 = Infinity, i1 = -1, n2 = Infinity, i2 = -1;
+  for (let ix = cx - 1; ix <= cx; ix++) for (let iy = cy - 1; iy <= cy; iy++) for (let iz = cz - 1; iz <= cz; iz++) {
+    const cell = grid.get(cellKey(ix, iy, iz));
+    if (!cell) continue;
+    for (const k2 of cell) {
+      const dx = q[0] - wp[3 * k2], dy = q[1] - wp[3 * k2 + 1], dz = q[2] - wp[3 * k2 + 2], d2 = dx * dx + dy * dy + dz * dz;
+      if (d2 < n1) { n2 = n1; i2 = i1; n1 = d2; i1 = k2; } else if (d2 < n2) { n2 = d2; i2 = k2; }
+    }
+  }
+  let hit = false;
+  for (const ni of [i1, i2]) {
+    if (ni < 0) continue;
+    const o = 3 * ni, sd = (q[0] - wp[o]) * wn[o] + (q[1] - wp[o + 1]) * wn[o + 1] + (q[2] - wp[o + 2]) * wn[o + 2];
+    if (sd < SKIRT_THICK) { const push = SKIRT_THICK - sd; q[0] += wn[o] * push; q[1] += wn[o + 1] * push; q[2] += wn[o + 2] * push; hit = true; }
+  }
+  return hit;
+}
 function buildSkirt(ch, L) {
   const spec = ch.spec, H = spec.H, Y = spec.Y, R = SKIRT_RINGS, N = SKIRT_SEGS;
   const top = Y.belly + (L.above == null ? 0.01 : L.above);
@@ -5581,10 +5641,25 @@ function bunchOne(ch, B) {
 function setSkirtGathered(ch, on) {
   const S = ch.skirt;
   if (!S || !!S.gathered === on) return;
-  S.gathered = on; S.stillT = 0;
-  // Back columns: within 60° of straight behind.
-  S.backCols = []; for (let j = 0; j < S.N; j++) if (Math.cos(2 * Math.PI * j / S.N) < -0.5) S.backCols.push(j);
-  S.pinned = new Set(S.backCols.map(j => (S.R - 1) * S.N + j));
+  S.gathered = on; S.stillT = 0; S.hu = null;
+  if (on) gatherPins(S, 0);
+}
+// Where the hitched-up hem is held. Bent over (the back near horizontal) it is the hem of the back panel, caught just outside and
+// below the waistband, with the cloth between it folding over; that works as it is. Standing (u → 1, the back vertical) the same
+// hold leaves the hem hanging inside the hips, so it is instead drawn up the width of the hips (a wider arc of the back), tucked into
+// the waistband itself (at its height, a little in), and the next row up is caught below it, so the hem and the cloth drawn up with
+// it are all held at the band. `u` is 0 bent over, 1 upright.
+function gatherPins(S, u) {
+  S.hu = u;
+  const N = S.N, R = S.R, c = -0.5 + 0.38 * u, list = [], pinned = new Set();
+  for (let j = 0; j < N; j++) {
+    if (Math.cos(2 * Math.PI * j / N) >= c) continue;
+    const f = 1.12 - 0.09 * u;
+    list.push([(R - 1) * N + j, j, f, -(0.012 - 0.018 * u)]);                       // hem row: [particle, column, radius factor, drop below the band (× height)]
+    if (u > 0.3) list.push([(R - 2) * N + j, j, f + 0.03 * u, -(0.012 - 0.018 * u) - 0.02 * u]);   // the cloth drawn up with it, just under
+  }
+  for (const e of list) pinned.add(e[0]);
+  S.pinList = list; S.pinned = pinned;
 }
 function setSkirtOff(ch, off) {
   if (!ch.skirt) return;
@@ -5630,6 +5705,10 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     for (let k = 0; k < 16; k++) _sM.elements[k] += _sT.elements[k] * w;
   }
   const restW = k => _sV.set(S.rest[3 * k], S.rest[3 * k + 1], S.rest[3 * k + 2]).applyMatrix4(_sM);
+  if (S.gathered) {   // how upright the waist is: 0 with the back near horizontal, 1 standing
+    const upY = _sV2.set(0, 1, 0).transformDirection(_sM).y, u = Math.min(1, Math.max(0, (upY - 0.5) / 0.4));
+    if (S.hu == null || Math.abs(u - S.hu) > 0.02) { gatherPins(S, u); S.stillT = 0; }
+  }
   if (!S.p) {
     S.p = new Float32Array(n * 3); S.prev = new Float32Array(n * 3);
     for (let k = 0; k < n; k++) { restW(k); S.p.set([_sV.x, _sV.y, _sV.z], 3 * k); }
@@ -5683,7 +5762,14 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     P.sc = mul(add3(P.a, P.b), 0.5); P.sr = len3(P.ba) / 2 + 0.03; hands.push(P);
   }
   skinPoints(ch, S);
-  const boxes = solids.filter(Boolean).map(o => new THREE.Box3().setFromObject(o));
+  const bodies = everyone.filter(o => o !== ch && o.group.parent && o.group.visible && o.mesh && o.bones.pelvis.getWorldPosition(new THREE.Vector3()).distanceTo(hip) < 2.2).map(o => otherSkin(o, hip));
+  const boxes = [], obbs = [];
+  for (const o of solids.filter(Boolean)) {
+    if (!o.userData || !o.userData.obb) { boxes.push(new THREE.Box3().setFromObject(o)); continue; }
+    o.updateMatrixWorld(true);   // an implement: each of its meshes is a box in the mesh's own frame (it turns and tilts, so no world box will do)
+    o.traverse(m => { if (!m.isMesh || !m.visible) return; if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); obbs.push({ inv: m.matrixWorld.clone().invert(), m: m.matrixWorld, bb: m.geometry.boundingBox }); });
+  }
+  const _ov = new THREE.Vector3();
   const q = [0, 0, 0];
   // How far a point is inside Kiko's own body (plus the cloth's thickness), and which
   // way is out: her proxies for depth, her posed skin near the surface. [pen, nx, ny, nz]
@@ -5745,6 +5831,15 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
         q[m[1]] += m[2] * m[0]; hit = true;
       }
     }
+    for (const O of obbs) {
+      _ov.set(q[0], q[1], q[2]).applyMatrix4(O.inv);
+      const lo = O.bb.min, hi = O.bb.max, t = SKIRT_THICK * 0.6;
+      if (_ov.x > lo.x - t && _ov.x < hi.x + t && _ov.y > lo.y - t && _ov.y < hi.y + t && _ov.z > lo.z - t && _ov.z < hi.z + t) {
+        const pen = [[_ov.x - (lo.x - t), 'x', -1], [(hi.x + t) - _ov.x, 'x', 1], [_ov.y - (lo.y - t), 'y', -1], [(hi.y + t) - _ov.y, 'y', 1], [_ov.z - (lo.z - t), 'z', -1], [(hi.z + t) - _ov.z, 'z', 1]];
+        const m = pen.reduce((a, b) => b[0] < a[0] ? b : a);
+        _ov[m[1]] += m[2] * m[0]; _ov.applyMatrix4(O.m); q[0] = _ov.x; q[1] = _ov.y; q[2] = _ov.z; hit = true;
+      }
+    }
     // Other people's bodies (their padded contact proxies): out along the nearest surface's normal.
     let best = Infinity, bp = null;
     for (const P of prims) {
@@ -5755,6 +5850,8 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     }
     const T = SKIRT_THICK + SKIRT_PAD;
     if (bp && best < T) { const g = [0, 0, 0], gl = grad(bp, q, g), push = T - best; for (let a = 0; a < 3; a++) q[a] += g[a] / gl * push; hit = true; }
+    // Other bodies' skin (a hand, a thigh, an arm, whatever is near), by the same plane test as the wearer's own.
+    for (const B of bodies) if (skinPush(B.wp, B.wn, B.grid, q)) hit = true;
     // Hands (a capsule from wrist to fingertips): a palm comes down on top of the cloth.
     for (const P of hands) {
       const dx = q[0] - P.sc[0], dy = q[1] - P.sc[1], dz = q[2] - P.sc[2];
@@ -5776,24 +5873,8 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
       for (let a = 0; a < 3; a++) q[a] += g[a] / gl * push;
       hit = true;
     }
-    // Own skin: the plane through the nearest skin point, and again through the next nearest (a crease or the cleft between the
-    // thighs has two surfaces; being outside one is not enough).
-    const cs = SKIN_CELL, cx = Math.round(q[0] / cs), cy = Math.round(q[1] / cs), cz = Math.round(q[2] / cs);
-    let n1 = Infinity, i1 = -1, n2 = Infinity, i2 = -1;
-    for (let ix = cx - 1; ix <= cx; ix++) for (let iy = cy - 1; iy <= cy; iy++) for (let iz = cz - 1; iz <= cz; iz++) {
-      const cell = S.grid.get(cellKey(ix, iy, iz));
-      if (!cell) continue;
-      for (const k2 of cell) {
-        const dx = q[0] - S.skin.wp[3 * k2], dy = q[1] - S.skin.wp[3 * k2 + 1], dz = q[2] - S.skin.wp[3 * k2 + 2], d2 = dx * dx + dy * dy + dz * dz;
-        if (d2 < n1) { n2 = n1; i2 = i1; n1 = d2; i1 = k2; } else if (d2 < n2) { n2 = d2; i2 = k2; }
-      }
-    }
-    for (const ni of [i1, i2]) {
-      if (ni < 0) continue;
-      const W = S.skin.wp, Nn = S.skin.wn, o = 3 * ni;
-      const sd = (q[0] - W[o]) * Nn[o] + (q[1] - W[o + 1]) * Nn[o + 1] + (q[2] - W[o + 2]) * Nn[o + 2];
-      if (sd < SKIRT_THICK) { const push = SKIRT_THICK - sd; q[0] += Nn[o] * push; q[1] += Nn[o + 1] * push; q[2] += Nn[o + 2] * push; hit = true; }
-    }
+    // Own skin, last: wherever the cloth is squeezed it ends on the wearer's skin.
+    if (skinPush(S.skin.wp, S.skin.wn, S.grid, q)) hit = true;
     if (q[1] < SKIRT_THICK) { q[1] = SKIRT_THICK; hit = true; }
     if (hit) {
       p[3 * k] = q[0]; p[3 * k + 1] = q[1]; p[3 * k + 2] = q[2];
@@ -5844,9 +5925,8 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     }
     for (let k = 0; k < N; k++) { restW(k); p.set([_sV.x, _sV.y, _sV.z], 3 * k); prev.set([_sV.x, _sV.y, _sV.z], 3 * k); }
     // Gathered (setSkirtGathered): the back of the hem is held up at the waistband, just outside and below it; the fabric between folds over.
-    if (S.gathered) for (const j of S.backCols) {
-      const k = (R - 1) * N + j, x = S.rest[3 * j] * 1.12, y = S.rest[3 * j + 1] - 0.012 * ch.spec.H, z = S.rest[3 * j + 2] * 1.12;
-      _sV.set(x, y, z).applyMatrix4(_sM); p.set([_sV.x, _sV.y, _sV.z], 3 * k); prev.set([_sV.x, _sV.y, _sV.z], 3 * k);
+    if (S.gathered) for (const [k, j, f, drop] of S.pinList) {
+      _sV.set(S.rest[3 * j] * f, S.rest[3 * j + 1] + drop * ch.spec.H, S.rest[3 * j + 2] * f).applyMatrix4(_sM); p.set([_sV.x, _sV.y, _sV.z], 3 * k); prev.set([_sV.x, _sV.y, _sV.z], 3 * k);
     }
     const pin = k => S.gathered && S.pinned.has(k);
     for (let it = 0; it < SKIRT.ITER; it++) {

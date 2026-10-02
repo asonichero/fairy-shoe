@@ -28,17 +28,10 @@ const skirtMode = v => v === true ? 'down' : !v ? 'off' : SKIRT_MODES.includes(v
 const LAYER_LABELS = { skirt: { down: 'Skirt down', up: 'Skirt hitched up', off: 'Skirt off' }, bottoms: ['Bottoms down', 'Bottoms up'], briefs: ['Briefs down', 'Briefs up'] };
 const layerLabel = (name, v) => name === 'skirt' ? LAYER_LABELS.skirt[skirtMode(v)] : LAYER_LABELS[name][v ? 0 : 1];
 const layerNext = (name, v) => name === 'skirt' ? SKIRT_MODES[(SKIRT_MODES.indexOf(skirtMode(v)) + 1) % SKIRT_MODES.length] : !v;
-const CAMERAS = [['overview', 'Overview'], ['behind', 'Behind'], ['shoulder', 'Over your shoulder'], ['floor', 'From the floor']];
+const CAMERAS = [['overview', 'Overview'], ['behind', 'Behind'], ['shoulder', 'Over your shoulder'], ['floor', 'Face']];
 const PACE = [0.5, 0.75, 1, 1.25, 1.5, 2];
 const STRENGTH = [0.4, 0.6, 0.8, 1, 1.25, 1.5];
 const RUN = [4, 8, 12, 16, 24, 32, 48];
-const OVERVIEW = {
-  lap:    { pos: [2.5, 1.5, 3.2], target: [0, 0.6, 0.2] },
-  case:   { pos: [-2.7, 1.45, -2.9], target: [-0.05, 0.85, -0.15] },
-  head:   { pos: [-3.2, 1.45, -2.9], target: [-0.1, 0.9, -0.3] },
-  chair:  { pos: [-2.8, 1.4, -3.0], target: [0.1, 0.8, -0.2] },
-  spread: { pos: [-3.0, 1.45, -3.4], target: [-0.1, 0.85, -0.45] },
-};
 
 // ── Sound: a clap per smack ─────────────────────────────────────
 const Sound = (() => {
@@ -161,29 +154,42 @@ function createStage(viewEl, { onGLProblem } = {}) {
   // ── Cameras. 'overview' is free to orbit; the others follow the action: each frame they are aimed from where the
   // subject and the player are, and eased toward, so movement stays in view.
   const cam = { mode: 'overview', fov: 35, handover: 0, pos: new V3(), tgt: new V3() };
+  // The subject's frame: which way they face, how upright they are, and where the contact sites are (the glutes: behind and a little
+  // below the hip joint). Facing is the way the body leans when bent over or across a lap, and where the pelvis points when standing.
   function focusOf(ses) {
     const s = ses.subject, P = s.bones.pelvis.getWorldPosition(new V3()), H = s.bones.head.getWorldPosition(new V3());
-    const fwd = new V3(H.x - P.x, 0, H.z - P.z); if (fwd.lengthSq() < 1e-4) fwd.set(1, 0, 0); fwd.normalize();
-    const C = P.clone().addScaledVector(fwd, -0.07); C.y -= 0.02;   // the contact sites: the rear, a little behind and below the hip joint
-    return { P, H, fwd, C };
+    const lean = new V3(H.x - P.x, 0, H.z - P.z), leanLen = lean.length();
+    let fwd = lean.normalize();
+    if (leanLen < 0.25) { fwd = new V3(0, 0, 1).applyQuaternion(s.bones.pelvis.getWorldQuaternion(new T.Quaternion())); fwd.y = 0; if (fwd.lengthSq() < 1e-4) fwd.set(1, 0, 0); fwd.normalize(); }
+    const up = 1 - clamp(leanLen / 0.5, 0, 1);   // 1 standing, 0 bent over
+    const C = P.clone().addScaledVector(fwd, -0.07); C.y -= 0.03 + 0.03 * up;
+    return { P, H, fwd, up, C };
   }
   const inRoom = (v, m = 0.3) => { const lim = Room.HALF - m; v.x = clamp(v.x, -lim, lim); v.z = clamp(v.z, -lim, lim); v.y = clamp(v.y, 0.08, Room.HEIGHT - 0.2); return v; };
+  // Overview: a three-quarter view from behind the subject, from the side away from the player, so the glutes, the player and the
+  // implement are all in view. (It is the starting point; the view can be orbited from there.)
+  function overviewPose(ses) {
+    const f = focusOf(ses), GH = ses.giver.bones.head.getWorldPosition(new V3());
+    const side = new V3(-f.fwd.z, 0, f.fwd.x); if (side.dot(new V3(GH.x - f.C.x, 0, GH.z - f.C.z)) > 0) side.negate();
+    const dir = f.fwd.clone().multiplyScalar(-Math.cos(0.6)).addScaledVector(side, Math.sin(0.6));
+    const pos = f.C.clone().addScaledVector(dir, 2.5 + 0.5 * f.up); pos.y = f.C.y + 0.6 + 0.5 * f.up;
+    return { pos: inRoom(pos, 0.25), tgt: f.C.clone().addScaledVector(f.fwd, 0.15).add(new V3(0, 0.1 + 0.3 * f.up, 0)), fov: 35 };
+  }
   function desired(ses) {
     const f = focusOf(ses), g = ses.giver;
-    if (cam.mode === 'behind') {
-      const pos = f.C.clone().addScaledVector(f.fwd, -1.7); pos.y = f.C.y + 0.5;
-      return { pos: inRoom(pos), tgt: f.C.clone(), fov: 38 };
+    if (cam.mode === 'behind') {   // square behind the subject, a little above the contact sites, far enough back to take in both cheeks and the thighs
+      const pos = f.C.clone().addScaledVector(f.fwd, -(1.6 + 0.6 * f.up)); pos.y = f.C.y + 0.4 + 0.1 * f.up;
+      return { pos: inRoom(pos, 0.2), tgt: f.C.clone(), fov: 40 };
     }
-    if (cam.mode === 'shoulder') {
-      const GS = g.bones.upperArmL.getWorldPosition(new V3()), GH = g.bones.head.getWorldPosition(new V3());
-      const away = new V3(GS.x - f.C.x, 0, GS.z - f.C.z); if (away.lengthSq() < 1e-4) away.set(-1, 0, 0); away.normalize();
-      const side = new V3(-away.z, 0, away.x);   // sideways, off the line of sight and away from the swinging (right) arm
-      const left = side.dot(new V3(GS.x - GH.x, 0, GS.z - GH.z)) >= 0 ? 1 : -1;
-      const pos = GS.clone().addScaledVector(away, 0.3).addScaledVector(side, 0.4 * left); pos.y = GS.y + 0.38;   // behind and above the player's left shoulder
-      return { pos: inRoom(pos, 0.15), tgt: f.C.clone(), fov: 52 };
+    if (cam.mode === 'shoulder') {   // the player's own view from just over the right shoulder (the striking arm's), looking down at the contact sites
+      const GS = g.bones.upperArmR.getWorldPosition(new V3()), GH = g.bones.head.getWorldPosition(new V3());
+      const out = new V3(GS.x - GH.x, 0, GS.z - GH.z); if (out.lengthSq() < 1e-4) out.set(1, 0, 0); out.normalize();   // from the head toward that shoulder
+      const toward = new V3(f.C.x - GH.x, 0, f.C.z - GH.z); if (toward.lengthSq() < 1e-4) toward.set(1, 0, 0); toward.normalize();
+      const pos = GH.clone().addScaledVector(out, 0.14).addScaledVector(toward, 0.2); pos.y = GH.y - 0.03;   // where the eyes are: ahead of the face, over that shoulder, so the player's own chest is behind the lens
+      return { pos: inRoom(pos, 0.1), tgt: f.C.clone(), fov: 62 };
     }
-    if (cam.mode === 'floor') {
-      const pos = f.H.clone().addScaledVector(f.fwd, 1.7); pos.y = 0.14;
+    if (cam.mode === 'floor') {   // the face, from in front of it, at the height that suits the pose: on the floor when the head hangs low, lower than the face when it is raised
+      const pos = f.H.clone().addScaledVector(f.fwd, 1.7); pos.y = clamp(f.H.y - 0.45, 0.14, 1.2);
       return { pos: inRoom(pos), tgt: f.H.clone().add(new V3(0, 0.02, 0)), fov: 50 };
     }
     return null;
@@ -191,7 +197,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   function setCamera(mode, snap) {
     if (!CAMERAS.some(c => c[0] === mode)) return;
     cam.mode = mode; cam.snap = !!snap; controls.enabled = mode === 'overview';
-    if (mode === 'overview') { const o = session ? OVERVIEW[session.position] : null; if (o) { cam.go = { pos: new V3(...o.pos), tgt: new V3(...o.target), fov: 35 }; cam.handover = 1; } }
+    if (mode === 'overview') { if (session) { cam.go = overviewPose(session); cam.handover = 1; } }
     else cam.go = null;
   }
   function updateCamera(dt) {
@@ -275,7 +281,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       }
       scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
-      if (cam.mode === 'overview') { const o = OVERVIEW[position]; camera.position.set(...o.pos); controls.target.set(...o.target); camera.fov = 35; camera.updateProjectionMatrix(); cam.go = null; }
+      if (cam.mode === 'overview') { s.group.updateMatrixWorld(true); g.group.updateMatrixWorld(true); const o = overviewPose({ subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = 35; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; }
     }
 
     const api = {
@@ -339,7 +345,8 @@ function createStage(viewEl, { onGLProblem } = {}) {
         const colliders = on.flatMap(S.bodyColliders);
         for (const ch of on) S.hairStep(ch, dt, colliders);
         for (const ch of on) S.faceStep(ch, dt);
-        for (const ch of on) S.skirtStep(ch, dt, on, [scn.bench]);
+        if (scn.tool && scn.tool.grp) scn.tool.grp.userData.obb = true;
+        for (const ch of on) S.skirtStep(ch, dt, on, [scn.bench, scn.tool && scn.tool.grp]);
         for (const ch of on) S.bunchStep(ch);
         if (P) st.peak = Math.max(st.peak, P.distress());
         if (api.onChange) api.onChange(api);
