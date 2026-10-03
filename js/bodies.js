@@ -103,9 +103,9 @@ const KEEPERS = {
       bra: { kind: 'bra', name: 'Plain bodice', color: 0xe9e2d4, style: 'classic' },
       briefs: { kind: 'briefs', name: 'Cotton drawers', color: 0xe9e2d4, rise: 0.7, side: 1.0, back: 'brief', backCurve: 0.5 },
 //      top: { kind: 'top', name: 'Plum dress, bodice', color: 0x5c3a56, from: 'hip', sleeves: 2 },
-      top: { kind: 'top', name: 'Plum tank', color: 0x5c3a56, from: 'hip', sleeves: 0 },
 //      skirt: { kind: 'skirt', name: 'Plum dress, skirt', color: 0x5c3a56, above: 0.01, length: 0.45, flare: 0.05 },
-      bottom: wear(m.wardrobe.bottom, { name: 'Jeggings', color: 0x547085 }),
+      bottom: { kind: 'bottom', name: 'Jeggings', color: 0x547085, legLen: 2.0, lowerTo: 'ankle'},
+      top: { kind: 'top', name: 'Plum tank', color: 0x5c3a56, from: 'hip', sleeves: 0 },
       shoes: { kind: 'shoes', name: 'Black buckled shoes', color: 0x1c1618 },
     };
     m.looks = { Underwear: ['bra', 'briefs'], Everyday: ['bra', 'briefs', 'top', 'skirt', 'shoes'] }; m.look = 'Everyday';
