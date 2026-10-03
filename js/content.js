@@ -130,14 +130,14 @@ const CHORES = [
   { id: 'washing', name: 'Washing', phrase: 'the washing', diff: 1 },
   { id: 'sweeping', name: 'Sweeping', phrase: 'the sweeping', diff: 1 },
   { id: 'water', name: 'Fetching Water', phrase: 'the water-fetching', diff: 1 },
-  { id: 'hens', name: 'Feeding the Hens', phrase: 'the hens', diff: 1 },
+  { id: 'hens', plural: true, name: 'Feeding the Hens', phrase: 'the hens', diff: 1 },
   { id: 'mending', name: 'Mending', phrase: 'the mending', diff: 2 },
   { id: 'cooking', name: 'Cooking Supper', phrase: 'supper', diff: 2 },
-  { id: 'floors', name: 'Scrubbing the Floors', phrase: 'the floors', diff: 2 },
+  { id: 'floors', plural: true, name: 'Scrubbing the Floors', phrase: 'the floors', diff: 2 },
   { id: 'garden', name: 'Tending the Garden', phrase: 'the garden', diff: 2 },
   { id: 'preserving', name: 'Preserving', phrase: 'the preserving', diff: 3 },
   { id: 'hearth', name: 'Hearth Care', phrase: 'the hearth', diff: 3 },
-  { id: 'laundry', name: 'Laundry Line', phrase: 'the heavy linens', diff: 2, paired: true },
+  { id: 'laundry', plural: true, name: 'Laundry Line', phrase: 'the heavy linens', diff: 2, paired: true },
   { id: 'baking', name: 'Baking', phrase: 'the baking', diff: 2, paired: true },
   { id: 'furniture', name: 'Moving Furniture', phrase: 'the furniture', diff: 2, paired: true },
 ];
@@ -146,30 +146,34 @@ const CHORES = [
 const CHORE_LINES = {
   well: [
     '{Name} did {Chore} so thoroughly it was a pleasure to look at. {Subj} even hummed through it.',
-    '{Name} finished {Chore} early and then went looking for something else to put right.',
-    '{Chore} was done beautifully today. {Name} wouldn\'t take the credit, but {Subj} stood a little straighter for it.',
+    '{Name} finished {Chore} early, and then went looking for something else to put right.',
+    '{Chore} {was} done beautifully today. {Name} wouldn\'t take the credit, but {Subj} stood a little straighter for it.',
+    'By midday {Chore} {was} finished and {Name} was looking round for more, which no one could remember happening before.',
   ],
   completed: [
     '{Name} did {Chore}, start to finish, without being asked twice.',
     '{Name} saw {Chore} through. Nothing remarkable, nothing wrong.',
-    '{Chore} got done. {Name} went about it steadily and quietly.',
+    '{Chore} {was} done, steadily and quietly, and {Name} went about {it} without complaint.',
+    '{Name} got on with {Chore} and finished {it} before supper, with no fuss and no shortcuts.',
   ],
   partial: [
     '{Name} got most of {Chore} done and left the rest "for later", which is not a time.',
-    '{Name} started {Chore} well and drifted. Half of it is finished and half of it is a good intention.',
-    '{Chore} was done, after a fashion. There are corners {Name} is hoping nobody checks.',
+    '{Name} started {Chore} well and drifted. Half of {it} {is} finished and half of {it} {is} a good intention.',
+    '{Chore} {was} done, after a fashion. There are corners {Name} is hoping nobody checks.',
+    '{Name} did a fair part of {Chore}, and then found something much more interesting to be doing.',
   ],
   failed: [
-    '{Name} made a real mess of {Chore}. It will have to be done again, by someone, and {Subj} knows it.',
+    '{Name} made a real mess of {Chore}. {It} will have to be done again, by someone, and {Subj} knows it.',
     '{Chore} did not get done. {Name} has a very detailed explanation, and it has no end.',
     '{Name} abandoned {Chore} halfway and was found elsewhere, looking out of a window.',
+    '{Name} was given {Chore} to see to and, by evening, had very little to show for it but a long story about why.',
   ],
 };
 const PAIR_LINES = {
-  well: ['{Name} and {Partner} did {Chore} together as if they had done it all their lives.'],
-  completed: ['{Name} and {Partner} saw {Chore} through between them, with only a little muttering.'],
-  partial: ['{Name} and {Partner} got most of {Chore} done and each privately believes the other one left the rest.'],
-  failed: ['{Name} and {Partner} made a tangle of {Chore} between them, and neither will say whose fault it was.'],
+  well: ['{Name} and {Partner} did {Chore} together as if they had done it all their lives.', '{Name} and {Partner} found a rhythm over {Chore} and kept it all afternoon.'],
+  completed: ['{Name} and {Partner} saw {Chore} through between them, with only a little muttering.', '{Name} and {Partner} did {Chore} side by side, and said hardly a word, which in this house is a kind of peace.'],
+  partial: ['{Name} and {Partner} got most of {Chore} done, and each privately believes the other one left the rest.', '{Name} and {Partner} began {Chore} together and finished it separately, or nearly.'],
+  failed: ['{Name} and {Partner} made a tangle of {Chore} between them, and neither will say whose fault it was.', '{Name} and {Partner} could not agree how to do {Chore}, and so did not.'],
 };
 
 // ── Events ──────────────────────────────────────────────────────
@@ -393,6 +397,59 @@ const SCENES = {
   },
 };
 
-root.FairyShoeContent = { SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
+// ── Morning narration ───────────────────────────────────────────
+// A few sentences at the top of the morning: the weather in the house, one resident caught in the act of being themselves, and what wants doing.
+const MORNING = {
+  first: ['The door of the Fairy Shoe is open, the fire has been lit, and the kettle is making the small anxious noises of a kettle that has never yet been asked to do anything. Today, at last, the house has people in it.'],
+  weather: [
+    'Mist lies in the lane and the hens complain about it from under the hedge. The kitchen smells of woodsmoke and yesterday\'s bread.',
+    'The sun gets in through the shutters in long gold bars, and every one of them has dust dancing in it. It is going to be a warm, sticky sort of day.',
+    'Rain on the thatch since before dawn. The whole house has gone quiet and a little damp, and the cat has taken the best chair.',
+    'A hard bright frost has put white on every fencepost, and the water in the pail has a skin of ice that someone will have to break.',
+    'There is a wind getting up. The shutters knock, the chimney hums, and a loose slate somewhere is keeping time.',
+    'The morning is grey, soft and slow. The sort of light that makes everything look as if it has been washed and not yet put away.',
+    'Birds have been at it since four. The garden is loud and green and badly in need of attention.',
+    'Somebody has left the back door open overnight and the whole kitchen is full of cold air and one very confident sparrow.',
+    'The stairs creak in their usual order. Down the lane the baker\'s cart goes by, and the house lets out its breath.',
+    'A thin cold drizzle, and the kind of sky that cannot make up its mind. Boots stand in a row by the door, each with a puddle of its own.',
+  ],
+  // by how the resident is (rules.js fetchMood): a line about them, to be filled with {Name} {Subj} {Poss}
+  mood: {
+    willing: ['{Name} is already up and has laid the table for everyone, and is pretending not to wait to be noticed.', '{Name} comes down humming and has put the porridge on before anyone asked.'],
+    sullen: ['{Name} is at the table with {Poss} arms folded, and has an expression that could curdle milk.', '{Name} has not said a word since waking, and has said it quite loudly.'],
+    cheeky: ['{Name} slides down the banister, lands badly, and acts as though that was the plan.', '{Name} is on the wrong side of the kitchen table, eating the thing that was meant for later.'],
+    flustered: ['{Name} has put {Poss} boots on the wrong feet and only noticed on the stairs.', '{Name} is looking for something that {Subj} has been holding for some time.'],
+    plain: ['{Name} comes in with the cold on {Poss} coat, and sits down to breakfast like anyone.', '{Name} is already at the window, watching the lane for no reason {Subj} could name.'],
+  },
+  own: {
+    red: '{Name} came in from the garden with flowers in {Poss} hair and no recollection of what {Subj} went out to fetch.',
+    goldilocks: '{Name} has tried three chairs at the breakfast table and has opinions on all of them.',
+    rapunzel: '{Name} stood at the highest window for a while before coming down, and says it was only for the light.',
+    jack: '{Name} has a new plan, which he is about to explain to anyone who will hold still.',
+    hans: '{Name} has been sitting out in the cold since dawn, and does not understand why that is worrying.',
+    snow: '{Name} has already agreed to three different things this morning, two of which cannot both be done.',
+  },
+  list: {
+    easy: 'The list on the kitchen wall today is a gentle one: {things}.',
+    hard: 'The list on the kitchen wall is not a gentle one today: {things}, and {hardest} is going to want someone steady.',
+    plain: 'There is work on the list for everyone: {things}.',
+  },
+};
+// One-line narration for results that have none of their own.
+const RESULT_LINES = {
+  reprieve: {
+    stern: 'You take {Name} aside and say it plainly, without raising a hand. {Subj} listens to every word, and does not look away.',
+    kind: 'You sit down with {Name} and ask, and then you listen. It takes a long time, and by the end of it something has eased.',
+    reflection: 'You put pen and paper in front of {Name} and leave {Obj} to it. For a long while the only sound in the room is the scratching of the nib.',
+  },
+  aftercare: {
+    corner: '{Name} stands facing the wall, hands behind {Poss} back, and for a few quiet minutes there is nothing to do but think.',
+    lines: '{Name} is set to copy out a page, carefully, and does it. Slowly the hand steadies.',
+    held: 'You stay with {Name} until it eases, and nobody says much, and nobody needs to.',
+    warm: 'Afterward you say something kind, and mean it, and {Name} lets the words in.',
+  },
+};
+
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

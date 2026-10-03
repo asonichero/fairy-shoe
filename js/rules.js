@@ -148,6 +148,7 @@ function generateChores(g, rng) {
 function startMorning(g, rng) {
   g.day++; g.phase = 'assign'; g.leftToday = []; g.cards = []; g.queue = []; g.cursor = 0; g.candle = EVENING_CANDLE;
   g.chores = generateChores(g, rng);
+  g.narration = morningNarration(g, rng);
   return g.chores;
 }
 function assign(g, choreIdx, slotIdx, id) {
@@ -254,7 +255,8 @@ function choreLine(g, id, entry, rng) {
   const def = CHARACTERS[id], ch = entry.chore, partnerId = ch.slots.find(s => s !== id);
   const pool = ch.slots.length === 2 ? C.PAIR_LINES[entry.band] : C.CHORE_LINES[entry.band];
   const t = pick(rng, pool);
-  const out = fillTemplate(t.replace('{Chore}', ch.def.phrase).replace('{Partner}', partnerId ? CHARACTERS[partnerId].name : ''), { name: def.name, pron: def.pronouns, title: g.title });
+  const pl = !!ch.def.plural, agree = { '{was}': pl ? 'were' : 'was', '{is}': pl ? 'are' : 'is', '{It}': pl ? 'They' : 'It', '{it}': pl ? 'them' : 'it' };
+  const out = fillTemplate(t.replace(/\{(was|is|It|it)\}/g, m => agree[m]).replace('{Chore}', ch.def.phrase).replace('{Partner}', partnerId ? CHARACTERS[partnerId].name : ''), { name: def.name, pron: def.pronouns, title: g.title });
   return out[0].toUpperCase() + out.slice(1);
 }
 // Situational modifier: chore trouble +1; an event its own; both on one card add a further +1; capped at +2.
@@ -351,7 +353,7 @@ function applyReprieve(g, id, kind) {
   if (card && card.event && card.event.trap && kind !== 'stern') changeStat(g, id, 'sat', 1, 'reprieve', rec);   // the trap variants: this is what they needed
   if (unsettled) changeStat(g, id, 'wil', 1, 'reprieve', rec);               // no consequence, so no change
   if (card) card.done = true;
-  const snap = { id, kind: 'reprieve', reprieve: kind, name: R.name, changes: rec, exits: [] };
+  const dd = CHARACTERS[id], snap = { id, kind: 'reprieve', reprieve: kind, name: R.name, changes: rec, exits: [], text: fillTemplate(C.RESULT_LINES.reprieve[kind], { name: dd.name, pron: dd.pronouns, title: g.title }) };
   snap.exits.push(...sweepMoveOns(g));
   return snap;
 }
@@ -369,7 +371,26 @@ function applyAftercare(g, id, kind) {
   for (const [st, d] of AFTERCARE_EFFECT[kind](id)) changeStat(g, id, st, d, 'aftercare', rec);
   if (kind === 'corner' && stats(g, id).val <= 3) changeStat(g, id, 'res', 1, 'aftercare', rec);
   const exits = sweepMoveOns(g);
-  return { id, kind, name: A.name, changes: rec, exits };
+  const dd = CHARACTERS[id];
+  return { id, kind, name: A.name, changes: rec, exits, line: fillTemplate(C.RESULT_LINES.aftercare[kind], { name: dd.name, pron: dd.pronouns, title: g.title }) };
+}
+
+// ── Morning narration ───────────────────────────────────────────
+// Built once when the morning begins (so it does not change on every redraw): the weather, one resident, and the list.
+function listPhrase(chores) {
+  const names = chores.map(c => c.def.name.toLowerCase());
+  return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1];
+}
+function morningNarration(g, rng) {
+  const M = C.MORNING, out = [];
+  out.push(g.day === 1 ? M.first[0] : pick(rng, M.weather));
+  const id = pick(rng, g.roster), s = stats(g, id), def = CHARACTERS[id];
+  const t = rng() < 0.4 ? M.own[id] : pick(rng, M.mood[fetchMood(s)]);
+  out.push(fillTemplate(t, { name: def.name, pron: def.pronouns, title: g.title }));
+  const hard = g.chores.slice().sort((a, b) => b.def.diff - a.def.diff)[0], top = hard ? hard.def.diff : 1, things = listPhrase(g.chores);
+  const tpl = top >= 3 ? M.list.hard : top === 1 ? M.list.easy : M.list.plain;
+  out.push(tpl.replace('{things}', things).replace('{hardest}', hard ? hard.def.name.toLowerCase() : ''));
+  return out;
 }
 
 // ── Asking for a new implement ──────────────────────────────────
@@ -465,7 +486,7 @@ const api = { mulberry32, pick, shuffle, weighted, clamp, HOUSE_SIZE, EVENING_CA
   newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, sweepMoveOns, moveOn, useWord, backfill,
   generateChores, startMorning, assign, unassign, allAssigned, choreOf, choreBand, choreEffective, applyChoreBand, resolveChores, resolveDay,
   occurrence, categoryWeights, fillTemplate, makeEvent, applyEvent, rollEvents, situationalModifier, buildCards,
-  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, farewellScene, fetchMood, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
+  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, choreLineFor: choreLine, morningNarration, farewellScene, fetchMood, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
   getRapport, addRapport };
 root.FairyShoeRules = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

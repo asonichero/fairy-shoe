@@ -271,3 +271,33 @@ test('the word notice carries how they were, captured before the reset', () => {
   const n = R.useWord(g, 'jack', 'worn');
   assert.equal(n.mood, 'sullen'); assert.deepEqual(g.chars.jack.stats, C.CHARACTERS.jack.base);
 });
+
+test('behaviour report lines: every chore, band and template reads grammatically', () => {
+  const g = house(['red', 'jack', 'snow']);
+  for (const ch of C.CHORES) for (const band of ['well', 'completed', 'partial', 'failed']) {
+    const slots = ch.paired ? ['red', 'jack'] : ['red'];
+    for (let seed = 1; seed < 12; seed++) {
+      const line = R.choreLineFor ? R.choreLineFor(g, 'red', { band, chore: { def: ch, slots } }, rng(seed)) : null;
+      if (!line) return;
+      assert.ok(!/\{\w+\}/.test(line), line);
+      assert.ok(/^[A-Z"]/.test(line), 'starts with a capital: ' + line);
+      if (ch.plural) assert.ok(!/ (was|is) (done|finished|a good)/.test(line.replace(/Half of them (is|are)/, '')) && !/\bthe (hens|floors|heavy linens) was\b/i.test(line), line);
+      else assert.ok(!/\bwere done\b|\bThey will\b|\bHalf of them\b/.test(line), line);
+    }
+  }
+});
+
+test('morning narration: a weather line, a resident and the list, each filled', () => {
+  for (let seed = 1; seed < 40; seed++) {
+    const g = house(['red', 'jack', 'snow'], seed); R.startMorning(g, rng(seed));
+    assert.equal(g.narration.length, 3);
+    for (const t of g.narration) { assert.ok(!/\{\w+\}/.test(t), t); assert.ok(t.length > 20); }
+    assert.ok(g.chores.every(c => g.narration[2].toLowerCase().includes(c.def.name.toLowerCase())), g.narration[2]);
+  }
+});
+
+test('reprieves and aftercare come with a sentence of their own', () => {
+  const g = house(['red', 'jack', 'snow']); withCard(g, 'red', {});
+  const r = R.applyReprieve(g, 'red', 'kind'); assert.ok(r.text && !/\{\w+\}/.test(r.text) && /Red/.test(r.text));
+  const a = R.applyAftercare(g, 'red', 'warm'); assert.ok(a.line && /Red/.test(a.line));
+});

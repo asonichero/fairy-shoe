@@ -38,13 +38,13 @@ Any static server works; there is no build step. Progress autosaves in `localSto
 
 ## The live correction
 
-You choose position, implement and what they wear, then everything is live:
+You begin across the lap, with the hand, bottoms and briefs up (all changeable), then everything is live:
 
 - **Smack** once, or **Run** a number and **Stop** whenever you like (Space also smacks), then **End the correction** when you decide it is done.
 - **Pace** and **Strength** are multipliers with − / + buttons (how fast you swing and how soon the next comes; how hard each lands). **Run** sets how many smacks a run gives.
 - **Change position…** opens a list; a short passage of narration plays while the room is set again. The pain, the marks and the clock carry over. (Over the table, across the lap, hands on head, hands on the chair, bent over with feet apart. The last needs the switch or paddle.)
 - **Change implement…** opens a list. The hand is simply put down; anything else has to be fetched, which is a short exchange: the options on offer, and how the resident answers, depend on their stats and how far along they are (ask politely, tell them, explain what it is for, say nothing and fetch it yourself, or check they are all right to go on). The first exchange of a correction can nudge a stat; the resident then comes back, returns to position, and the new implement is in hand.
-- **Layers** (skirt, bottoms, briefs) are toggled live; the skirt cycles *down* (it drapes as cloth and the palm lands on it), *hitched up* at the back, or *off*. Clothing over the struck area cushions the sting, as in the engine's pain model.
+- **Layers** (skirt, bottoms, briefs) are toggled live; a skirt is always hitched up for a correction (the game doesn't offer to change it; the editor still has down / hitched up / off for previewing). Clothing over the struck area cushions the sting, as in the engine's pain model.
 - **Cameras**: the buttons are standard angles, and the view is yours: drag to orbit, scroll to zoom, right-drag to pan. A button takes the camera back to its angle (Overview: three-quarter from behind on the side away from the player; Behind: square on the contact sites; Over your shoulder: the player's right shoulder; Face: from in front, at a height that suits the pose). Changing position keeps a chosen angle, but leaves a view you framed yourself alone. The editor has the same angles in its discipline-scene section.
 
 The engine's pain model (tolerance, resilience, implement, speed, dread, dwell, clothing, tender skin) turns what you

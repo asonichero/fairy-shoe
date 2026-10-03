@@ -57,7 +57,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* morning */
-.morning { display: grid; grid-template-columns: minmax(300px, 1.1fr) minmax(280px, 1fr); gap: 20px; padding: 18px; max-width: 1100px; width: 100%; margin: 0 auto; }
+.morning { display: grid; grid-template-columns: 1fr; gap: 18px; padding: 18px; max-width: 1100px; width: 100%; margin: 0 auto; }
 @media (max-width: 800px) { .morning { grid-template-columns: 1fr; } }
 .col h2 { font-size: 17px; color: var(--gold); margin-bottom: 4px; }
 .col .hint { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
@@ -214,3 +214,11 @@ a.linkbtn:hover { color: var(--ink); background: #2e2837; }
 .scenebox .pick { background: #e5d8bb; color: var(--paper-ink); border-color: var(--paper-line); }
 .scenebox .pick:hover { background: #eadfc4; }
 @media (max-width: 800px) { .scenebox { bottom: 8px; padding: 12px 14px; } .scenebox .sline { font-size: 16px; } }
+
+.narration { font-family: var(--serif); font-size: 18px; line-height: 1.6; color: #e5dccb; border-left: 3px solid var(--gold); padding: 2px 0 2px 16px; max-width: 760px; }
+.narration p { margin: 0 0 8px; }
+.narration p:first-child { font-size: 20px; color: #f1e7d2; }
+.chorelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; align-items: start; }
+.chorelist .chore { margin-bottom: 0; }
+.residents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.residents .res { margin-bottom: 0; }

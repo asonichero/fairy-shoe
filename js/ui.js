@@ -213,11 +213,13 @@ function renderMorning() {
       slot.addEventListener('drop', e => { e.preventDefault(); const id = e.dataTransfer.getData('text/plain'); if (id) place(ci, si, id); });
       return slot;
     }))));
+  if (!g.narration) g.narration = R.morningNarration(g, app.rng);
   setScreen(h('div', { class: 'screen' }, header(),
     h('div', { class: 'morning' },
-      h('div', { class: 'col' }, h('h2', {}, 'Morning: the house'), h('div', { class: 'hint' }, 'Tap a resident, then a chore, or drag one across. The “story” tab opens their file. At chores is how well their state lets them work today.'), residents),
-      h('div', { class: 'col' }, h('h2', {}, 'Today\'s list'), h('div', { class: 'hint' }, 'The day starts once everyone has something to do. Tap a placed name to take it back.'), chores,
-        ready ? h('div', { class: 'starting' }, 'The day begins…') : null))));
+      h('div', { class: 'narration' }, g.narration.map(t => h('p', {}, t))),
+      h('div', { class: 'col' }, h('h2', {}, 'Today\'s chores'), h('div', { class: 'hint' }, 'Tap a resident below, then a chore, or drag one across. The day starts once everyone has something to do; tap a placed name to take it back.'), h('div', { class: 'chorelist' }, chores),
+        ready ? h('div', { class: 'starting' }, 'The day begins…') : null),
+      h('div', { class: 'col' }, h('h2', {}, 'The house'), h('div', { class: 'hint' }, 'The “story” tab opens a resident\'s file. At chores is how well their state lets them work today.'), h('div', { class: 'residents' }, residents)))));
   if (ready) { const day = g.day; app.advance = setTimeout(() => { if (app.g === g && g.day === day && g.phase === 'assign' && R.allAssigned(g)) beginDay(); }, 1100); }
   else clearTimeout(app.advance);
 }
@@ -293,12 +295,12 @@ async function transition(lines, minMs, work) {
 const ctxFor = id => ({ name: CH[id].name, pron: CH[id].pronouns, title: app.title });
 const tell = (text, id, extra) => R.fillTemplate(text, { ...ctxFor(id), ...extra });
 // Pre-sitting layer choices: what the resident wears for it (the rest can be changed as you go).
-const defaultLayers = () => ({ bottoms: true, briefs: false, skirt: 'down' });
+const defaultLayers = () => ({ bottoms: false, briefs: false });   // (bottoms and briefs both up to begin with; a skirt is always hitched up)
 
 // ── Setting up the correction ───────────────────────────────────
 function renderSetup(card) {
   const id = card.id, d = CH[id];
-  const set = app.setup && app.setup.id === id ? app.setup : (app.setup = { id, position: 'case', implement: 'hand', layers: defaultLayers() });
+  const set = app.setup && app.setup.id === id ? app.setup : (app.setup = { id, position: 'lap', implement: 'hand', layers: defaultLayers() });
   const dock = h('div', { class: 'dock' });
   const sample = B.spec(id).wardrobe;
   const paint = () => {
@@ -308,7 +310,7 @@ function renderSetup(card) {
       h('div', { class: 'sub' }, POS[set.position].blurb),
       h('h4', {}, 'Implement'), h('button', { class: 'wide', onclick: () => chooseImplement(set.implement, set.position, v => { set.implement = v; paint(); }) }, IMPL[set.implement].label + '  ▸'),
       h('div', { class: 'sub' }, IMPL[set.implement].blurb),
-      h('h4', {}, 'What they wear'), h('div', { class: 'tabs' }, layerBtn('skirt', !!sample.skirt), layerBtn('bottoms', !!sample.bottom), layerBtn('briefs', !!sample.briefs)),
+      h('h4', {}, 'What they wear'), h('div', { class: 'tabs' }, layerBtn('bottoms', !!sample.bottom), layerBtn('briefs', !!sample.briefs)),
       h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. If ' + d.name + ' calls it, or is brought too far, it stops.'),
       h('button', { class: 'primary big', onclick: () => startLive(card, set) }, 'Bring them in'),
       h('button', { class: 'quiet big', onclick: () => { dock.remove(); } }, 'Back'));
@@ -359,7 +361,7 @@ function buildLiveDock(ses, card) {
   const impBtn = h('button', { class: 'wide', onclick: () => { ses.stop(); chooseImplement(ses.implement, ses.position, doImplement); } });
   // layers
   const layerBtns = {}; const avail = ses.layerAvailable();
-  const layers = h('div', { class: 'tabs' }, ['skirt', 'bottoms', 'briefs'].filter(n => avail[n]).map(n => (layerBtns[n] = h('button', { onclick: () => { ses.setLayer(n, SC.layerNext(n, ses.layers[n])); sync(); } }))));
+  const layers = h('div', { class: 'tabs' }, ['bottoms', 'briefs'].filter(n => avail[n]).map(n => (layerBtns[n] = h('button', { onclick: () => { ses.setLayer(n, SC.layerNext(n, ses.layers[n])); sync(); } }))));
   // pace, strength, run length: multipliers with − and +
   const stepper = (label, get, step, title) => {
     const val = h('b', {}, ''), minus = h('button', { onclick: () => { step(-1); sync(); }, 'aria-label': label + ' down' }, '−'), plus = h('button', { onclick: () => { step(1); sync(); }, 'aria-label': label + ' up' }, '+');
@@ -474,14 +476,15 @@ function showResult(snap, { stage }) {
     const here = g.roster.includes(id), canAfter = snap.kind === 'correction' && here && !snap.word;
     body.replaceChildren(...[
       h('h2', {}, snap.kind === 'reprieve' ? d.name + ': ' + snap.name : d.name),
+      snap.kind === 'reprieve' && snap.text ? h('p', { class: 'say' }, snap.text) : null,
       snap.kind === 'correction' ? [
         h('div', { class: 'verdict' }, snap.smacks ? snap.smacks + (snap.smacks === 1 ? ' smack. ' : ' smacks. ') : 'You decided that was enough without lifting a hand. ',
           snap.tooHarsh ? ['You took them past what they could bear; they needed ', h('b', {}, snap.expectedName), '.']
             : ['You brought them to ', h('b', {}, snap.reachedName), '; they needed ', h('b', {}, snap.expectedName), '.']),
         h('div', {}, snap.text + '.')] : null,
-      snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
+      (snap.lines || []).map(l => h('p', { class: 'say' }, l)), snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
       canAfter ? [h('h4', {}, 'Afterwards'), h('div', { class: 'choices' }, Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
-        h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => { const r = R.applyAftercare(g, id, k); if (!r) return; snap.done[k] = true; snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save(); draw(); } },
+        h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => { const r = R.applyAftercare(g, id, k); if (!r) return; snap.done[k] = true; (snap.lines = snap.lines || []).push(r.line); snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save(); draw(); } },
           h('b', {}, a.name, h('span', { class: 'costtag' }, '● '.repeat(a.cost).trim())), h('span', {}, a.blurb))))] : null,
       h('div', { class: 'row', style: 'margin-top:14px' }, candle(), h('span', { class: 'grow' }), h('button', { class: 'primary', onclick: async () => { wrap.remove(); save(); await playScenes(snap.exits); teardownLive(); showStage(false); say(null, null); renderEvening(); } }, 'Next'))].flat(Infinity).filter(Boolean));
   };

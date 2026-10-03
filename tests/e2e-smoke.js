@@ -21,16 +21,16 @@ async function liveControls(p) {
   const state = () => p.evaluate(() => ({ pos: __fs.app.live.position, impl: __fs.app.live.implement, pace: __fs.app.live.pace, strength: __fs.app.live.strengthMult, run: __fs.app.live.runLength, cam: __fs.app.stage.cameraMode }));
   let s = await state(); if (s.pace !== 1.25 || s.strength !== 1.25 || s.run !== 8 || s.cam !== 'overview') throw new Error('steppers or camera: ' + JSON.stringify(s));
   await p.click(`${dock} >> text=Change position`);
-  await p.click('.overlay .pick:has-text("Across the lap")');
+  await p.click('.overlay .pick:has-text("Over the table")');
   await p.waitForSelector('#veil', { state: 'hidden', timeout: 90000 });
-  s = await state(); if (s.pos !== 'lap') throw new Error('position did not change: ' + JSON.stringify(s));
+  s = await state(); if (s.pos !== 'case') throw new Error('position did not change: ' + JSON.stringify(s));
   await p.click(`${dock} >> text=Change implement`);
   await p.click('.overlay .pick:has-text("Hairbrush")');
   await p.waitForSelector('.overlay .pick');                                          // the conversation
   await p.locator('.overlay .pick').first().click();
   await p.click('.overlay >> text=Continue');
   await p.waitForSelector('#veil', { state: 'hidden', timeout: 90000 });
-  s = await state(); if (s.impl !== 'hairbrush' || s.pos !== 'lap') throw new Error('implement did not change: ' + JSON.stringify(s));
+  s = await state(); if (s.impl !== 'hairbrush' || s.pos !== 'case') throw new Error('implement did not change: ' + JSON.stringify(s));
 }
 
 (async () => {

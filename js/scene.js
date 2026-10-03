@@ -228,7 +228,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   function begin(opts) {
     if (session) session.dispose();
     const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
-      layers: { bottoms: true, briefs: false, skirt: 'down', ...(opts.layers || {}) }, implement: opts.implement || 'hand', position: opts.position || 'case' };
+      layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: 'up' }   /* a skirt is always hitched up for a correction */, implement: opts.implement || 'hand', position: opts.position || 'case' };
     let g = null, s = null, scn = null, furniture = null, plant = null;
 
     const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
@@ -289,7 +289,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       get implement() { return st.implement; },
       get busy() { return scn.busy(); },
       get layers() { return st.layers; },
-      layerAvailable() { const w = s.spec.m.wardrobe || {}; return { skirt: !!s.skirt, bottoms: !!w.bottom, briefs: !!w.briefs }; },
+      layerAvailable() { const w = s.spec.m.wardrobe || {}; return { bottoms: !!w.bottom, briefs: !!w.briefs }; },
       setLayer(name, on) {
         st.layers[name] = on; if (name === 'bottoms' && !on) st.layers.briefs = false;
         applyLayers(true);

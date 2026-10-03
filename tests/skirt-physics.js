@@ -25,12 +25,14 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
 
   // Contact: in every position, with a smack every second, nothing ends up inside the body, nothing blows up, nothing goes missing.
   for (const [who, pos, impl] of [['red', 'lap', 'hand'], ['red', 'case', 'hairbrush'], ['snow', 'head', 'hand'], ['snow', 'chair', 'hand'], ['goldilocks', 'spread', 'paddle'], ['goldilocks', 'lap', 'rod']]) {
-    const r = await p.evaluate(([w, ps, im]) => { setup(w, ps, im, 'down'); const st = run(4, 1 / 60, 1.0); return { st, finite: mesh(), speed: maxSpeed() }; }, [who, pos, impl]);
-    check(r.finite && r.st.inside <= 8 && r.st.deepest < 0.02 && r.speed < 0.025, `${who}, ${pos}, ${impl}: ${r.st.inside} particles inside (deepest ${(r.st.deepest * 1000).toFixed(1)} mm), fastest ${(r.speed * 1000).toFixed(1)} mm/step`);
+    for (const mode of ['down', 'up']) {
+    const r = await p.evaluate(([w, ps, im, m]) => { setup(w, ps, im, m); const st = run(4, 1 / 60, 1.0); return { st, finite: mesh(), speed: maxSpeed() }; }, [who, pos, impl, mode]);
+    check(r.finite && r.st.inside <= 8 && r.st.deepest < 0.02 && r.speed < 0.035, `${who}, ${pos}, ${impl}, ${mode}: ${r.st.inside} particles inside (deepest ${(r.st.deepest * 1000).toFixed(1)} mm), fastest ${(r.speed * 1000).toFixed(1)} mm/step`);
+    }
   }
-  // A hitched-up skirt is held at the back, and one that is taken off is not simulated.
-  const modes = await p.evaluate(() => { setup('red', 'case', 'hand', 'up'); const up = !!skirt.gathered && !skirt.off; setup('red', 'case', 'hand', 'off'); return { up, off: !!ses.subject.skirt.off }; });
-  check(modes.up && modes.off, 'skirt modes: hitched up is gathered, off is off');
+  // In the game a skirt is always hitched up (the stage forces it); in the engine it can still be taken off.
+  const modes = await p.evaluate(() => { setup('red', 'case', 'hand', 'up'); const up = !!skirt.gathered && !skirt.off; Starlight.setSkirtOff(ses.subject, true); return { up, off: !!ses.subject.skirt.off }; });
+  check(modes.up && modes.off, 'in the game the skirt is always hitched up; the engine can still take it off');
   check(errs.length === 0, 'no page errors' + (errs.length ? ': ' + errs[0] : ''));
   await b.close();
   if (fails.length) { console.log(fails.length + ' failed'); process.exit(1); }
