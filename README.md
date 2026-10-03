@@ -108,7 +108,7 @@ reading over-correction as abandonment, Goldilocks reading a reprieve as no cons
 
 `editor.html` (linked from the title screen) is the Starlight character viewer, with the Fairy Shoe's cast in place of the stock bodies and no environment: just the figures on a plain floor. It has everything the viewer has:
 
-- **Characters**: the six residents and the player's two looks (a woman in a plum dress, a man in huntsman's greens), one at a time or in a line-up.
+- **Characters**: the six residents and the player's two looks (a woman in a plum dress, a man in huntsman's greens, both in their forties or fifties), one at a time or in a line-up.
 - **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.
 - **View**: skeleton, weights, wireframe, turntable, head camera.
 - **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The furniture is the game's cottage chair and table.

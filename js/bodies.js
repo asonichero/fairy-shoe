@@ -89,14 +89,14 @@ const BODIES = {
   },
 };
 
-// The player's own hands: who they appear as, chosen on the first screen. Never named. Both are of middle years or more, plainly and
+// The player's own hands: who they appear as, chosen on the first screen. Never named. Both are in their forties or fifties, plainly and
 // conservatively dressed, the sort of figures the stories keep at the edge of the page: a Mother Hubbard, and a Huntsman.
 const KEEPERS = {
-  a: { label: 'A woman of middle years, in a plain dress', make: () => {
+  a: { label: 'A woman in her forties, in a plum dress', make: () => {
     const m = S.clone(S.PRESETS.aya);
-    A(m, { name: 'You', height: 165, legs: 1.0, shoulders: 37, bust: 97, underbust: 84, cup: 5, waist: 80, hip: 106, glutes: 1.3, neck: 32, arm: 29, forearm: 23, wrist: 15, thigh: 57, knee: 37, calf: 35, ankle: 21,
-      skin: 0xe4c2a2, youth: -0.35, brow: 0.2, lips: 0.78, cheeks: 0.9, jaw: 0.96,
-      outfit: { hair: 0x9a948c, hairStyle: 'ponytail', scrunchie: 0x3c2a38, bobbles: [0x3c2a38] },
+    A(m, { name: 'You', height: 165, legs: 1.0, shoulders: 37, bust: 95, underbust: 78, cup: 4, waist: 72, hip: 103, glutes: 1.3, neck: 30, arm: 29, forearm: 23, wrist: 15, thigh: 57, knee: 37, calf: 35, ankle: 21,
+      skin: 0xe6c6a8, youth: 0.05, brow: 0.3, lips: 0.95, cheeks: 0.9, jaw: 0.97,
+      outfit: { hair: 0x6a5a52, hairStyle: 'ponytail', scrunchie: 0x3c2a38, bobbles: [0x3c2a38] },   // brown going to silver
       expr: { browInner: -0.1, browOuter: -0.05, mouthL: 0.1, mouthR: 0.1, lidUpper: -0.1, saccade: 0.15, contact: 0.85, blink: 0.7 } });
     m.moods = { effort: { browInner: 0.05, browFurrow: 0.5, lidUpper: -0.3, squint: 0.4, mouthL: -0.2, mouthR: -0.2 }, enjoyment: { browOuter: 0.05, squint: 0.2, mouthL: 0.4, mouthR: 0.4 } };
     m.wardrobe = {
@@ -109,11 +109,11 @@ const KEEPERS = {
     m.looks = { Underwear: ['bra', 'briefs'], Everyday: ['bra', 'briefs', 'top', 'skirt', 'shoes'] }; m.look = 'Everyday';
     return m;
   } },
-  b: { label: 'A man of middle years, in huntsman\'s greens', make: () => {
+  b: { label: 'A man in his forties, in huntsman\'s greens', make: () => {
     const m = S.clone(S.PRESETS.kenji);
-    A(m, { name: 'You', height: 178, legs: 1.0, shoulders: 46, bust: 106, underbust: 100, waist: 94, hip: 102, neck: 40, arm: 34, forearm: 28, wrist: 17.5, thigh: 58, knee: 39, calf: 37, ankle: 23.5, glutes: 1.3,
-      skin: 0xd8ae88, youth: -0.4, brow: 0.3, nose: 1.2, lips: 0.8,
-      outfit: { hair: 0x8c8780, hairStyle: 'short' },
+    A(m, { name: 'You', height: 178, legs: 1.0, shoulders: 46, bust: 104, underbust: 96, waist: 86, hip: 98, neck: 39, arm: 34, forearm: 28, wrist: 17.5, thigh: 58, knee: 39, calf: 37, ankle: 23.5, glutes: 1.3,
+      skin: 0xdcb48e, youth: 0.0, brow: 0.35, nose: 1.15, lips: 0.88,
+      outfit: { hair: 0x4e4640, hairStyle: 'short' },   // dark, gone grey at the edges
       expr: { gazeX: 0.05, gazeY: 0.05, squint: 0.3, lidUpper: -0.2, browInner: 0.0, mouthL: -0.03, mouthR: -0.03, saccade: 0.2, contact: 0.8, blink: 0.7 } });
     m.wardrobe = {
       briefs: { kind: 'briefs', name: 'Linen drawers', color: 0xd9d2c0, rise: 0.7, leg: 0.12 },
