@@ -127,6 +127,7 @@
   <textarea id="pe-out" readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;background:#101014;color:#b8b8c4;border:1px solid #2c2c36;font:11px ui-monospace,Consolas,monospace;display:none"></textarea>
 
   <h3>Save to the game</h3>
+  <div id="ed-override" class="sub" style="color:#e0a85a;border:1px solid #6b5a2a;border-radius:4px;padding:6px 8px" hidden></div>
   <div class="sub" style="margin:0 0 6px">Everything above is a preview until it is saved. Saved designs and pose edits are used by <a href="index.html" style="color:#c9a84c">the game</a> whenever it next builds a scene, in this browser (they are kept in <code>localStorage</code>).</div>
   <div class="toggles">
     <button id="ed-save" class="on">Save this look</button>
@@ -318,7 +319,16 @@ const allTab = document.createElement('button');
 allTab.textContent = 'All'; allTab.id = 'tab-all';
 allTab.onclick = () => { view.lineup = true; refreshTabs(); placeChars(); };
 tabsEl.appendChild(allTab);
+// Saved changes sit over bodies.js: say so, so an edit to the file is not mistaken for being ignored.
+function noteOverrides() {
+  const el = document.getElementById('ed-override'); if (!el || !window.EDITOR) return;
+  const d = EDITOR.Ov.designFor(view.selected), all = Object.keys(EDITOR.Ov.get().designs);
+  el.hidden = !all.length;
+  el.textContent = d ? PRESETS[view.selected].name + ' has saved changes (' + Object.keys(d).join(', ') + ') that are applied over js/bodies.js, so edits to those fields in the file will not show here until you press “Remove its saved changes”.'
+    : all.length ? 'Saved changes exist for ' + all.map(k => PRESETS[k].name).join(', ') + ' (applied over js/bodies.js). ' + PRESETS[view.selected].name + ' has none.' : '';
+}
 function refreshTabs() {
+  noteOverrides();
   ORDER.forEach(k => document.getElementById('tab-' + k).classList.toggle('on', k === view.selected));
   allTab.classList.toggle('on', view.lineup);
   document.getElementById('t-lineup').classList.toggle('on', view.lineup);
@@ -1319,9 +1329,9 @@ function animate() {
     const patch = diff(base, current[k]);
     snap();
     if (!Object.keys(patch).length) { Ov.clearDesign(k); return say(label(k) + ' matches the built-in design: nothing to save (any earlier saved changes were removed).', 'ok'); }
-    Ov.setDesign(k, patch, { replace: true }); say('Saved ' + label(k) + ': ' + Object.keys(patch).join(', ') + '.', 'ok');
+    Ov.setDesign(k, patch, { replace: true }); noteOverrides(); say('Saved ' + label(k) + ': ' + Object.keys(patch).join(', ') + '.', 'ok');
   };
-  $('ed-clear').onclick = () => { const k = view.selected; snap(); Ov.clearDesign(k); current[k] = clone(PRESETS[k]); refresh([k]); say('Saved changes for ' + label(k) + ' removed; back to the built-in design.', 'ok'); };
+  $('ed-clear').onclick = () => { const k = view.selected; snap(); Ov.clearDesign(k); noteOverrides(); current[k] = clone(PRESETS[k]); refresh([k]); say('Saved changes for ' + label(k) + ' removed; back to the built-in design.', 'ok'); };
   $('ed-show').onclick = () => { $('ed-design').value = JSON.stringify(current[view.selected], null, 1); say('This is ' + label(view.selected) + ' as shown. Edit it and paste the changes back, or copy it elsewhere.'); };
   $('ed-apply').onclick = () => {
     try { const k = view.selected, patch = Ov.parseDesign($('ed-design').value); current[k] = Ov.deepMerge(current[k], patch); refresh([k]); say('Applied to the preview (' + Object.keys(patch).length + ' field(s)). Press Save this look to keep it.', 'ok'); }
