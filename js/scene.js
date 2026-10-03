@@ -273,6 +273,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       furniture = null; plant = furnishScene(scene, scn, s, position, seatTop);
       applyPoseOverrides(scn, position);
       if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
+      if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench]); }   // the player's own skirt (a dress) drapes over the seat or the stance
       if (oldP && scn.pain) {
         for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
         scn.pain.update(cfg.elapsed || 0, false);   // the time it took

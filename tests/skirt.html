@@ -7,7 +7,7 @@
 window.setup = function (id, pos, impl, mode) {
   const B = FairyShoeBodies, C = FairyShoeContent;
   const stage = window.stage || (window.stage = FairyShoeScene.createStage(document.getElementById('view')));
-  window.ses = stage.begin({ giver: B.keeper('a'), subject: B.spec(id), subjectId: id, position: pos, implement: impl, layers: { bottoms: true }, pain: { ...C.CHARACTERS[id].pain } });
+  window.ses = stage.begin({ giver: B.keeper(window.__keeper || 'a'), subject: B.spec(id), subjectId: id, position: pos, implement: impl, layers: { bottoms: true }, pain: { ...C.CHARACTERS[id].pain } });
   window.clock = 0; window.skirt = ses.subject.skirt;
   // (the game forces a skirt to be hitched up; here the mode is applied afterwards so the loose cloth is tested too)
   if (skirt && mode === 'down') { Starlight.setSkirtGathered(ses.subject, false); ses.scn.update(0.016); Starlight.settleSkirt(ses.subject, [ses.giver], [ses.scn.bench]); } if (window.skirt) window.skirt.debug = true;
@@ -21,7 +21,7 @@ window.run = function (seconds, dt, every) {
     if (every && since > every && ses.canStrike()) { ses.smack(); since = 0; }
     ses.tick(dt, clock);
   }
-  return skirt.stats;
+  return skirt ? skirt.stats : null;
 };
 const hemY = () => { const S = skirt, N = S.N, n = S.R * N; let y = 0; for (let k = n - N; k < n; k++) y += S.p[3 * k + 1]; return y / N; };
 // Lift the whole cloth below the waist by `up` metres (it has not moved, so it is not carried along), then let it fall. Returns the
