@@ -29,10 +29,10 @@ const BODIES = {
       outfit: { hair: 0xd9a843, hairStyle: 'long' },
       expr: { browInner: -0.1, browOuter: 0.15, lidUpper: 0.2, mouthL: 0.2, mouthR: 0.1, saccade: 0.4, contact: 0.8, blink: 0.9 } });
     A(m.wardrobe, {
-      bra: wear(m.wardrobe.bra, { color: 0xf4f0e8 }), briefs: wear(m.wardrobe.briefs, { color: 0xf4f0e8 }),
+      bra: wear(m.wardrobe.bra, { color: 0xF4B8E4 }), briefs: wear(m.wardrobe.briefs, { color: 0xF4B8E4 }),
       bottom: wear(m.wardrobe.bottom, { name: 'Under-shorts', color: 0xe6dccb, legLen: 0.4 }),
-      skirt: { kind: 'skirt', name: 'Blue skirt', color: 0x7fa3d6, above: 0.01, length: 0.24, flare: 0.03 },
-      top: { kind: 'top', name: 'Cream blouse', color: 0xf2ecdc, from: 'waist', sleeves: 0.45 }, shoes: wear(m.wardrobe.shoes, { name: 'Buckled shoes', color: 0x5a3a2a }) });
+      skirt: { kind: 'skirt', name: 'Blue dress, skirt', color: 0x7fa3d6, above: 0.01, length: 0.24, flare: 0.03 },
+      top: { kind: 'top', name: 'Blue dress, bodice', color: 0x7fa3d6, from: 'hip', sleeves: 0.45 }, shoes: wear(m.wardrobe.shoes, { name: 'Buckled shoes', color: 0x7fa3d6 }) });
     m.looks = everyday(['bra', 'briefs', 'bottom', 'skirt', 'top', 'shoes']); m.look = 'Everyday';
     return m;
   },
@@ -65,11 +65,11 @@ const BODIES = {
   // Hans — a big, steady build (Kenji's); nothing in the face moves unless it has a reason.
   hans: () => {
     const m = S.clone(S.PRESETS.kenji);
-    A(m, { name: 'Hans', height: 184, skin: 0xf0cdae, outfit: { hair: 0xc8b078, hairStyle: 'short' },
+    A(m, { name: 'Hans', height: 174, youth: 0.35, cheeks: 0.78, skin: 0xf0cdae, outfit: { hair: 0xc8b078, hairStyle: 'short' },
       expr: { gazeX: 0.05, gazeY: 0.0, squint: 0.1, lidUpper: -0.05, browInner: 0, mouthL: 0, mouthR: 0, saccade: 0.15, contact: 0.85, blink: 0.7 } });
     A(m.wardrobe, {
       briefs: wear(m.wardrobe.briefs, { name: 'Grey trunks', color: 0x55585e }), bottom: wear(m.wardrobe.bottom, { name: 'Work trousers', color: 0x4a4d52 }),
-      top: wear(m.wardrobe.top, { name: 'Undyed sweater', color: 0xcfc6ae, from: 'hip', sleeves: 2 }), shoes: wear(m.wardrobe.shoes, { name: 'Boots', color: 0x2c2a26 }) });
+      top: wear(m.wardrobe.top, { name: 'Undyed sweater', color: 0xCDB991, from: 'hip', sleeves: 2 }), shoes: wear(m.wardrobe.shoes, { name: 'Boots', color: 0x2c2a26 }) });
     m.looks = everyday(['briefs', 'bottom', 'top', 'shoes']); m.look = 'Everyday';
     return m;
   },
@@ -80,7 +80,7 @@ const BODIES = {
       outfit: { hair: 0x0e0b0c, hairStyle: 'long' },
       expr: { browInner: 0.4, browOuter: 0.1, lidUpper: 0.3, mouthL: 0.1, mouthR: 0.1, saccade: 0.5, contact: 0.7, blink: 1.0 } });
     A(m.wardrobe, {
-      bra: wear(m.wardrobe.bra, { color: 0xf4f0e8 }), briefs: wear(m.wardrobe.briefs, { color: 0xf4f0e8 }),
+      bra: wear(m.wardrobe.bra, { color: 0xB02828 }), briefs: wear(m.wardrobe.briefs, { color: 0xB02828 }),
       bottom: wear(m.wardrobe.bottom, { name: 'Under-shorts', color: 0xe8e0d0, legLen: 0.4 }),
       skirt: { kind: 'skirt', name: 'Blue skirt', color: 0x2f4d9c, above: 0.01, length: 0.26, flare: 0.03 },
       top: { kind: 'top', name: 'Yellow top', color: 0xe8c23c, from: 'waist', sleeves: 0.45 }, shoes: wear(m.wardrobe.shoes, { name: 'Little shoes', color: 0xb02828 }) });
@@ -111,14 +111,14 @@ const KEEPERS = {
   } },
   b: { name: 'The Huntsman', label: 'The Huntsman: a man in his forties, in a white shirt and brown breeches', make: () => {
     const m = S.clone(S.PRESETS.kenji);
-    A(m, { name: 'The Huntsman', height: 178, legs: 1.0, shoulders: 46, bust: 104, underbust: 96, waist: 86, hip: 98, neck: 39, arm: 34, forearm: 28, wrist: 17.5, thigh: 58, knee: 39, calf: 37, ankle: 23.5, glutes: 1.3,
+    A(m, { name: 'The Huntsman', height: 182, legs: 1.0, shoulders: 46, bust: 104, underbust: 96, waist: 86, hip: 98, neck: 39, arm: 34, forearm: 28, wrist: 17.5, thigh: 58, knee: 39, calf: 37, ankle: 23.5, glutes: 1.3,
       skin: 0xdcb48e, youth: 0.0, brow: 0.35, nose: 1.15, lips: 0.88,
       outfit: { hair: 0x4e4640, hairStyle: 'short' },   // dark, gone grey at the edges
       expr: { gazeX: 0.05, gazeY: 0.05, squint: 0.3, lidUpper: -0.2, browInner: 0.0, mouthL: -0.03, mouthR: -0.03, saccade: 0.2, contact: 0.8, blink: 0.7 } });
     m.wardrobe = {
       briefs: { kind: 'briefs', name: 'Linen drawers', color: 0xd9d2c0, rise: 0.7, leg: 0.12 },
-      bottom: { kind: 'bottom', name: 'Brown breeches', color: 0x5a4128, legLen: 2.0, lowerTo: 'ankle' },
-      top: { kind: 'top', name: 'White linen shirt', color: 0xf0ece2, from: 'hip', sleeves: 1.75, neck: 'v', collar: true, placket: true, cuffs: true, buttons: 0xd8d0bc },
+      bottom: { kind: 'bottom', name: 'Brown breeches', color: 0x5a4128, legLen: 2.0, lowerTo: 'ankle', from: 'waist'},
+      top: { kind: 'top', name: 'White linen shirt', color: 0xf0ece2, from: 'waist', sleeves: 1.75, neck: 'v', collar: true, placket: true, cuffs: true, buttons: 0xd8d0bc },
       shoes: { kind: 'shoes', name: 'Hunting boots', color: 0x2a1d14 },
     };
     m.looks = { Underwear: ['briefs'], Everyday: ['briefs', 'bottom', 'top', 'shoes'] }; m.look = 'Everyday';
