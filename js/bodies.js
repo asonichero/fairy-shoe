@@ -117,7 +117,7 @@ const KEEPERS = {
       expr: { gazeX: 0.05, gazeY: 0.05, squint: 0.3, lidUpper: -0.2, browInner: 0.0, mouthL: -0.03, mouthR: -0.03, saccade: 0.2, contact: 0.8, blink: 0.7 } });
     m.wardrobe = {
       briefs: { kind: 'briefs', name: 'Linen drawers', color: 0xd9d2c0, rise: 0.7, leg: 0.12 },
-      bottom: { kind: 'bottom', name: 'Brown breeches', color: 0x5a4128, legLen: 2.0, lowerTo: 'ankle', from: 'waist'},
+      bottom: { kind: 'bottom', name: 'Brown breeches', color: 0x5a4128, legLen: 2.0, lowerTo: 'ankle', from: 'underbust'},
       top: { kind: 'top', name: 'White linen shirt', color: 0xf0ece2, from: 'waist', sleeves: 1.75, neck: 'v', collar: true, placket: true, cuffs: true, buttons: 0xd8d0bc },
       shoes: { kind: 'shoes', name: 'Hunting boots', color: 0x2a1d14 },
     };
