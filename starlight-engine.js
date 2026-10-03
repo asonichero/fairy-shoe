@@ -912,7 +912,7 @@ const VNECK_DEPTH = 0.05, VNECK_HALF = 0.031;
 const vNeckDrop = (H, x) => Math.max(0, 1 - Math.abs(x) / (VNECK_HALF * H)) * VNECK_DEPTH * H;
 function topCoverage(spec, L, tag, torso, p, t, coneLen) {
   const Y = spec.Y, H = spec.H;
-  const from = { underbust: Y.under - 0.012 * H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
+  const from = { underbust: Y.under - 0.012 * H, belly: Y.belly - 0.01 *H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
   const neck = L.neck || (spec.m.build === 'male' ? 'crew' : 'scoop');
   const neckline = neck === 'crew' || neck === 'v'
     ? Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
