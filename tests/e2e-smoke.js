@@ -14,8 +14,8 @@ async function liveControls(p) {
   await p.click(`${dock} >> button:text-is("Behind")`);
   if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'behind') throw new Error('a button should return to its angle');
   await p.click(`${dock} >> button:text-is("Overview")`);
-  await p.click(`${dock} >> button:text-is("Bottoms down")`);                        // layers are live: bottoms up
-  await p.click(`${dock} >> button:text-is("Bottoms up")`);
+  await p.click(`${dock} >> button:text-is("Bottoms up")`);                          // layers are live: bottoms down (they begin up)
+  await p.click(`${dock} >> button:text-is("Bottoms down")`);
   await p.click(`${dock} >> button[aria-label="Pace up"]`); await p.click(`${dock} >> button[aria-label="Strength up"]`);
   await p.click(`${dock} >> button[aria-label="Run down"]`);
   const state = () => p.evaluate(() => ({ pos: __fs.app.live.position, impl: __fs.app.live.implement, pace: __fs.app.live.pace, strength: __fs.app.live.strengthMult, run: __fs.app.live.runLength, cam: __fs.app.stage.cameraMode }));
