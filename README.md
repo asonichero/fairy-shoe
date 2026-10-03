@@ -111,7 +111,8 @@ A `top` layer becomes a shirt with a few options (engine: `topCoverage`, `buildS
 - `neck: 'v'`: a V neckline cut into the painted base (front only).
 - `placket: true`: a painted fastening all the way down the front, from the point of the V to the hem: a doubled strip with stitched edges and a button every 4.2 cm (`buttons`, `buttonGap`, `placketWidth` to change them). It is painted per pixel, so it stays crisp.
 - `collar: true`: a 3D collar, a band round the neck and two points laid down along the V, sitting on the neck bone (`collarColor`).
-- `cuffs: true` with `sleeves: 1.75`: two rolled cuffs of cloth on each forearm where the three-quarter sleeve ends (`cuffAt`, `cuffColor`).
+- `cuffs: true`: two rolled cuffs of cloth on each forearm just above where the sleeve ends. `sleeves` is in arm segments (1 = the elbow, 2 = the wrist), so `1.5` ends halfway down the forearm and `1.75` three quarters of the way; the cuffs follow it (`cuffAt` to override, `cuffColor`).
+- Bottoms take `from: 'belly'` (default), `'waist'` (so they meet a top whose `from` is `'waist'`) or `'hip'`.
 
 Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuffs; The Huntsman wears a white shirt with all four, sleeves rolled to three quarters.
 

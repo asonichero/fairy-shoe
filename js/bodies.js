@@ -118,7 +118,7 @@ const KEEPERS = {
     m.wardrobe = {
       briefs: { kind: 'briefs', name: 'Linen drawers', color: 0xd9d2c0, rise: 0.7, leg: 0.12 },
       bottom: { kind: 'bottom', name: 'Brown breeches', color: 0x5a4128, legLen: 2.0, lowerTo: 'ankle', from: 'waist'},
-      top: { kind: 'top', name: 'White linen shirt', color: 0xf0ece2, from: 'waist', sleeves: 1.75, neck: 'v', collar: true, placket: true, cuffs: true, buttons: 0xd8d0bc },
+      top: { kind: 'top', name: 'White linen shirt', color: 0xf0ece2, from: 'waist', sleeves: 1.5, neck: 'v', collar: true, placket: true, cuffs: true, buttons: 0xd8d0bc },
       shoes: { kind: 'shoes', name: 'Hunting boots', color: 0x2a1d14 },
     };
     m.looks = { Underwear: ['briefs'], Everyday: ['briefs', 'bottom', 'top', 'shoes'] }; m.look = 'Everyday';

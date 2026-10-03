@@ -933,6 +933,12 @@ function topCoverage(spec, L, tag, torso, p, t, coneLen) {
 // to its hem. The bunched roll of fabric at the top is a separate mesh (buildBunches).
 // lowerTo: 'ankle' pushes it all the way down: covering from LOWER_ANKLE down the shin.
 const LOWER_BAND = [0.045, 0.02], LOWER_CALF = 0.45, LOWER_ANKLE = 0.8;
+// Where bottoms start on the body: `from` 'belly' (the default: the belly line), 'waist' (up to just under a top whose own `from` is 'waist', so the two
+// meet) or 'hip' (low-slung).
+function bottomTop(spec, L) {
+  const Y = spec.Y, H = spec.H;
+  return L.from === 'waist' ? Y.waist + 0.012 * H : L.from === 'hip' ? Y.hip + 0.012 * H : Y.belly;
+}
 function bottomCoverage(spec, L, tag, torso, p, t, coneLen) {
   if (L.lowered && (L.lowerTo === 'calf' || L.lowerTo === 'ankle')) {
     if (tag !== 'shin' || !coneLen) return NONE;
@@ -944,7 +950,7 @@ function bottomCoverage(spec, L, tag, torso, p, t, coneLen) {
     if (tag === 'shin') return L.legLen < 1 ? (LOWER_BAND[1] * spec.H / coneLen - t) * coneLen : (L.legLen - 1 - t) * coneLen;
     return NONE;
   }
-  if (torso) return spec.Y.belly - p[1];
+  if (torso) return bottomTop(spec, L) - p[1];
   if (tag === 'thigh') return L.legLen < 1 ? p[1] - (spec.J.thighL[1] - L.legLen * coneLen) : (L.legLen - t) * coneLen;
   if (tag === 'shin') return (L.legLen - 1 - t) * coneLen;
   return NONE;
@@ -6104,7 +6110,7 @@ function buildShirtParts(ch, L) {
     m.castShadow = m.receiveShadow = true; m.frustumCulled = false; ch.bones.neck.add(m); parts.push(m);
   }
   if (L.cuffs) {
-    const at = L.cuffAt != null ? L.cuffAt : 0.7;   // along the forearm, from the elbow
+    const at = L.cuffAt != null ? L.cuffAt : Math.max(0.1, L.sleeves - 1 - 0.04);   // along the forearm, from the elbow: just above where the sleeve is cut (sleeves 1.5 ends halfway down)
     for (const side of ['L', 'R']) {
       const P = spec.prims.find(q => q.type === 'cone' && q.tag === 'forearm' && q.bone === 'forearm' + side); if (!P) continue;
       const a = new THREE.Vector3(...P.a), b = new THREE.Vector3(...P.b), axis = b.clone().sub(a).normalize(), c = a.clone().lerp(b, at);
