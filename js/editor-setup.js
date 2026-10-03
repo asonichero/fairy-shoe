@@ -9,7 +9,7 @@ Ov.load();
 
 const builtIn = {};
 for (const id of C.ORDER) builtIn[id] = B.BODIES[id]();
-for (const [k, v] of Object.entries(B.KEEPERS)) { const m = v.make(); m.name = 'You (' + v.label.split(',')[0].toLowerCase() + ')'; builtIn['keeper-' + k] = m; }
+for (const [k, v] of Object.entries(B.KEEPERS)) { const m = v.make(); m.name = v.name; builtIn['keeper-' + k] = m; }
 for (const k of Object.keys(S.PRESETS)) delete S.PRESETS[k];
 S.ORDER.length = 0;
 for (const [id, spec] of Object.entries(builtIn)) { S.PRESETS[id] = spec; S.ORDER.push(id); }

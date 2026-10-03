@@ -58,7 +58,7 @@ const BODIES = {
       expr: { mouthL: 0.55, mouthR: 0.2, lidUpper: 0.35, browInner: 0.05, browOuter: 0.25, browAsym: 0.2, saccade: 0.7, contact: 0.9, blink: 1.0 } });
     A(m.wardrobe, {
       briefs: wear(m.wardrobe.briefs, { name: 'Brown trunks', color: 0x5a4028 }), bottom: wear(m.wardrobe.bottom, { name: 'Brown trousers', color: 0x6a5232 }),
-      top: wear(m.wardrobe.top, { name: 'Green shirt', color: 0x4f8a3c, from: 'hip', sleeves: 0.45 }), shoes: wear(m.wardrobe.shoes, { name: 'Boots', color: 0x3a2a1a }) });
+      top: wear(m.wardrobe.top, { name: 'Green shirt, short-sleeved', color: 0x4f8a3c, from: 'hip', sleeves: 0.45, neck: 'v', collar: true, placket: true, buttons: 0xe9e2cf }), shoes: wear(m.wardrobe.shoes, { name: 'Boots', color: 0x3a2a1a }) });
     m.looks = everyday(['briefs', 'bottom', 'top', 'shoes']); m.look = 'Everyday';
     return m;
   },
@@ -90,11 +90,11 @@ const BODIES = {
 };
 
 // The player's own hands: who they appear as, chosen on the first screen. Never named. Both are in their forties or fifties, plainly and
-// conservatively dressed, the sort of figures the stories keep at the edge of the page: a Mother Hubbard, and a Huntsman.
+// conservatively dressed, the sort of figures the stories keep at the edge of the page: Mother Hubbard, and The Huntsman.
 const KEEPERS = {
-  a: { label: 'A woman in her forties, in a plum dress', make: () => {
+  a: { name: 'Mother Hubbard', label: 'Mother Hubbard: a woman in her forties, in a plum dress', make: () => {
     const m = S.clone(S.PRESETS.aya);
-    A(m, { name: 'You', height: 165, legs: 1.0, shoulders: 37, bust: 95, underbust: 78, cup: 4, waist: 72, hip: 103, glutes: 1.3, neck: 30, arm: 29, forearm: 23, wrist: 15, thigh: 57, knee: 37, calf: 35, ankle: 21,
+    A(m, { name: 'Mother Hubbard', height: 165, legs: 1.0, shoulders: 37, bust: 95, underbust: 78, cup: 4, waist: 72, hip: 103, glutes: 1.3, neck: 30, arm: 29, forearm: 23, wrist: 15, thigh: 57, knee: 37, calf: 35, ankle: 21,
       skin: 0xe6c6a8, youth: 0.05, brow: 0.3, lips: 0.95, cheeks: 0.9, jaw: 0.97,
       outfit: { hair: 0x6a5a52, hairStyle: 'ponytail', scrunchie: 0x3c2a38, bobbles: [0x3c2a38] },   // brown going to silver
       expr: { browInner: -0.1, browOuter: -0.05, mouthL: 0.1, mouthR: 0.1, lidUpper: -0.1, saccade: 0.15, contact: 0.85, blink: 0.7 } });
@@ -109,16 +109,16 @@ const KEEPERS = {
     m.looks = { Underwear: ['bra', 'briefs'], Everyday: ['bra', 'briefs', 'top', 'skirt', 'shoes'] }; m.look = 'Everyday';
     return m;
   } },
-  b: { label: 'A man in his forties, in huntsman\'s greens', make: () => {
+  b: { name: 'The Huntsman', label: 'The Huntsman: a man in his forties, in a white shirt and brown breeches', make: () => {
     const m = S.clone(S.PRESETS.kenji);
-    A(m, { name: 'You', height: 178, legs: 1.0, shoulders: 46, bust: 104, underbust: 96, waist: 86, hip: 98, neck: 39, arm: 34, forearm: 28, wrist: 17.5, thigh: 58, knee: 39, calf: 37, ankle: 23.5, glutes: 1.3,
+    A(m, { name: 'The Huntsman', height: 178, legs: 1.0, shoulders: 46, bust: 104, underbust: 96, waist: 86, hip: 98, neck: 39, arm: 34, forearm: 28, wrist: 17.5, thigh: 58, knee: 39, calf: 37, ankle: 23.5, glutes: 1.3,
       skin: 0xdcb48e, youth: 0.0, brow: 0.35, nose: 1.15, lips: 0.88,
       outfit: { hair: 0x4e4640, hairStyle: 'short' },   // dark, gone grey at the edges
       expr: { gazeX: 0.05, gazeY: 0.05, squint: 0.3, lidUpper: -0.2, browInner: 0.0, mouthL: -0.03, mouthR: -0.03, saccade: 0.2, contact: 0.8, blink: 0.7 } });
     m.wardrobe = {
       briefs: { kind: 'briefs', name: 'Linen drawers', color: 0xd9d2c0, rise: 0.7, leg: 0.12 },
       bottom: { kind: 'bottom', name: 'Brown breeches', color: 0x5a4128, legLen: 2.0, lowerTo: 'ankle' },
-      top: { kind: 'top', name: 'Forest-green jerkin', color: 0x3d5a36, from: 'hip', sleeves: 2 },
+      top: { kind: 'top', name: 'White linen shirt', color: 0xf0ece2, from: 'hip', sleeves: 1.75, neck: 'v', collar: true, placket: true, cuffs: true, buttons: 0xd8d0bc },
       shoes: { kind: 'shoes', name: 'Hunting boots', color: 0x2a1d14 },
     };
     m.looks = { Underwear: ['briefs'], Everyday: ['briefs', 'bottom', 'top', 'shoes'] }; m.look = 'Everyday';

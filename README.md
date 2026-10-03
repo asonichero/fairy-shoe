@@ -104,11 +104,22 @@ severity, Snow White's doubled Valued and sluggish Satisfaction, Jack shrugging 
 reading over-correction as abandonment, Goldilocks reading a reprieve as no consequence) live in `js/content.js` and
 `changeStat` in `js/rules.js`.
 
+## Shirts
+
+A `top` layer becomes a shirt with a few options (engine: `topCoverage`, `buildShirtParts`, and the fragment shader):
+
+- `neck: 'v'`: a V neckline cut into the painted base (front only).
+- `placket: true`: a painted fastening all the way down the front, from the point of the V to the hem: a doubled strip with stitched edges and a button every 4.2 cm (`buttons`, `buttonGap`, `placketWidth` to change them). It is painted per pixel, so it stays crisp.
+- `collar: true`: a 3D collar, a band round the neck and two points laid down along the V, sitting on the neck bone (`collarColor`).
+- `cuffs: true` with `sleeves: 1.75`: two rolled cuffs of cloth on each forearm where the three-quarter sleeve ends (`cuffAt`, `cuffColor`).
+
+Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuffs; The Huntsman wears a white shirt with all four, sleeves rolled to three quarters.
+
 ## Character editor
 
 `editor.html` (linked from the title screen) is the Starlight character viewer, with the Fairy Shoe's cast in place of the stock bodies and no environment: just the figures on a plain floor. It has everything the viewer has:
 
-- **Characters**: the six residents and the player's two looks (a woman in a plum dress, a man in huntsman's greens, both in their forties or fifties), one at a time or in a line-up.
+- **Characters**: the six residents and the player's two looks (Mother Hubbard, in a plum dress, and The Huntsman, in a white shirt and brown breeches, both in their forties), one at a time or in a line-up.
 - **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.
 - **View**: skeleton, weights, wireframe, turntable, head camera.
 - **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The furniture is the game's cottage chair and table.

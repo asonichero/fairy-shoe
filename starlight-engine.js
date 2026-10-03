@@ -907,12 +907,15 @@ function lookLayers(m, look = m.look) {
 // Tops: from `from` (underbust / waist / hip) up to the neckline. Scoop ends above
 // the armpits, crew at the base of the neck, both higher at the back; the default
 // is crew for male builds, scoop otherwise. `sleeves`: 0 none, 1 to the elbow, 2 long.
+// A V neck: how far below the crew line the neckline drops at sideways position x (zero at VNECK_HALF × height out, deepest in the middle).
+const VNECK_DEPTH = 0.05, VNECK_HALF = 0.031;
+const vNeckDrop = (H, x) => Math.max(0, 1 - Math.abs(x) / (VNECK_HALF * H)) * VNECK_DEPTH * H;
 function topCoverage(spec, L, tag, torso, p, t, coneLen) {
   const Y = spec.Y, H = spec.H;
   const from = { underbust: Y.under - 0.012 * H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
   const neck = L.neck || (spec.m.build === 'male' ? 'crew' : 'scoop');
-  const neckline = neck === 'crew'
-    ? Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2])
+  const neckline = neck === 'crew' || neck === 'v'
+    ? Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
     : Y.armpit + 0.022 * H + 0.018 * H * smooth01(0.02, -0.02, p[2]);
   if (torso || tag === 'thigh') return Math.min(p[1] - from, neckline - p[1]);   // long tops reach the upper thigh
   if (tag === 'deltoid') return L.sleeves > 0 ? 0.05 : NONE;
@@ -1166,6 +1169,17 @@ function dress(ch, layers = lookLayers(ch.spec.m)) {
   const u = ch.mesh.material.userData.uniforms;
   u.uLayer.value.forEach((c, l) => c.copy(layers[l] ? lin(layers[l].color) : u.uSkin.value));
   ch.layers = layers;
+  // A shirt (a top with a collar, a placket or rolled cuffs): the painted fastening, and the 3D collar and cuffs.
+  const shirtIdx = layers.findIndex(L => L.kind === 'top' && L.placket);
+  if (shirtIdx >= 0) {
+    const L = layers[shirtIdx], H = spec.H, Y = spec.Y, from = { underbust: Y.under - 0.012 * H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
+    const tip = Y.neckBase - 0.016 * H - ((L.neck || '') === 'v' ? VNECK_DEPTH * H : 0);
+    u.uShirt.value.set((L.placketWidth || 0.0125) * H / 1.78, tip, from + 0.004, 1);
+    u.uShirtA.value.set(...[0, 1, 2, 3].map(i => i === shirtIdx ? 1 : 0)); u.uShirtB.value.set(...[4, 5, 6, 7].map(i => i === shirtIdx ? 1 : 0));
+    u.uShirtBtn.value.set(...lin(L.buttons != null ? L.buttons : 0xe6e0d0).toArray(), (L.buttonGap || 0.042) * H);
+  } else u.uShirt.value.w = 0;
+  const shirt = layers.find(L => L.kind === 'top' && (L.collar || L.cuffs));
+  if (shirt) buildShirtParts(ch, shirt); else removeShirtParts(ch);
 }
 // The crease where each thigh takes over from the torso, as a smooth curve: around
 // the thigh's axis (CREASE_BINS angles), how far down the axis from the hip joint
@@ -1429,6 +1443,8 @@ function makeBodyMaterial(m) {
     uSkin: { value: skin }, uHair: { value: lin(m.outfit.hair) },
     uLayer: { value: Array.from({ length: MAX_LAYERS }, () => skin.clone()) },   // set by dress()
     uWeights: { value: 0 },
+    // A shirt's painted fastening (see dress): [placket half-width, top y, hem y, on], the layer it belongs to (one-hot over the eight layers), button spacing and colour.
+    uShirt: { value: new THREE.Vector4(0, 0, 0, 0) }, uShirtA: { value: new THREE.Vector4() }, uShirtB: { value: new THREE.Vector4() }, uShirtBtn: { value: new THREE.Vector4(0.9, 0.88, 0.8, 0.07) },
     // Contact compression: skin above the palm plane (point uPressP, outward normal
     // uPressN, mesh-local space) within radius uPressR is flattened onto the plane.
     uPressP: { value: new THREE.Vector3() }, uPressN: { value: new THREE.Vector3(0, 1, 0) },
@@ -1521,7 +1537,7 @@ function makeBodyMaterial(m) {
           transformed -= objectNormal * dent * wC;
         }` + CONTACT_VERTEX);
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\nvarying vec4 vLayerA, vLayerB;\nvarying float vHair, vCrease;\nuniform vec3 uLipCol;\nuniform vec4 uMouth;\nuniform float uMouthZ;\nuniform vec2 uMouthCorner;\nuniform vec3 uMouthOpen;\nvarying vec3 vRest, vRestN;\nuniform vec3 uSkin, uHair, uLayer[${MAX_LAYERS}], uMarkP[2], uMarkReach[2], uMarkCol;\nuniform float uMarkAmt[2];\nuniform vec4 uStripe[32];\nuniform float uStripeN;\nuniform vec4 uMarkRegion;\nuniform float uWeights;`)
+      .replace('#include <common>', `#include <common>\nvarying vec4 vLayerA, vLayerB;\nvarying float vHair, vCrease;\nuniform vec3 uLipCol;\nuniform vec4 uMouth;\nuniform float uMouthZ;\nuniform vec2 uMouthCorner;\nuniform vec3 uMouthOpen;\nvarying vec3 vRest, vRestN;\nuniform vec3 uSkin, uHair, uLayer[${MAX_LAYERS}], uMarkP[2], uMarkReach[2], uMarkCol;\nuniform float uMarkAmt[2];\nuniform vec4 uStripe[32];\nuniform float uStripeN;\nuniform vec4 uMarkRegion;\nuniform float uWeights;\nuniform vec4 uShirt, uShirtA, uShirtB, uShirtBtn;`)
       .replace('#include <color_fragment>', `
         // Each layer's edge distance, thresholded over about a pixel; innermost first.
         vec4 wa = fwidth(vLayerA) * 0.75 + 1e-5, wb = fwidth(vLayerB) * 0.75 + 1e-5;
@@ -1621,6 +1637,25 @@ function makeBodyMaterial(m) {
         outfitCol = mix(outfitCol, uLayer[5], cb.y);
         outfitCol = mix(outfitCol, uLayer[6], cb.z);
         outfitCol = mix(outfitCol, uLayer[7], cb.w);
+        if (uShirt.w > 0.5 && vRest.z > 0.0) {
+          // A shirt's fastening, painted down the front: a placket (a doubled strip of cloth with a stitched edge each side) and a button every
+          // so often, only where the shirt's own fabric is.
+          float fab = smoothstep(0.35, 0.65, dot(ca, uShirtA) + dot(cb, uShirtB));
+          float ax = abs(vRest.x), e = 0.0006;
+          float span = step(uShirt.z, vRest.y) * step(vRest.y, uShirt.y) * fab;
+          float strip = (1.0 - smoothstep(uShirt.x - e, uShirt.x + e, ax)) * span;
+          float stitch = (1.0 - smoothstep(0.0003, 0.0003 + e, abs(ax - uShirt.x * 0.82))) * span;
+          outfitCol = mix(outfitCol, outfitCol * 0.9, strip);
+          outfitCol = mix(outfitCol, outfitCol * 0.74, stitch * strip);
+          float k = (uShirt.y - vRest.y) / uShirtBtn.w;
+          float cy = uShirt.y - (floor(k) + 0.5) * uShirtBtn.w;
+          float bd = length(vec2(vRest.x, vRest.y - cy));
+          float btn = (1.0 - smoothstep(0.0052 - e, 0.0052 + e, bd)) * span * step(0.0, k);
+          float rim = (1.0 - smoothstep(0.0042 - e, 0.0042 + e, bd));
+          outfitCol = mix(outfitCol, uShirtBtn.rgb * (0.78 + 0.22 * rim), btn);
+          float hole = (1.0 - smoothstep(0.0009 - 0.0003, 0.0009 + 0.0003, length(vec2(abs(vRest.x) - 0.0018, vRest.y - cy)))) * btn;
+          outfitCol = mix(outfitCol, uShirtBtn.rgb * 0.45, hole);
+        }
         outfitCol = mix(outfitCol, uHair, smoothstep(-wh, wh, vHair));
         diffuseColor.rgb = mix(outfitCol, vColor, uWeights);
       `);
@@ -6009,6 +6044,89 @@ function settleSkirt(ch, others = [], solids = [], seconds = 1.5) {
   for (const b of BONES) ch.bones[b].quaternion.copy(endBones[b]);
   g.updateMatrixWorld(true);
   S.lastM = null; S.stillT = 0;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// SHIRT PARTS — the 3D bits of a shirt, on a top layer that asks for them (the painted body, the V neck and the fastening are in the shader and
+// topCoverage): a collar (`collar`): a band round the neck and two points laid down over the chest along the V; and rolled cuffs (`cuffs`):
+// two rolls of cloth round each forearm where the sleeve (set to three-quarter length with `sleeves: 1.75`) ends. Each is a mesh on a bone, so
+// it turns with the neck and the forearm. The cloth is the shirt's own colour (`cuffColor` for the rolls, a little darker by default).
+// ════════════════════════════════════════════════════════════════
+function removeShirtParts(ch) {
+  if (!ch.shirtParts) return;
+  for (const m of ch.shirtParts) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); }
+  ch.shirtParts = null;
+}
+function buildShirtParts(ch, L) {
+  removeShirtParts(ch);
+  const spec = ch.spec, H = spec.H, Y = spec.Y, J = spec.J, parts = [], tint = (hex, k) => new THREE.Color(hex).multiplyScalar(k);
+  const mat = hex => new THREE.MeshStandardMaterial({ color: lin(hex), roughness: 0.85, metalness: 0, side: THREE.DoubleSide });
+  const add = (bone, geo, material, at) => {
+    const m = new THREE.Mesh(geo, material); m.position.set(at[0] - J[bone][0], at[1] - J[bone][1], at[2] - J[bone][2]);
+    m.castShadow = m.receiveShadow = true; m.frustumCulled = false; ch.bones[bone].add(m); parts.push(m);
+  };
+  // The body's surface along a horizontal ray from the neck's axis at height y and angle th (0 = front), so a collar can lie on it.
+  const cz = J.neck[2], surf = (th, y) => {
+    const dx = Math.sin(th), dz = Math.cos(th), p = [0, y, 0];
+    let r = 0.3;
+    for (; r > 0.004; r -= 0.006) { p[0] = dx * r; p[2] = cz + dz * r; if (field(spec, p) < 0) break; }
+    let lo = r, hi = r + 0.006;
+    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; p[0] = dx * m; p[2] = cz + dz * m; if (field(spec, p) < 0) lo = m; else hi = m; }
+    return [dx * hi, y, cz + dz * hi, dx, dz];
+  };
+  if (L.collar) {
+    const neckR = spec.m.neck / 100 / (2 * Math.PI), V = (L.neck || '') === 'v', cut = 0.34;   // the collar opens at the front, ±cut rad
+    const NS = 44, NR = 6, pos = [], idx = [];
+    const topAt = x => Y.neckBase - 0.016 * H + 0.008 * H * 0 - (V ? vNeckDrop(H, x) : 0);   // the painted neckline at sideways position x (front)
+    for (let i = 0; i <= NS; i++) {
+      const th = cut + (2 * Math.PI - 2 * cut) * i / NS, front = Math.cos(th) > 0 ? 1 : 0, side = Math.abs(Math.sin(th));
+      const x0 = surf(th, Y.neckBase)[0];
+      const yTop = (front ? topAt(x0) : Y.neckBase - 0.008 * H) + 0.001 * H;                  // where the shirt's neckline is at this angle
+      const tip = Math.pow(Math.max(0, Math.cos(th)), 2);                                     // 1 at the points, 0 round the back
+      const yFold = yTop + 0.016 * H;
+      let yEdge = yTop - (0.006 + 0.011 * side + 0.034 * tip) * H;
+      // A collar is a few centimetres wide: lower down than that the body (the slope of the shoulder) is further out than the cloth reaches.
+      const rLimit = neckR + 0.062 * (H / 1.78) + 0.014 * tip;
+      for (let y = yFold; y > yEdge; y -= 0.002 * H) { const q = surf(th, y); if (Math.hypot(q[0], q[2] - cz) > rLimit) { yEdge = Math.max(yEdge, y + 0.002 * H); break; } }
+      for (let j = 0; j < NR; j++) {
+        const f = j / (NR - 1), y = yFold + (yEdge - yFold) * f;
+        const q = surf(th, y), lift = 0.004 + 0.0045 * Math.sin(Math.min(1, f * 1.4) * Math.PI * 0.5) + 0.002 * f;   // stands off the body, the fold lying on it
+        pos.push(q[0] + q[3] * lift, y, q[2] + q[4] * lift);
+      }
+    }
+    for (let i = 0; i < NS; i++) for (let j = 0; j < NR - 1; j++) { const a = i * NR + j, b = a + NR; idx.push(a, b, b + 1, a, b + 1, a + 1); }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    // (positions are rest-space; the mesh sits on the neck bone, so shift them by the bone's rest origin)
+    const o = J.neck; const pa = g.attributes.position.array; for (let k = 0; k < pa.length; k += 3) { pa[k] -= o[0]; pa[k + 1] -= o[1]; pa[k + 2] -= o[2]; }
+    const m = new THREE.Mesh(g, mat(L.collarColor != null ? L.collarColor : L.color)); m.position.set(o[0] - o[0], 0, 0);
+    m.castShadow = m.receiveShadow = true; m.frustumCulled = false; ch.bones.neck.add(m); parts.push(m);
+  }
+  if (L.cuffs) {
+    const at = L.cuffAt != null ? L.cuffAt : 0.7;   // along the forearm, from the elbow
+    for (const side of ['L', 'R']) {
+      const P = spec.prims.find(q => q.type === 'cone' && q.tag === 'forearm' && q.bone === 'forearm' + side); if (!P) continue;
+      const a = new THREE.Vector3(...P.a), b = new THREE.Vector3(...P.b), axis = b.clone().sub(a).normalize(), c = a.clone().lerp(b, at);
+      // The forearm's real radius there: the widest the surface reaches round the axis (muscle bulges beyond the cone).
+      const u1 = new THREE.Vector3(0, 0, 1).sub(axis.clone().multiplyScalar(axis.z)).normalize(), u2 = axis.clone().cross(u1);
+      let rad = 0;
+      for (let k = 0; k < 12; k++) {
+        const ang = 2 * Math.PI * k / 12, d = u1.clone().multiplyScalar(Math.cos(ang)).addScaledVector(u2, Math.sin(ang));
+        let r = 0.12; for (; r > 0.004; r -= 0.003) { const pt = c.clone().addScaledVector(d, r); if (field(spec, [pt.x, pt.y, pt.z]) < 0) break; }
+        rad = Math.max(rad, r);
+      }
+      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis);
+      const roll = (shift, k) => {
+        const R = rad + 0.0085 * (H / 1.78) * 0.9, tube = 0.0095 * (H / 1.78);
+        const g = new THREE.TorusGeometry(R, tube, 10, 28); g.scale(1, 1, 1.5);
+        const m = new THREE.Mesh(g, mat(L.cuffColor != null ? L.cuffColor : tint(L.color, k).getHex())); m.quaternion.copy(q);
+        const pt = c.clone().addScaledVector(axis, shift); m.position.set(pt.x - J['forearm' + side][0], pt.y - J['forearm' + side][1], pt.z - J['forearm' + side][2]);
+        m.castShadow = m.receiveShadow = true; m.frustumCulled = false; ch.bones['forearm' + side].add(m); parts.push(m);
+      };
+      roll(-0.0105 * (H / 1.78), 0.96); roll(0.0105 * (H / 1.78), 1.0);   // two rolls, side by side
+    }
+  }
+  ch.shirtParts = parts;
 }
 
 // ════════════════════════════════════════════════════════════════
