@@ -5802,7 +5802,7 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   for (const o of solids.filter(Boolean)) {
     if (!o.userData || !o.userData.obb) { boxes.push(new THREE.Box3().setFromObject(o)); continue; }
     o.updateMatrixWorld(true);   // an implement: each of its meshes is a box in the mesh's own frame (it turns and tilts, so no world box will do)
-    o.traverse(m => { if (!m.isMesh || !m.visible) return; if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); obbs.push({ inv: m.matrixWorld.clone().invert(), m: m.matrixWorld, bb: m.geometry.boundingBox }); });
+    o.traverse(m => { if (!m.isMesh || !m.visible) return; if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); obbs.push({ inv: m.matrixWorld.clone().invert(), m: m.matrixWorld, bb: m.geometry.boundingBox, wb: new THREE.Box3().copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld).expandByScalar(0.03) }); });
   }
   const _ov = new THREE.Vector3();
   const q = [0, 0, 0];
@@ -5867,6 +5867,7 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
       }
     }
     for (const O of obbs) {
+      if (q[0] < O.wb.min.x || q[0] > O.wb.max.x || q[1] < O.wb.min.y || q[1] > O.wb.max.y || q[2] < O.wb.min.z || q[2] > O.wb.max.z) continue;
       _ov.set(q[0], q[1], q[2]).applyMatrix4(O.inv);
       const lo = O.bb.min, hi = O.bb.max, t = SKIRT_THICK * 0.6;
       if (_ov.x > lo.x - t && _ov.x < hi.x + t && _ov.y > lo.y - t && _ov.y < hi.y + t && _ov.z > lo.z - t && _ov.z < hi.z + t) {

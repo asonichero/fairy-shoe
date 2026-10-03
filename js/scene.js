@@ -118,7 +118,8 @@ function furnishScene(parent, scn, s, position, seatTop) {
     }
     chair.position.set(cx + 0.07, 0, 0);
   }
-  if (made) { scn.bench = made; parent.add(made); made.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
+  if (made) { made.userData.obb = true; scn.bench = made; parent.add(made);   // (cloth meets each board and leg, not one big box round the lot)
+    made.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } }); }
   return plant;
 }
 // Hands on the chair: planted on the seat however the body moves. Call each frame after the scene's own update.
