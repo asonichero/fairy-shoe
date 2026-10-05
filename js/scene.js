@@ -249,7 +249,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const mode = skirtMode(L.skirt), was = s.skirt.off ? 'off' : s.skirt.gathered ? 'up' : 'down';
       S.setSkirtOff(s, mode === 'off');
       if (mode !== 'off') S.setSkirtGathered(s, mode === 'up');
-      if (settle && mode !== 'off' && mode !== was) settleSkirt();
+      if (settle && mode !== 'off') settleSkirt();   // any change of clothes re-drapes it over the body as it now is
     }
     // The skirt is put on over the pose she is already in: it is dropped and draped (see Starlight.settleSkirt).
     function settleSkirt() { scn.update(0.016); scn.update(0.016); S.settleSkirt(s, [g], [scn.bench]); }
