@@ -7,10 +7,10 @@ const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`,
 // Everything the live dock offers, once: cameras, layers, pace and strength, a change of position, a fetched implement.
 async function liveControls(p) {
   const dock = '.dock';
-  // the hitched-up skirt is the gathered roll, not cloth; and the orbit pivot follows the bodies
-  const sk = await p.evaluate(() => { const s = __fs.app.live.subject, S = s && s.skirt; return S ? { roll: !!S.roll && S.roll.visible, cloth: S.mesh.visible, who: s.spec.m && s.spec.m.name } : null; });
+  // the hitched-up skirt is cloth laid out gathered round the waist and carried by the body
+  const sk = await p.evaluate(() => { const s = __fs.app.live.subject, S = s && s.skirt; return S ? { hitched: !!S.gathered, draped: !!S.fz, cloth: S.mesh.visible, who: s.spec.m && s.spec.m.name } : null; });
   console.log('skirt in the live game:', JSON.stringify(sk));
-  if (sk && (!sk.roll || sk.cloth)) throw new Error('the live skirt should be the roll');
+  if (sk && (!sk.hitched || !sk.draped || !sk.cloth)) throw new Error('the live skirt should be hitched up and draped over the body');
   for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
   // a real drag on the view orbits it, and the wheel zooms, from an anchor angle
   await p.click(`${dock} >> button:text-is("Behind")`); await p.waitForTimeout(2500);

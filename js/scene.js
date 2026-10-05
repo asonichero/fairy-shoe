@@ -101,9 +101,9 @@ function chairSeatTop(g) {
 }
 function furnishScene(parent, scn, s, position, seatTop) {
   const old = scn.bench; let made = null, plant = null;
-  if (old) {
+  if (old) {   // (for the lap, the engine's seat is the height of the sitting hips' centre; the skin sits on a seat a little lower, so it is built that much lower)
     const b = new T.Box3().setFromObject(old); parent.remove(old); Room.disposeGroup(old);
-    if (position === 'lap') { made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
+    if (position === 'lap') { made = Room.buildChair(b.max.y - 0.018 * (s.spec.H / 1.7), b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
     else made = Room.buildTable(b.max.y, b.min.x, b.max.x, b.max.z - b.min.z);
   } else if (position === 'chair') {
     made = new T.Group(); const chair = Room.buildChair(seatTop); chair.rotation.y = -Math.PI / 2; made.add(chair);
@@ -237,7 +237,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
     if (session) session.dispose();
     const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
       layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: 'up' }   /* a skirt is always hitched up for a correction */, implement: opts.implement || 'hand', position: opts.position || 'case' };
-    let g = null, s = null, scn = null, furniture = null, plant = null;
+    let g = null, s = null, scn = null, furniture = null, plant = null;   // (st.warm: frames that take extra solver passes after a new scene, until the correction has settled)
 
     const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
 
@@ -264,7 +264,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const position = cfg.position || st.position;
       const oldP = scn && scn.pain;
       teardown();
-      st.position = position;
+      st.position = position; st.warm = 40;
       const mk = spec => S.buildCharacter(S.clone(spec), { voxel: 0.011, key: spec.name });
       g = mk(opts.giver); s = mk(opts.subject);
       for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
@@ -347,7 +347,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
         scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
         scn.update(dt);
         if (plant) holdChairHands(s, plant);   // hands on the chair
-        if (!window.__solidOff && st.solid !== false) S.solveSolids(on, [scn.bench], 2);   // nothing passes into anything else (see Starlight.solveSolids)
+        if (!window.__solidOff && st.solid !== false) S.solveSolids(on, [scn.bench], st.warm-- > 0 ? 3 : 1);   // nothing passes into anything else (see Starlight.solveSolids)
         for (const ch of on) S.fadeMarks(ch, dt);
         for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
         for (const ch of on) S.bustContact(ch, on);
