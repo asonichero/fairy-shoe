@@ -14,9 +14,8 @@ const POSITIONS = [
   ['head', 'Hands on head', 'Standing, fingers laced on top of the head.'],
   ['chair', 'Hands on the chair', 'Bent forward, hands on the seat of the chair you sit in.'],
   ['spread', 'Bent over, feet apart', 'Bent forward, feet wide, palms on the thighs. Wide implements only.'],
-  ['x', 'X', 'Bent over the table as before, with you standing at their side.'],
 ];
-const ENGINE_POSITION = { lap: 'lap', case: 'case', head: 'head', chair: 'knees', spread: 'spread', x: 'x' };
+const ENGINE_POSITION = { lap: 'lap', case: 'case', head: 'head', chair: 'knees', spread: 'spread' };
 const IMPLEMENTS = [
   ['hand', 'Hand', 'Nothing to fetch. Stings, and fades quickly.'],
   ['hairbrush', 'Hairbrush', 'Light and sharp; a dull ache follows.'],

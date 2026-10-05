@@ -301,7 +301,6 @@ const MOVES = {
     case: 'You steer {Name} to the table. {Subj} bends at the hips and lays {Poss} palms flat on the boards.',
     head: 'You stand {Name} in the middle of the room and tell {Obj} to put {Poss} hands on {Poss} head, fingers laced.',
     chair: 'You pull your chair out and set it square in front of {Name}. {Subj} bends forward and takes hold of the seat.',
-    x: 'You steer {Name} to the table and have {Obj} bend over it, then take your place at {Poss} side.',
     spread: 'You nudge {Name}\'s feet apart with your own and wait while {Subj} settles, bent forward, palms on {Poss} thighs.',
   },
   fetched: '{Name} comes back with the {Impl}, hands it over, and takes {Poss} place again.',

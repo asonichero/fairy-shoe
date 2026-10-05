@@ -6,7 +6,7 @@
 const KEY = 'fairyshoe.overrides.v1';
 const BONE_RE = /^[A-Za-z0-9]+$/;
 const BEATS = { relaxed: 'relaxed', 'arm raised': 'raised', raised: 'raised', contact: 'contact' };
-const POSITIONS = ['lap', 'case', 'head', 'chair', 'spread', 'x'];
+const POSITIONS = ['lap', 'case', 'head', 'chair', 'spread'];
 
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 // Objects merge key by key; arrays and scalars replace. `null` deletes a key.
