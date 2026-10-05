@@ -110,6 +110,7 @@
   <div class="toggles">
     <button id="pe-on">Edit pose</button>
     <button id="pe-pin" class="on" title="Hands stay where they are while the body or shoulders move">Pin hands</button>
+    <button id="pe-pinfeet" title="Feet stay where they are (and keep their turn) while the pelvis, spine or the other leg moves; editing a leg lets that foot go">Pin feet</button>
     <button id="pe-reset">Reset beat</button>
     <button id="pe-report">Report</button>
   </div>
@@ -840,7 +841,9 @@ const NO_DRAG = new Set(['spine1', 'thighL', 'thighR']);
 const ARM = s => ['upperArm' + s, 'forearm' + s, 'hand' + s], LEG = s => ['thigh' + s, 'shin' + s, 'foot' + s];
 // Bones that carry a hand: editing one lets that hand go (and it's pinned again where it ends up).
 const HAND_CHAIN = { L: new Set([...ARM('L'), 'fingersL', 'thumbL', 'thumb2L']), R: new Set([...ARM('R'), 'fingersR', 'thumbR', 'thumb2R']) };
-Object.assign(PE, { who: 'g', pin: true, sel: null, saved: {}, base: null, key: null, label: '', drag: null, src: null, press: null });
+// The same for a foot: editing a bone of a leg lets that foot go.
+const FOOT_CHAIN = { L: new Set(LEG('L')), R: new Set(LEG('R')) };
+Object.assign(PE, { who: 'g', pin: true, pinFeet: false, sel: null, saved: {}, base: null, key: null, label: '', drag: null, src: null, press: null });
 
 const wpos = o => o.getWorldPosition(new THREE.Vector3());
 const wquat = o => o.getWorldQuaternion(new THREE.Quaternion());
@@ -974,9 +977,13 @@ function followPress() {
 function peEdit(who, bone, fn) {
   const ch = scn[who];
   const pins = PE.pin && ['L', 'R'].filter(s => !HAND_CHAIN[s].has(bone)).map(s => [s, wpos(ch.bones['hand' + s]), wquat(ch.bones['hand' + s])]);
+  const feet = PE.pinFeet && ['L', 'R'].filter(s => !FOOT_CHAIN[s].has(bone)).map(s => [s, wpos(ch.bones['foot' + s]), wquat(ch.bones['foot' + s])]);
   fn(ch);
   ch.group.updateMatrixWorld(true);
   if (pins) for (const [s, p, q] of pins) handTo(ch, s, p, q);
+  ch.group.updateMatrixWorld(true);
+  if (feet) for (const [s, p, q] of feet) { limbIK(ch, LEG(s), p); setWorldQuat(ch.bones['foot' + s], q); ch.group.updateMatrixWorld(true); }   // (the foot back where it was, with its own turn)
+  if (pins) for (const [s, p, q] of pins) handTo(ch, s, p, q);   // (a leg turning can move the body; the hands go back once more)
   ch.group.updateMatrixWorld(true);
   peRefresh(false);
 }
@@ -1136,6 +1143,7 @@ function peRefresh(rebuild) {
   const btn = document.getElementById('pe-on');
   btn.classList.toggle('on', PE.on); btn.textContent = PE.on ? 'Stop editing' : 'Edit pose';
   document.getElementById('pe-pin').classList.toggle('on', PE.pin);
+  document.getElementById('pe-pinfeet').classList.toggle('on', PE.pinFeet);
   document.querySelectorAll('#pe-who button').forEach(b => b.classList.toggle('on', b.dataset.who === PE.who));
   peGroup.visible = on;
   for (const [id, m] of handleList()) {
@@ -1156,7 +1164,7 @@ function peRefresh(rebuild) {
   status.textContent = `Frozen at ${PE.label}. ` + (parts.length ? `Edited: ${parts.join(', ')}.` : 'No edits yet.') + (others ? ` ${others} other beat${others > 1 ? 's' : ''} edited.` : '');
   banner.style.display = 'block';
   banner.innerHTML = `<b>Pose editor</b> · ${PE.label} · ${PE.who === 'g' ? 'disciplinarian' : 'subject'}'s joints` +
-    (PE.sel ? ` · <b>${PE.sel === 'tool' ? 'implement' : PE.sel}</b>` : '') + (PE.pin ? ' · hands pinned' : '') +
+    (PE.sel ? ` · <b>${PE.sel === 'tool' ? 'implement' : PE.sel}</b>` : '') + (PE.pin ? ' · hands pinned' : '') + (PE.pinFeet ? ' · feet pinned' : '') +
     '<br>Drag a dot to move it; click one to fine-tune it in the panel. Esc deselects.';
 }
 
@@ -1247,6 +1255,7 @@ function peReport() {
 
 document.getElementById('pe-on').onclick = () => { if (PE.on) PE.stop(); else PE.start(); };
 document.getElementById('pe-pin').onclick = () => { PE.pin = !PE.pin; peRefresh(false); };
+document.getElementById('pe-pinfeet').onclick = () => { PE.pinFeet = !PE.pinFeet; peRefresh(false); };
 document.getElementById('pe-reset').onclick = () => {
   if (!PE.on || !PE.base) return;
   delete PE.saved[PE.key]; applyState(PE.base); peRefresh(true);
@@ -1389,7 +1398,7 @@ animate();
 
 // Test hooks for automated screenshots
 window.__viewer = { S, view, chars, rebuild, placeChars, camera, controls,
-  applyViewToChar, current, sc, PE, placeTool, toolPose, rightClearance, get scn() { return scn; }, buildScene, buildClothing, applyPose, refreshTabs, fieldAt: (ch, q) => S.field(ch.spec, [q.x, q.y, q.z]) };
+  applyViewToChar, current, sc, PE, peDragBone, placeTool, toolPose, rightClearance, get scn() { return scn; }, buildScene, buildClothing, applyPose, refreshTabs, fieldAt: (ch, q) => S.field(ch.spec, [q.x, q.y, q.z]) };
 })();
 </script>
 </body>

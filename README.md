@@ -125,7 +125,7 @@ Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuff
 - **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.
 - **View**: skeleton, weights, wireframe, turntable, head camera.
 - **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The furniture is the game's cottage chair and table.
-- **Pose editor**: freeze the scene at a beat, drag joints or the implement, pin hands, and print a **Report**.
+- **Pose editor**: freeze the scene at a beat, drag joints or the implement, pin hands and/or feet (a pinned hand or foot stays put, with its turn, while the rest of the body is moved; editing that limb lets it go), and print a **Report**.
 - **Measurements, face and expression sliders**, voxel size, and the design's JSON.
 
 (The dance library is not part of this game, so that section is gone.)
