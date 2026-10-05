@@ -29,6 +29,9 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
 .speech b { font-style: normal; font-family: var(--sans); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #7a5a22; display: block; margin-bottom: 2px; }
 
 #app { position: relative; z-index: 2; min-height: 100%; }
+/* during a correction the page above the 3D view is transparent: let drags and the wheel through to it, keeping the panels clickable */
+body.live #app { pointer-events: none; }
+body.live #app > * { pointer-events: auto; }
 .screen { min-height: 100vh; display: flex; flex-direction: column; }
 .wash { background: radial-gradient(120% 90% at 50% 0%, #2c2433 0%, var(--bg) 70%); }
 

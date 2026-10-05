@@ -323,7 +323,7 @@ function teardownLive() {
   clearTimeout(app.advance);
   if (app.live) { try { app.live.onChange = null; app.live.onImpact = null; } catch (e) { /* */ } }
   if (app.stage && app.stage.session) app.stage.end();
-  app.live = null; app.refreshGuidance = null; document.removeEventListener('keydown', onKey);
+  app.live = null; app.refreshGuidance = null; document.removeEventListener('keydown', onKey); document.body.classList.remove('live');
   const v = $('#veil'); if (v) { v.hidden = true; v.classList.remove('on'); }
 }
 function onKey(e) {
@@ -334,7 +334,7 @@ async function startLive(card, set) {
   const id = card.id, d = CH[id];
   await busy('Setting the room…', async () => {
     const stage = await ensureStage();
-    showStage(true); setScreen(h('div'));
+    showStage(true); setScreen(h('div')); document.body.classList.add('live');   // the view takes the pointer (see css .live)
     app.live = stage.begin({ giver: B.keeper(app.keeper), subject: B.spec(id), subjectId: id, position: set.position, implement: set.implement, layers: { ...set.layers }, pain: { ...d.pain } });
     stage.setCamera(app.camera || 'overview');
   });

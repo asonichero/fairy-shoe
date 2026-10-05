@@ -7,6 +7,14 @@ const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`,
 // Everything the live dock offers, once: cameras, layers, pace and strength, a change of position, a fetched implement.
 async function liveControls(p) {
   const dock = '.dock';
+  // a real drag on the view orbits it and the wheel zooms (the page layer above the canvas must let them through)
+  await p.click(`${dock} >> button:text-is("Behind")`); await p.waitForTimeout(2500);
+  const cp = () => p.evaluate(() => { const c = __fs.app.stage.camera, t = __fs.app.stage.controls.target; return { p: c.position.toArray(), d: c.position.distanceTo(t) }; });
+  const c0 = await cp(), box = await p.locator('canvas').first().boundingBox(), mx = box.x + box.width * 0.5, my = box.y + box.height * 0.3;
+  await p.mouse.move(mx, my); await p.mouse.down(); await p.mouse.move(mx + 160, my + 20, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(1500);
+  const c1 = await cp(); if (Math.hypot(...c1.p.map((v, i) => v - c0.p[i])) < 0.2) throw new Error('dragging should orbit the camera');
+  await p.mouse.move(mx, my); await p.mouse.wheel(0, -400); await p.waitForTimeout(1200);
+  const c2 = await cp(); if (c2.d > c1.d - 0.03) throw new Error('the wheel should zoom');
   for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
   // the buttons are standard angles: after one, the user's own orbit takes over and no button stays lit
   await p.evaluate(() => __fs.app.stage.controls.dispatchEvent({ type: 'start' }));
