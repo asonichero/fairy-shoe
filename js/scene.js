@@ -3,7 +3,7 @@
 // the middle of it, and reports how far the resident has been brought (the pain model's distress), which is all the rules read.
 (function (root) {
 'use strict';
-const S = root.Starlight, T = root.THREE, Room = root.FairyShoeRoom, Poses = root.FairyShoePoses || {};
+const S = root.Starlight, T = root.THREE, Room = root.FairyShoeRoom, Ov = root.FairyShoeOverrides;
 const V3 = T.Vector3;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -61,10 +61,10 @@ const Sound = (() => {
   return { init, clap, set: v => { on = v; } };
 })();
 
-// ── Pose edits (js/poses.js, from the editor's report) ──────────
+// ── Pose overrides (from the editor) ────────────────────────────
 // The scene reads its pose tables every frame from the scene object, so a copy with the edited bones swapped in is enough.
 function applyPoseOverrides(scn, position) {
-  const list = Poses[position] || [];
+  const list = Ov ? Ov.posesFor(position) : [];
   for (const e of list) {
     const q = Object.fromEntries(Object.entries(e.bones).filter(([b]) => scn.s.bones[b]).map(([b, v]) => [b, S.degQ(v)]));
     if (e.who === 'subject' && e.beat === 'base') scn.baseQ = { ...scn.baseQ, ...q };
@@ -179,7 +179,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   viewEl.appendChild(renderer.domElement);
   const scene = new T.Scene(); scene.background = new T.Color(0x120d08);
   const camera = new T.PerspectiveCamera(35, 1, 0.05, 40);
-  const controls = new T.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.minDistance = 0.35; controls.maxDistance = 6; controls.maxPolarAngle = Math.PI * 0.55; controls.enablePan = false;   // the view orbits and zooms about the chosen anchor, which follows the bodies
+  const controls = new T.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.minDistance = 0.35; controls.maxDistance = 6; controls.maxPolarAngle = Math.PI * 0.55;
   const room = Room.buildRoom(scene);
   const resize = () => {
     const w = viewEl.clientWidth || 1, h = viewEl.clientHeight || 1;
@@ -191,28 +191,21 @@ function createStage(viewEl, { onGLProblem } = {}) {
   const marks = {};   // resident id → { marks, stripes }: kept through the day
   let session = null, running = false, last = 0, clock = 0, onFrame = null;
 
-  // Standard angles (see cameraPose) are anchors: a button takes the camera to its angle and makes its focus point the pivot. From then on the
-  // user orbits and zooms about that point as they like (cam.user), and the point keeps following the bodies (the view moves with it).
-  const cam = { mode: 'overview', go: null, snap: false, framed: false, user: false, anchor: null };
+  // Standard angles (see cameraPose): a button takes the camera there; from then on the view is the user's to orbit, zoom and pan.
+  const cam = { mode: 'overview', go: null, snap: false, framed: false };
   let api_onCam = null;
-  controls.addEventListener('start', () => { cam.go = null; cam.user = true; if (api_onCam) api_onCam(); });   // the user has taken the view (the anchor stays)
+  controls.addEventListener('start', () => { cam.go = null; cam.mode = 'free'; if (api_onCam) api_onCam(); });   // the user has taken the view
   function setCamera(mode, snap) {
     if (!CAMERAS.some(c => c[0] === mode)) return;
-    cam.mode = mode; cam.snap = !!snap; cam.user = false;
+    cam.mode = mode; cam.snap = !!snap;
     cam.go = session ? cameraPose(mode, session) : null;
   }
   function updateCamera(dt) {
-    if (session && cam.go) cam.go = cameraPose(cam.mode, session);   // the angle it is heading for moves with the bodies
-    else if (session && cam.anchor) {   // the pivot follows the bodies, carrying the view with it
-      const t = cameraPose(cam.mode, session).tgt, d = t.clone().sub(cam.anchor);
-      if (d.lengthSq() > 1e-10) { camera.position.add(d); controls.target.add(d); }
-      cam.anchor = t;
-    }
     if (cam.go) {
       const ease = cam.snap ? 1 : 1 - Math.exp(-dt * 5);
       camera.position.lerp(cam.go.pos, ease); controls.target.lerp(cam.go.tgt, ease);
       camera.fov += (cam.go.fov - camera.fov) * ease; camera.updateProjectionMatrix();
-      if (camera.position.distanceTo(cam.go.pos) < 0.01 && controls.target.distanceTo(cam.go.tgt) < 0.01) { cam.anchor = cam.go.tgt.clone(); cam.go = null; }
+      if (camera.position.distanceTo(cam.go.pos) < 0.01 && controls.target.distanceTo(cam.go.tgt) < 0.01) cam.go = null;
       cam.snap = false;
     }
     controls.update();
@@ -256,7 +249,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const mode = skirtMode(L.skirt), was = s.skirt.off ? 'off' : s.skirt.gathered ? 'up' : 'down';
       S.setSkirtOff(s, mode === 'off');
       if (mode !== 'off') S.setSkirtGathered(s, mode === 'up');
-      if (settle && mode !== 'off') settleSkirt();   // any change of clothes re-drapes it over the body as it now is
+      if (settle && mode !== 'off' && mode !== was) settleSkirt();
     }
     // The skirt is put on over the pose she is already in: it is dropped and draped (see Starlight.settleSkirt).
     function settleSkirt() { scn.update(0.016); scn.update(0.016); S.settleSkirt(s, [g], [scn.bench]); }
@@ -288,9 +281,8 @@ function createStage(viewEl, { onGLProblem } = {}) {
       }
       scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
-      { const o = cameraPose(cam.mode, { subject: s, giver: g });   // a rebuild keeps the user's angle and zoom about the anchor
-        const off = cam.user && cam.framed ? camera.position.clone().sub(controls.target) : null;
-        controls.target.copy(o.tgt); camera.position.copy(off ? o.tgt.clone().add(off) : o.pos); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; cam.anchor = o.tgt.clone(); cam.framed = true; }
+      if (cam.mode !== 'free') { const o = cameraPose(cam.mode, { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; }
+      else if (!cam.framed) { const o = cameraPose('overview', { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.framed = true; }
     }
 
     const api = {

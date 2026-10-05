@@ -914,12 +914,10 @@ function topCoverage(spec, L, tag, torso, p, t, coneLen) {
   const Y = spec.Y, H = spec.H;
   const from = { underbust: Y.under - 0.012 * H, belly: Y.belly - 0.01 *H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
   const neck = L.neck || (spec.m.build === 'male' ? 'crew' : 'scoop');
-  let neckline = neck === 'crew' || neck === 'v'
+  const neckline = neck === 'crew' || neck === 'v'
     ? Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
     : Y.armpit + 0.022 * H + 0.018 * H * smooth01(0.02, -0.02, p[2]);
-  if (L.collar) neckline += 0.006 * H;   // under a collar the paint runs a little higher, so no skin shows around its edges
   if (torso || tag === 'thigh') return Math.min(p[1] - from, neckline - p[1]);   // long tops reach the upper thigh
-  if (L.collar && tag === 'neck') return neckline - p[1];   // (and up the neck-tagged skin, which would otherwise end the paint early)
   if (tag === 'deltoid') return L.sleeves > 0 ? 0.05 : NONE;
   if (tag === 'upperArm') return (L.sleeves - t) * coneLen;
   if (tag === 'forearm') return (L.sleeves - 1 - t) * coneLen;
@@ -5309,7 +5307,6 @@ function skinPoints(ch, S) {
       nx += w * (e[0] * qx + e[4] * qy + e[8] * qz); ny += w * (e[1] * qx + e[5] * qy + e[9] * qz); nz += w * (e[2] * qx + e[6] * qy + e[10] * qz);
     }
     const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
-    if (K.lin) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let v = 0; for (let a = 0; a < 4; a++) { const w = K.w[4 * k + a]; if (w) v += w * M[K.i[4 * k + a]][4 * c + r]; } K.lin[9 * k + 3 * r + c] = v; }   // (row r, column c)
     K.wp[3 * k] = x; K.wp[3 * k + 1] = y; K.wp[3 * k + 2] = z; K.wn[3 * k] = nx / nl; K.wn[3 * k + 1] = ny / nl; K.wn[3 * k + 2] = nz / nl;
     const key = cellKey(Math.floor(x / SKIN_CELL), Math.floor(y / SKIN_CELL), Math.floor(z / SKIN_CELL));
     let cell = S.grid.get(key); if (!cell) S.grid.set(key, cell = []); cell.push(k);
@@ -5428,14 +5425,14 @@ function buildSkirt(ch, L) {
   // height band (with a margin), re-skinned each frame (see skinPoints).
   const g2 = ch.mesh.geometry, pa = g2.attributes.position.array, na = g2.attributes.normal.array;
   const si = g2.attributes.skinIndex.array, sw = g2.attributes.skinWeight.array, pick = [];
-  const yLo = ys[R - 1] - 0.08, yHi = top + 0.2 * H;   // (up to well above the waist: a hitched skirt lies up the back)
+  const yLo = ys[R - 1] - 0.08, yHi = top + 0.03;
   for (let v = 0; v < pa.length / 3; v += 2) if (pa[3 * v + 1] > yLo && pa[3 * v + 1] < yHi) pick.push(v);
   const skin = { n: pick.length, p: new Float32Array(pick.length * 3), nr: new Float32Array(pick.length * 3), i: new Uint16Array(pick.length * 4), w: new Float32Array(pick.length * 4),
     wp: new Float32Array(pick.length * 3), wn: new Float32Array(pick.length * 3) };
   pick.forEach((v, k) => { for (let a = 0; a < 3; a++) { skin.p[3 * k + a] = pa[3 * v + a]; skin.nr[3 * k + a] = na[3 * v + a]; } for (let a = 0; a < 4; a++) { skin.i[4 * k + a] = si[4 * v + a]; skin.w[4 * k + a] = sw[4 * v + a]; } });
   const sa = new Int32Array(springs.length), sb = new Int32Array(springs.length), sl = new Float32Array(springs.length), sk = new Float32Array(springs.length), sn = new Uint8Array(springs.length);
   springs.forEach(([a, b, l0, k, kind], i) => { sa[i] = a; sb[i] = b; sl[i] = l0; sk[i] = k; sn[i] = kind; });
-  ch.skirt = { L, rest, springs, sa, sb, sl, slHang: sl.slice(), sk, sn, iw, R, N, mesh, p: null, prev: null, top, skin, grid: new Map(), acc: 0 };
+  ch.skirt = { L, rest, springs, sa, sb, sl, sk, sn, iw, R, N, mesh, p: null, prev: null, top, skin, grid: new Map(), acc: 0 };
 }
 const len3 = v => Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 // Takes a skirt off (hidden, not simulated) or puts it back on, restarting its cloth
@@ -5687,66 +5684,8 @@ function bunchOne(ch, B) {
 function setSkirtGathered(ch, on) {
   const S = ch.skirt;
   if (!S || !!S.gathered === on) return;
-  S.gathered = on; S.stillT = 0; S.hu = null; S.fz = null;
-  if (!on && S.slHang) S.sl.set(S.slHang);
+  S.gathered = on; S.stillT = 0; S.hu = null;
   if (on) gatherPins(S, 0);
-  syncBunch(ch);
-}
-// ── The hitched-up skirt ─────────────────────────────────────────
-// Hitched up, a skirt is not free cloth: it is a roll of fabric gathered round the waist and lying on the lower back and hips, with the rest of the
-// skirt up inside it. So it is built as that, a thick wavy band skinned to the pelvis and spine exactly as the belt is, thickest at the back and
-// sides, thin at the front (where it would otherwise be pressed between the belly and a lap or a table edge) and with a rolled lower edge. It
-// follows every pose by skinning alone, so there is nothing to settle, drift or clip: it is as far outside the skin as it is built to be, in any pose.
-// A longer skirt has more fabric in the roll.
-function removeBunch(ch) {
-  const S = ch.skirt; if (!S || !S.roll) return;
-  ch.group.remove(S.roll); S.roll.geometry.dispose(); S.roll.material.dispose(); S.roll = null;
-}
-const SKIRT_STYLE = { roll: false };   // true: a hitched-up skirt is the skinned roll of fabric (buildRoll) rather than cloth
-function syncBunch(ch) {
-  const S = ch.skirt; if (!S) return;
-  const show = SKIRT_STYLE.roll && !!S.gathered && !S.off;
-  if (show && !S.roll) buildRoll(ch, S);
-  if (S.roll) S.roll.visible = show;
-  S.mesh.visible = !S.off && !show;
-}
-function buildRoll(ch, S) {
-  const spec = ch.spec, H = spec.H, Y = spec.Y, L = S.L, R = 10, M = 72;
-  const yTop = S.top + 0.004 * H, yHem = Y.hip + 0.12 * (Y.belly - Y.hip) - Math.min(0.5, L.length || 0.18) * H * 0.03;
-  const fabric = 0.022 * H / 1.78 + Math.min(0.7, L.length || 0.18) * H * 0.07;   // how thick the roll is at the back
-  const pos = new Float32Array(R * (M + 1) * 3), si = new Uint16Array(R * (M + 1) * 4), sw = new Float32Array(R * (M + 1) * 4), names = BONES;
-  // the body's outer surface at angle th (0 = front) and height y, found by marching in along a horizontal ray (the hips and buttocks are not part of the torso loft)
-  const surf = (th, y) => {
-    const dx = Math.sin(th), dz = Math.cos(th), q = [0, y, 0];
-    let r = 0.3;
-    for (; r > 0.005; r -= 0.006) { q[0] = dx * r; q[2] = dz * r; if (field(spec, q) < 0) break; }
-    let lo = r, hi = r + 0.006;
-    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (field(spec, q) < 0) lo = m; else hi = m; }
-    return hi;
-  };
-  for (let i = 0; i < R; i++) {
-    const t = i / (R - 1), y = yTop + (yHem - yTop) * t;            // t = 0 at the waistband, 1 the rolled lower edge
-    const W = loftWeights(spec, y);
-    for (let j = 0; j <= M; j++) {
-      const th = 2 * Math.PI * j / M, c = Math.cos(th), sn = Math.sin(th), r = surf(th, y), x = sn * r, z = c * r;
-      const nx = sn, nz = c, nl = 1;
-      const back = 0.3 + 0.7 * (1 - c) / 2;                            // 0.3 at the front, 1 at the back
-      const profile = i === R - 1 ? 0.35 : Math.sin(Math.PI * Math.min(1, 0.25 + 0.75 * t)) ** 0.7 * (0.55 + 0.45 * t);   // thin at the band, full on the roll, closing to the skin at the end
-      const wave = 1 + 0.22 * Math.sin(5 * th + 4.1 * t) + 0.14 * Math.sin(9 * th - 2.3 * t + 1.0);    // folds
-      const off = 0.002 * H / 1.78 + fabric * back * profile * wave;
-      const v = (i * (M + 1) + j);
-      pos[3 * v] = x + nx / nl * off; pos[3 * v + 1] = y + (i === R - 1 ? 0.0 : 0.004 * H * Math.sin(5 * th + 2 * t) * profile); pos[3 * v + 2] = z + nz / nl * off;
-      for (let k = 0; k < W.length; k++) { si[4 * v + k] = names.indexOf(W[k][0]); sw[4 * v + k] = W[k][1]; }
-    }
-  }
-  const idx = [];
-  for (let i = 0; i + 1 < R; i++) for (let j = 0; j < M; j++) { const a0 = i * (M + 1) + j, b0 = a0 + 1, a1 = a0 + M + 1, b1 = b0 + M + 1; idx.push(a0, a1, b1, a0, b1, b0); }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
-  g.setIndex(idx); g.computeVertexNormals();
-  const mesh = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: lin(L.color), roughness: 0.82, metalness: 0, side: THREE.DoubleSide, skinning: true }));
-  mesh.bind(ch.mesh.skeleton, ch.mesh.bindMatrix); mesh.castShadow = mesh.receiveShadow = true; mesh.frustumCulled = false;
-  ch.group.add(mesh); S.roll = mesh;
 }
 // Where the hitched-up hem is held. Bent over (the back near horizontal) it is the hem of the back panel, caught just outside and
 // below the waistband, with the cloth between it folding over; that works as it is. Standing (u → 1, the back vertical) the same
@@ -5767,14 +5706,11 @@ function gatherPins(S, u) {
 }
 function setSkirtOff(ch, off) {
   if (!ch.skirt) return;
-  ch.skirt.fz = null;
-  ch.skirt.off = off;
+  ch.skirt.off = off; ch.skirt.mesh.visible = !off;
   if (!off) ch.skirt.p = null;
-  syncBunch(ch);
 }
 function removeSkirt(ch) {
   if (!ch.skirt) return;
-  removeBunch(ch);
   ch.group.remove(ch.skirt.mesh); ch.skirt.mesh.geometry.dispose(); ch.skirt.mesh.material.dispose();
   ch.skirt = null;
 }
@@ -5800,72 +5736,9 @@ function posedProxies(o) {
 const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 const _sM = new THREE.Matrix4(), _sT = new THREE.Matrix4(), _sV = new THREE.Vector3();
 const _sD = new THREE.Matrix4(), _sI = new THREE.Matrix4(), _sV2 = new THREE.Vector3(), SKIRT_FOLLOW = SKIRT.FOLLOW, SKIRT_FOLLOW_ROT = 0.3, SKIRT_SLEEP = 1.5;
-
-// ── The draped skirt ─────────────────────────────────────────────
-// After settleSkirt the cloth is not simulated any more: every particle is fixed to the skin point nearest it (its skinning blend and its offset in that
-// blend's own frame), so the skirt keeps the shape it was draped in and goes wherever the body does, a rocking hip, a lifted knee, without being able to
-// pass through anything. On top of that sits a small damped spring per particle (a lag behind the body's own movement, strongest at the hem) which gives
-// sway and a ripple on impact; it only ever moves cloth away from the skin, never into it.
-const FZ = { K: 260, C: 13, REACH: 0.014, MASS: 0.5 };
-function bindSkirt(ch, S) {
-  const n = S.R * S.N, K = S.skin;
-  if (!K.lin) K.lin = new Float32Array(K.n * 9);
-  skinPoints(ch, S);
-  const idx = new Int32Array(n), loc = new Float32Array(n * 3);
-  const near = (x, y, z) => {
-    let best = Infinity, bi = -1;
-    const cs = SKIN_CELL, cx = Math.round(x / cs), cy = Math.round(y / cs), cz = Math.round(z / cs);
-    for (let r = 1; r <= 3 && bi < 0; r++) for (let ix = cx - r; ix <= cx + r - 1; ix++) for (let iy = cy - r; iy <= cy + r - 1; iy++) for (let iz = cz - r; iz <= cz + r - 1; iz++) {
-      const cell = S.grid.get(cellKey(ix, iy, iz)); if (!cell) continue;
-      for (const k of cell) { const dx = x - K.wp[3 * k], dy = y - K.wp[3 * k + 1], dz = z - K.wp[3 * k + 2], d = dx * dx + dy * dy + dz * dz; if (d < best && dx * K.wn[3 * k] + dy * K.wn[3 * k + 1] + dz * K.wn[3 * k + 2] > -0.002) { best = d; bi = k; } }   // (only skin the point is outside of, so it never binds to the far thigh)
-    }
-    if (bi < 0) for (let k = 0; k < K.n; k++) { const dx = x - K.wp[3 * k], dy = y - K.wp[3 * k + 1], dz = z - K.wp[3 * k + 2], d = dx * dx + dy * dy + dz * dz; if (d < best) { best = d; bi = k; } }
-    return bi;
-  };
-  const m3 = new THREE.Matrix3(), v = new THREE.Vector3();
-  for (let k = 0; k < n; k++) {
-    const x = S.p[3 * k], y = S.p[3 * k + 1], z = S.p[3 * k + 2], b = near(x, y, z);
-    const L = K.lin, o = 9 * b;
-    m3.set(L[o], L[o + 1], L[o + 2], L[o + 3], L[o + 4], L[o + 5], L[o + 6], L[o + 7], L[o + 8]).invert();
-    v.set(x - K.wp[3 * b], y - K.wp[3 * b + 1], z - K.wp[3 * b + 2]).applyMatrix3(m3);
-    idx[k] = b; loc.set([v.x, v.y, v.z], 3 * k);
-  }
-  S.fz = { idx, loc, off: new Float32Array(n * 3), vel: new Float32Array(n * 3), tprev: null, vprev: new Float32Array(n * 3), warm: 0 };
-}
-// Where a draped skirt wants to be this frame: its bound skin points moved on with the body, plus the small lag springs. Written to S.fz.cur; the caller then
-// relaxes and collides it (a draped skirt is still pushed out of everything it touches, every frame, so it can never end up inside anything).
-function frozenTargets(ch, S, dt) {
-  const R = S.R, N = S.N, n = R * N, F = S.fz, K = S.skin, p = S.p, h = Math.min(dt, 1 / 30);
-  const tgt = new Float32Array(n * 3), L = K.lin;
-  for (let k = 0; k < n; k++) {
-    const b = F.idx[k], o = 9 * b, lx = F.loc[3 * k], ly = F.loc[3 * k + 1], lz = F.loc[3 * k + 2];
-    tgt[3 * k] = K.wp[3 * b] + L[o] * lx + L[o + 1] * ly + L[o + 2] * lz;
-    tgt[3 * k + 1] = K.wp[3 * b + 1] + L[o + 3] * lx + L[o + 4] * ly + L[o + 5] * lz;
-    tgt[3 * k + 2] = K.wp[3 * b + 2] + L[o + 6] * lx + L[o + 7] * ly + L[o + 8] * lz;
-  }
-  if (F.tprev && F.warm > 2) {
-    const sub = Math.max(1, Math.ceil(h / (1 / 120))), hs = h / sub;
-    for (let k = N; k < n; k++) {
-      const row = ((k / N) | 0) / (R - 1), amp = FZ.REACH * (0.25 + 0.75 * row), b = F.idx[k];
-      for (let a = 0; a < 3; a++) {
-        const i = 3 * k + a, v = (tgt[i] - F.tprev[i]) / h, acc = (v - F.vprev[i]) / h; F.vprev[i] = v;
-        let o2 = F.off[i], vo = F.vel[i];
-        for (let s = 0; s < sub; s++) { vo += (-FZ.K * o2 - FZ.C * vo - acc * FZ.MASS) * hs; o2 += vo * hs; }
-        F.off[i] = Math.max(-amp, Math.min(amp, o2)); F.vel[i] = vo;
-      }
-      // never into the skin: drop any part of the lag that points against the skin's outward normal
-      const ox = F.off[3 * k], oy = F.off[3 * k + 1], oz = F.off[3 * k + 2], nx = K.wn[3 * b], ny = K.wn[3 * b + 1], nz = K.wn[3 * b + 2], d = ox * nx + oy * ny + oz * nz;
-      if (d < 0) { F.off[3 * k] -= d * nx; F.off[3 * k + 1] -= d * ny; F.off[3 * k + 2] -= d * nz; }
-    }
-  }
-  F.warm++;
-  F.tprev = F.tprev || new Float32Array(n * 3); F.tprev.set(tgt);
-  F.cur = F.cur || new Float32Array(n * 3);
-  for (let k = 0; k < n; k++) for (let a = 0; a < 3; a++) F.cur[3 * k + a] = tgt[3 * k + a] + (k >= N ? F.off[3 * k + a] : 0);
-}
 function skirtStep(ch, dt, everyone = [], solids = []) {
   const S = ch.skirt;
-  if (!S || S.off || (S.gathered && SKIRT_STYLE.roll) || !ch.group.parent || !ch.group.visible || dt <= 0) return;
+  if (!S || S.off || !ch.group.parent || !ch.group.visible || dt <= 0) return;
   const R = S.R, N = S.N, n = R * N, sk = ch.mesh.skeleton;
   ch.group.updateMatrixWorld(true);
   // The waistband follows the body: skinning matrices blended as the torso is at that height.
@@ -5932,7 +5805,6 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     P.sc = mul(add3(P.a, P.b), 0.5); P.sr = len3(P.ba) / 2 + 0.03; hands.push(P);
   }
   skinPoints(ch, S);
-  if (S.fz) frozenTargets(ch, S, dt);   // a draped skirt (see settleSkirt) is carried by the skin, then collided like any other
   const bodies = everyone.filter(o => o !== ch && o.group.parent && o.group.visible && o.mesh && o.bones.pelvis.getWorldPosition(new THREE.Vector3()).distanceTo(hip) < 2.2).map(o => otherSkin(o, hip));
   const boxes = [], obbs = [];
   for (const o of solids.filter(Boolean)) {
@@ -6084,11 +5956,9 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   S.acc = Math.min((S.acc || 0) + Math.min(dt, 0.06), SKIRT.STEP * SKIRT.MAX_STEPS);
   const spA = S.sa, spB = S.sb, spL = S.sl, spK = S.sk, spN = S.sn, ns = spA.length;
   const H = SKIRT.STEP, damp = Math.exp(-SKIRT.DAMP * H), gStep = SKIRT.GRAVITY * H * H, maxMove2 = SKIRT.MAXMOVE * SKIRT.MAXMOVE;
-  if (S.fz) S.acc = H;   // (a draped skirt takes exactly one relaxation per frame, with no gravity or velocity of its own)
   while (S.acc >= H) {
     S.acc -= H;
-    if (S.fz) { p.set(S.fz.cur); prev.set(S.fz.cur); }
-    else for (let k = N; k < n; k++) {
+    for (let k = N; k < n; k++) {
       const i = 3 * k;
       let vx = (p[i] - prev[i]) * damp, vy = (p[i + 1] - prev[i + 1]) * damp, vz = (p[i + 2] - prev[i + 2]) * damp;
       prev[i] = p[i]; prev[i + 1] = p[i + 1]; prev[i + 2] = p[i + 2];
@@ -6099,10 +5969,10 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     }
     for (let k = 0; k < N; k++) { restW(k); p.set([_sV.x, _sV.y, _sV.z], 3 * k); prev.set([_sV.x, _sV.y, _sV.z], 3 * k); }
     // Gathered (setSkirtGathered): the back of the hem is held up at the waistband, just outside and below it; the fabric between folds over.
-    if (S.gathered && !S.fz) for (const [k, j, f, drop] of S.pinList) {
+    if (S.gathered) for (const [k, j, f, drop] of S.pinList) {
       _sV.set(S.rest[3 * j] * f, S.rest[3 * j + 1] + drop * ch.spec.H, S.rest[3 * j + 2] * f).applyMatrix4(_sM); p.set([_sV.x, _sV.y, _sV.z], 3 * k); prev.set([_sV.x, _sV.y, _sV.z], 3 * k);
     }
-    const pin = k => S.gathered && !S.fz && S.pinned.has(k);
+    const pin = k => S.gathered && S.pinned.has(k);
     for (let it = 0; it < SKIRT.ITER; it++) {
       for (let si = 0; si < ns; si++) {
         const a = spA[si], b = spB[si], L0 = spL[si], stiff = spK[si], kind = spN[si], ax = 3 * a, bx = 3 * b;
@@ -6134,8 +6004,7 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
           p[bx] -= dx * c * wb / ws; p[bx + 1] -= dy * c * wb / ws; p[bx + 2] -= dz * c * wb / ws;
         }
       }
-      if (S.fz && it < SKIRT.ITER - 1) for (let k = N; k < n; k++) if (!pin(k)) { const o = 3 * k, c = S.fz.cur, w = S.gathered ? 0.3 : 0.18; p[o] += (c[o] - p[o]) * w; p[o + 1] += (c[o + 1] - p[o + 1]) * w; p[o + 2] += (c[o + 2] - p[o + 2]) * w; }   // (keeps the draped shape)
-      if (it >= (S.fz ? 1 : SKIRT.ITER - 2)) {
+      if (it >= SKIRT.ITER - 2) {
         for (let k = N; k < n; k++) if (!pin(k)) collide(k);   // the last passes end on a collision, so nothing is left inside the body
         if (it === SKIRT.ITER - 1) edgePass();
       }
@@ -6143,22 +6012,11 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   }
   // The cloth's own layers keep apart: once a frame is enough (folds persist), then one more collision so nothing ends inside the body.
   selfPass();
-  for (let k = N; k < n; k++) if (!(S.gathered && !S.fz && S.pinned.has(k))) collide(k);
+  for (let k = N; k < n; k++) if (!(S.gathered && S.pinned.has(k))) collide(k);
   if (S.debug) {   // (for tests: how many particles are inside the body, and how far)
     let pc = 0, mp = 0;
     let wk = -1; for (let k = N; k < n; k++) { const h = ownPen(p[3 * k], p[3 * k + 1], p[3 * k + 2]); if (h && h[0] > 0.004) { pc++; if (h[0] > mp) { mp = h[0]; wk = k; } } }
-    // ...and inside furniture or another body (deeper than 4 mm)
-    let fi = 0, oi = 0;
-    for (let k = N; k < n; k++) {
-      const x = p[3 * k], y = p[3 * k + 1], z = p[3 * k + 2];
-      for (const O of obbs) { _ov.set(x, y, z).applyMatrix4(O.inv); const lo = O.bb.min, hi = O.bb.max, t = 0.004; if (_ov.x > lo.x + t && _ov.x < hi.x - t && _ov.y > lo.y + t && _ov.y < hi.y - t && _ov.z > lo.z + t && _ov.z < hi.z - t) { fi++; break; } }
-      for (const B of bodies) {
-        let best = Infinity, bi = -1; const cs = SKIN_CELL, cx = Math.round(x / cs), cy = Math.round(y / cs), cz = Math.round(z / cs);
-        for (let ix = cx - 1; ix <= cx; ix++) for (let iy = cy - 1; iy <= cy; iy++) for (let iz = cz - 1; iz <= cz; iz++) { const cell = B.grid.get(cellKey(ix, iy, iz)); if (cell) for (const j of cell) { const d = (x - B.wp[3 * j]) ** 2 + (y - B.wp[3 * j + 1]) ** 2 + (z - B.wp[3 * j + 2]) ** 2; if (d < best) { best = d; bi = j; } } }
-        if (bi >= 0 && best < 0.0004 && (x - B.wp[3 * bi]) * B.wn[3 * bi] + (y - B.wp[3 * bi + 1]) * B.wn[3 * bi + 1] + (z - B.wp[3 * bi + 2]) * B.wn[3 * bi + 2] < -0.004) { oi++; break; }
-      }
-    }
-    S.stats = { inside: pc, furniture: fi, other: oi, deepest: +mp.toFixed(4), worst: wk < 0 ? null : { row: (wk / N) | 0, col: wk % N, at: [p[3 * wk], p[3 * wk + 1], p[3 * wk + 2]].map(v => +v.toFixed(3)) } };
+    S.stats = { inside: pc, deepest: +mp.toFixed(4), worst: wk < 0 ? null : { row: (wk / N) | 0, col: wk % N, at: [p[3 * wk], p[3 * wk + 1], p[3 * wk + 2]].map(v => +v.toFixed(3)) } };
   }
   // Into the character's group space for drawing.
   const pos = S.mesh.geometry.attributes.position.array, inv = _sT.copy(ch.group.matrixWorld).invert();
@@ -6168,68 +6026,13 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
 }
 
 
-// The body's outer surface at angle th (0 = front) and height y, found by marching in along a horizontal ray (rest space, cached per character).
-function bodySurface(spec) {
-  const cache = new Map(), trunk = spec.prims.filter(P => P.type === 'loft' || ['torso', 'bust', 'glute', 'perineum', 'thigh'].includes(P.tag || P.group));   // (the trunk only: not the arms, which hang beside it in the rest pose)
-  const inside = q => { for (const P of trunk) if (primDist(q, P) < 0) return true; return false; };
-  return (th, y) => {
-    const key = Math.round(th * 1000) + ',' + Math.round(y * 1000), hit = cache.get(key); if (hit !== undefined) return hit;
-    const dx = Math.sin(th), dz = Math.cos(th), q = [0, y, 0];
-    let r = 0.32;
-    for (; r > 0.005; r -= 0.006) { q[0] = dx * r; q[2] = dz * r; if (inside(q)) break; }
-    let lo = r, hi = r + 0.006;
-    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (inside(q)) lo = m; else hi = m; }
-    cache.set(key, hi); return hi;
-  };
-}
-// A hitched-up skirt, laid out rather than simulated into place. The back of the skirt is folded up over its own waistband and lies on the
-// back, in a few layers, as far up as the fabric can sensibly go (a long skirt is mostly bunched into thickness, not carried to the
-// shoulders); the sides gather into pleats between that and the front, which hangs as it does. The layout is built in the body's rest
-// pose, bound to the skin there, and from then on carried by the skin and pushed out of everything it touches every frame (see frozenTargets
-// and skirtStep), so it is as solid as everything else.
-function layHitched(ch) {
-  const S = ch.skirt, spec = ch.spec, H = spec.H, R = S.R, N = S.N, n = R * N, K = S.skin, L = S.L;
-  const surf = ch._surf || (ch._surf = bodySurface(spec));
-  const len = (L.length || 0.18) * H, up = Math.min(len * 0.45, 0.16 * H), thick = Math.min(0.05, 0.010 + len * 0.03) * H / 1.78;
-  const T = new Float32Array(S.rest);
-  for (let j = 0; j < N; j++) {
-    const th = 2 * Math.PI * j / N, c = Math.cos(th), back = 0.35 + 0.65 * (1 - c) / 2;   // the whole skirt is gathered up round the waist: most of it at the back, little at the front
-    for (let i = 1; i < R; i++) {
-      const t = i / (R - 1), o = 3 * (i * N + j), yF = S.top + 0.004 * H + up * back * t;
-      const rF = surf(th, yF) + 0.005 + thick * back * (0.45 + 0.55 * t) * (1 + 0.25 * Math.sin(5 * th + 3 * t) + 0.12 * Math.sin(11 * th - 2 * t));
-      T[o] = Math.sin(th) * rF; T[o + 1] = yF; T[o + 2] = Math.cos(th) * rF;
-    }
-  }
-  const idx = new Int32Array(n), loc = new Float32Array(n * 3), onTrunk = new Uint8Array(K.n);
-  for (let a = 0; a < K.n; a++) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (K.w[4 * a + m] > bw) { bw = K.w[4 * a + m]; bb = K.i[4 * a + m]; } onTrunk[a] = /^(upperArm|forearm|hand|fingers|thumb|clav)/.test(BONES[bb]) ? 0 : 1; }   // (never bound to an arm)
-  for (let k = 0; k < n; k++) {
-    const x = T[3 * k], y = T[3 * k + 1], z = T[3 * k + 2];
-    let best = Infinity, bi = -1;
-    for (let a = 0; a < K.n; a++) {
-      if (!onTrunk[a]) continue;
-      const dx = x - K.p[3 * a], dy = y - K.p[3 * a + 1], dz = z - K.p[3 * a + 2], d = dx * dx + dy * dy + dz * dz;
-      if (d < best && dx * K.nr[3 * a] + dy * K.nr[3 * a + 1] + dz * K.nr[3 * a + 2] > -0.002) { best = d; bi = a; }
-    }
-    if (bi < 0) bi = 0;
-    idx[k] = bi; loc[3 * k] = x - K.p[3 * bi]; loc[3 * k + 1] = y - K.p[3 * bi + 1]; loc[3 * k + 2] = z - K.p[3 * bi + 2];
-  }
-  // the cloth is not stressed as laid out: every spring's rest length is its length in the layout (restored when the skirt hangs again)
-  for (let i = 0; i < S.sa.length; i++) { const a = 3 * S.sa[i], b = 3 * S.sb[i]; S.sl[i] = Math.hypot(T[a] - T[b], T[a + 1] - T[b + 1], T[a + 2] - T[b + 2]); }
-  if (!K.lin) K.lin = new Float32Array(K.n * 9);
-  S.fz = { idx, loc, off: new Float32Array(n * 3), vel: new Float32Array(n * 3), tprev: null, vprev: new Float32Array(n * 3), warm: 0 };
-  ch.group.updateMatrixWorld(true);
-  skinPoints(ch, S); frozenTargets(ch, S, 0.016);
-  S.p = new Float32Array(S.fz.cur); S.prev = new Float32Array(S.fz.cur); S.lastM = null; S.stillT = 0; S.acc = 0;
-}
 // Puts a skirt on a body that is already in a pose (a bent-over subject), so that it hangs the way it would have if she had bent over
 // in it: the body is walked from standing into the pose over a moment, pelvis fixed, while the cloth falls and drapes, and is then put
 // back exactly where it was. (Starting the cloth in its rest shape around an already-bent body leaves it lying on the back like a lampshade.)
 // `others` take part only for the last stretch, so the cloth settles onto them as they are. Call after the scene has placed the bodies.
-function settleSkirt(ch, others = [], solids = [], seconds = 1.5, freeze = true) {
+function settleSkirt(ch, others = [], solids = [], seconds = 1.5) {
   const S = ch.skirt;
-  if (!S || S.off || (S.gathered && SKIRT_STYLE.roll)) return;
-  S.fz = null;
-  if (S.gathered) { layHitched(ch); return; }
+  if (!S || S.off) return;
   const g = ch.group, endQ = g.quaternion.clone(), endP = g.position.clone();
   const endBones = {}; for (const b of BONES) endBones[b] = ch.bones[b].quaternion.clone();
   const stand = poseQuats(POSES.Relaxed), yaw = new THREE.Euler().setFromQuaternion(endQ, 'YXZ').y;
@@ -6250,9 +6053,7 @@ function settleSkirt(ch, others = [], solids = [], seconds = 1.5, freeze = true)
   for (const b of BONES) ch.bones[b].quaternion.copy(endBones[b]);
   g.updateMatrixWorld(true);
   S.lastM = null; S.stillT = 0;
-  if (freeze) bindSkirt(ch, S);   // from here the skirt follows the body rather than being simulated (S.fz); unfreeze with unfreezeSkirt
 }
-function unfreezeSkirt(ch) { if (ch.skirt) { ch.skirt.fz = null; ch.skirt.p = null; ch.skirt.lastM = null; } }
 
 
 // ════════════════════════════════════════════════════════════════
@@ -6351,7 +6152,7 @@ function removeBelt(ch) {
 function buildBelt(ch, L) {
   removeBelt(ch);
   const spec = ch.spec, H = spec.H, Y = spec.Y, B = typeof L.belt === 'object' ? L.belt : { color: L.belt };
-  const half = (B.width || 0.017) * H / 1.78, y = Y[B.at || (L.kind === 'bottom' ? 'belly' : 'waist')] - (B.drop != null ? B.drop : L.kind === 'bottom' ? 1 : 0) * half, ring = loftRing(spec.prims[0], y);   // (on bottoms it hangs half its width below the line, so it covers where a tucked top meets them)
+  const half = (B.width || 0.017) * H / 1.78, y = Y[B.at || (L.kind === 'bottom' ? 'belly' : 'waist')], ring = loftRing(spec.prims[0], y);
   const W = loftWeights(spec, y), names = BONES, boneIdx = W.map(([b]) => names.indexOf(b));
   const mk = (pos, idx, color, metal) => {
     const g = new THREE.BufferGeometry(), n = pos.length / 3, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
@@ -6458,8 +6259,8 @@ function bustContact(ch, everyone) {
 }
 
 global.Starlight = {
-  SKIRT, SKIRT_THICK, settleSkirt, unfreezeSkirt, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
-  buildCharacter, disposeCharacter, resetCharacter, setPose, groundFeet, wideStance, poseQuats, degQ, mirrorPose, animateCharacter, bustSpring, bustContact, updateContacts, faceStep, setExpression, setMood, setMoods, MOODS, moodFor, EXPR_RANGE, mouthOpening, EXPR_DEFAULTS, skirtStep, bunchStep, SKIRT_STYLE, setSkirtOff, setSkirtGathered, setLowered, addMark, clearMarks, fadeMarks, fadeMarksMove, copyMarks, markStrength, markCount,
+  SKIRT, SKIRT_THICK, settleSkirt, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
+  buildCharacter, disposeCharacter, resetCharacter, setPose, groundFeet, wideStance, poseQuats, degQ, mirrorPose, animateCharacter, bustSpring, bustContact, updateContacts, faceStep, setExpression, setMood, setMoods, MOODS, moodFor, EXPR_RANGE, mouthOpening, EXPR_DEFAULTS, skirtStep, bunchStep, setSkirtOff, setSkirtGathered, setLowered, addMark, clearMarks, fadeMarks, fadeMarksMove, copyMarks, markStrength, markCount,
   hairStep, bodyColliders, hairReset, setFingerCurl, setFingerBend, fistPocket,
   ALL_MATS, lin, field, loftRing,
   createPain, PAIN, clothCushion, FACE, glReport, watchGL, createDisciplineScene, POSITIONS: ['lap', 'case', 'head', 'knees', 'spread'], IMPLEMENTS, PADDLE, seatGiver, buildBench, DEFAULT_TIMING, GIVER_BASE, GIVER_BEAT, GIVER_SEATED,

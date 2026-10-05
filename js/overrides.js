@@ -1,8 +1,9 @@
-// The Fairy Shoe — edits: what the editor page (editor.html) does with a design or a pose it has been given or has made. Nothing here is
-// stored and the game never reads it: the editor only previews, and prints a REPORT (designReport, poseReport) to paste into the project
-// (js/bodies.js for a design, js/poses.js for poses) to make an edit permanent. Pure logic, no three.js, so it also runs in Node for the tests.
+// The Fairy Shoe — overrides: edits to the characters' designs and to the discipline scene's poses, kept in localStorage and
+// applied by bodies.js (designs) and scene.js (poses). The editor page (editor.html) writes them; the game only reads them.
+// Pure logic and storage, no three.js, so it also runs in Node for the tests.
 (function (root) {
 'use strict';
+const KEY = 'fairyshoe.overrides.v1';
 const BONE_RE = /^[A-Za-z0-9]+$/;
 const BEATS = { relaxed: 'relaxed', 'arm raised': 'raised', raised: 'raised', contact: 'contact' };
 const POSITIONS = ['lap', 'case', 'head', 'chair', 'spread'];
@@ -18,6 +19,16 @@ function deepMerge(base, patch) {
   }
   return out;
 }
+
+function empty() { return { designs: {}, poses: [] }; }
+let mem = empty();
+function load() {
+  try { const o = JSON.parse(localStorage.getItem(KEY)); if (o && isObj(o.designs) && Array.isArray(o.poses)) mem = o; } catch (e) { /* none saved, or storage blocked */ }
+  return mem;
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(mem)); } catch (e) { /* storage may be blocked */ } }
+const get = () => mem;
+function set(o) { mem = { designs: o.designs || {}, poses: o.poses || [] }; save(); }
 
 // ── Designs ─────────────────────────────────────────────────────
 // Accepts a JSON object: either a few fields of a preset ({"height":170,"outfit":{"hair":9449516}}) or a whole preset as the
@@ -42,6 +53,10 @@ function parseDesign(text) {
   if (!isObj(o)) throw new Error('Expected an object.');
   return normaliseColours(o);
 }
+function designFor(id) { return mem.designs[id] || null; }
+function applyDesign(spec, id) { const p = designFor(id); return p ? deepMerge(spec, p) : spec; }
+function setDesign(id, patch, { replace = false } = {}) { mem.designs[id] = replace || !mem.designs[id] ? patch : deepMerge(mem.designs[id], patch); save(); }
+function clearDesign(id) { delete mem.designs[id]; save(); }
 
 // ── Poses ───────────────────────────────────────────────────────
 // An entry says: in this position, for the subject or the disciplinarian, at this beat, these bones take these local Euler
@@ -124,45 +139,19 @@ function parsePoses(text, defaults = {}) {
   if (/^==/m.test(t) || /pose editor report/i.test(t)) { const r = parseReport(t, defaults.position && defaults.position !== 'auto' ? defaults.position : null); if (!r.entries.length) throw new Error('That report has no edited bones in it.'); return r; }
   return parsePoseJSON(t, defaults);
 }
-// Poses grouped for js/poses.js: one list per position, entries for the same slot merged bone by bone.
-function groupPoses(entries) {
-  const out = {};
+// Adding an entry for the same position / who / beat replaces the earlier one's bones bone by bone.
+function addPoses(entries) {
   for (const e of entries) {
-    const list = out[e.position] || (out[e.position] = []);
-    const hit = list.find(p => p.who === e.who && p.beat === e.beat);
-    if (hit) hit.bones = { ...hit.bones, ...e.bones }; else list.push({ who: e.who, beat: e.beat, bones: { ...e.bones } });
+    const hit = mem.poses.find(p => p.position === e.position && p.who === e.who && p.beat === e.beat);
+    if (hit) { hit.bones = { ...hit.bones, ...e.bones }; if (e.label) hit.label = e.label; } else mem.poses.push({ ...e, bones: { ...e.bones } });
   }
-  return out;
+  save();
 }
-// The report for pose edits, to be pasted into js/poses.js (or sent on): each position's entries, written the way the file holds them.
-function poseReport(entries) {
-  const g = groupPoses(entries), lines = ['// Pose edits for js/poses.js: add each entry to its position\'s list (an entry for the same who and beat replaces that one\'s bones).'];
-  for (const pos of POSITIONS) {
-    if (!g[pos]) continue;
-    lines.push(pos + ': [');
-    for (const e of g[pos]) lines.push("  { who: '" + e.who + "', beat: '" + e.beat + "', bones: { " + Object.entries(e.bones).map(([b, v]) => b + ': [' + v.join(', ') + ']').join(', ') + ' } },');
-    lines.push('],');
-  }
-  return lines.join('\n');
-}
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-// What `cur` changes about `base`, as a patch deepMerge understands (null removes a field).
-function diff(base, cur) {
-  const out = {};
-  for (const k of Object.keys(cur)) { if (same(base[k], cur[k])) continue; out[k] = isObj(cur[k]) && isObj(base[k]) ? diff(base[k], cur[k]) : cur[k]; }
-  for (const k of Object.keys(base)) if (!(k in cur)) out[k] = null;
-  return out;
-}
-const hex = v => typeof v === 'number' && v > 255 ? '0x' + v.toString(16).padStart(6, '0') : v;
-const fmt = o => JSON.stringify(o, null, 1).replace(/"?(\w+)"?: (\d{3,})/g, (m, k, n) => (+n > 255 && +n <= 0xffffff && /(color|hair|skin|eye|lip|shoe|buckle|above)/i.test(k) ? '"' + k + '": "' + hex(+n) + '"' : m));
-// The report for a design: what it changes from the built-in one (a patch for js/bodies.js), and the whole design as it now stands.
-function designReport(id, name, base, cur) {
-  const patch = diff(base, cur);
-  if (!Object.keys(patch).length) return '=== Design: ' + name + ' (' + id + ') ===\nNo changes from the built-in design.';
-  return '=== Design: ' + name + ' (' + id + ') ===\nChanges from the built-in design (a patch for js/bodies.js: objects merge, arrays replace, null removes a field; colours may be written 0xrrggbb):\n' + fmt(patch) + '\n\nThe whole design as it now stands:\n' + fmt(cur);
-}
+function removePose(i) { mem.poses.splice(i, 1); save(); }
+function clearPoses() { mem.poses = []; save(); }
+const posesFor = position => mem.poses.filter(p => p.position === position);
 
-const api = { POSITIONS, deepMerge, parseDesign, parsePoses, parseReport, parsePoseJSON, groupPoses, poseReport, designReport, diff };
-root.FairyShoeEdits = api;
+const api = { KEY, POSITIONS, deepMerge, load, save, get, set, parseDesign, designFor, applyDesign, setDesign, clearDesign, parsePoses, parseReport, parsePoseJSON, addPoses, removePose, clearPoses, posesFor, empty };
+root.FairyShoeOverrides = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
