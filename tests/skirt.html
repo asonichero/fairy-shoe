@@ -21,7 +21,6 @@ window.run = function (seconds, dt, every) {
     if (every && since > every && ses.canStrike()) { ses.smack(); since = 0; }
     ses.tick(dt, clock);
   }
-  if (skirt && skirt.fz) return frozenStats();
   return skirt ? skirt.stats : null;
 };
 const hemY = () => { const S = skirt, N = S.N, n = S.R * N; let y = 0; for (let k = n - N; k < n; k++) y += S.p[3 * k + 1]; return y / N; };
