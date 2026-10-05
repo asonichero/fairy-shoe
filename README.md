@@ -130,12 +130,11 @@ Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuff
 
 (The dance library is not part of this game, so that section is gone.)
 
-What it adds is **Save to the game**. Everything above is a preview until saved; saved changes are kept in the browser (`localStorage`) and used whenever the game next builds a scene.
+What it adds is **reports**. Everything in the editor is a preview: nothing is saved and the game never reads it, so there is no state to get out of step with the files. To make an edit permanent, make a report, copy it and paste it into the project (or send it on):
 
-- **Save this look** stores what you changed about the selected character (as a patch over the built-in design: if you only moved the height, only the height is saved). *Remove its saved changes* and *Reset everything* go back to the built-in designs.
-- **Paste a design**: a few fields as JSON (`{"height":172,"outfit":{"hair":"#5a1e12"}}`), or a whole preset as *Show JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`.
-- **Paste poses**: the pose editor's report as it is (it names its position, e.g. `Position: chair.`; older reports saying `Over the case.` mean the table), or JSON (`{"position":"case","who":"subject","beat":"base","bones":{"neck":[-40,0,0]}}`, a list, or `{position, giver:{…}, subject:{…}, beat}`). Angles are the engine's pose-table Euler degrees; where the scene itself drives a bone (the swinging arm's IK) the report's table value is used. **Save pose-editor edits** parses the Report you have just made without a paste. The subject's *base* and *contact* poses and the player's relaxed / raised / contact beats can be edited, per position.
-- *Export all*, *Import* and *Undo* move and step through the saved changes.
+- **Design report (this character)** lists what you changed about the selected character from its design in `js/bodies.js` (a patch: if you only moved the height, only the height is listed) and then the whole design as it now stands. *Every changed design* does the same for each character that differs.
+- **Pose report** turns the pose editor's Report into entries for `js/poses.js`, grouped by position (`lap`, `case`, `head`, `chair`, `spread`). An entry names whose pose it is (`subject` or `giver`, the player), the beat (`base` / `contact` for the subject; `relaxed` / `raised` / `contact` for the player) and the bones, as the engine's pose-table Euler degrees; where the scene itself drives a bone (the swinging arm's IK) the report uses the table value.
+- **Try a design in the preview**: paste a few fields as JSON (`{"height":172,"outfit":{"hair":"#5a1e12"}}`) or a whole preset as *Show as JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`. *Revert this character* goes back to `js/bodies.js`.
 
 ## Layout
 
@@ -144,14 +143,15 @@ index.html            page shell
 css/style.css
 js/content.js         the cast, chores, event templates, lines (pure data)
 js/rules.js           the rules (pure functions over JSON state; runs in Node)
-js/overrides.js       design and pose edits from the editor (storage, parsing, merging)
+js/edits.js           the editor's reports: parsing a pasted design or pose report, and writing the design and pose reports
+js/poses.js           pose edits (pasted from the editor's pose report)
 js/room.js            the cottage room, the chair and the table
 js/bodies.js          the residents' (and the player's) bodies, as Starlight presets
 js/scene.js           the live-correction wrapper: cameras, rebuild-in-place, layers, pace and strength
-editor.html           the character editor: the Starlight viewer plus Save to the game (js/editor-setup.js gives it the cast)
+editor.html           the character editor: the Starlight viewer plus reports (js/editor-setup.js gives it the cast)
 js/ui.js              interface and game flow
 tests/rules.test.js   unit tests for the rules, including a long simulated run
-tests/overrides.test.js  pose-report / design parsing, merging, and the implement exchange
+tests/edits.test.js   pose-report / design parsing, the reports, and the implement exchange
 tests/e2e-smoke.js    two days in headless Chromium, including every live control
 tests/skirt-physics.js + skirt.html  the cloth: weight, frame-rate independence, no clipping
 ```

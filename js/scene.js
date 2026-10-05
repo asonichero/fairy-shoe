@@ -3,7 +3,7 @@
 // the middle of it, and reports how far the resident has been brought (the pain model's distress), which is all the rules read.
 (function (root) {
 'use strict';
-const S = root.Starlight, T = root.THREE, Room = root.FairyShoeRoom, Ov = root.FairyShoeOverrides;
+const S = root.Starlight, T = root.THREE, Room = root.FairyShoeRoom, Poses = root.FairyShoePoses || {};
 const V3 = T.Vector3;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
@@ -61,10 +61,10 @@ const Sound = (() => {
   return { init, clap, set: v => { on = v; } };
 })();
 
-// ── Pose overrides (from the editor) ────────────────────────────
+// ── Pose edits (js/poses.js, from the editor's report) ──────────
 // The scene reads its pose tables every frame from the scene object, so a copy with the edited bones swapped in is enough.
 function applyPoseOverrides(scn, position) {
-  const list = Ov ? Ov.posesFor(position) : [];
+  const list = Poses[position] || [];
   for (const e of list) {
     const q = Object.fromEntries(Object.entries(e.bones).filter(([b]) => scn.s.bones[b]).map(([b, v]) => [b, S.degQ(v)]));
     if (e.who === 'subject' && e.beat === 'base') scn.baseQ = { ...scn.baseQ, ...q };
@@ -347,6 +347,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
         scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
         scn.update(dt);
         if (plant) holdChairHands(s, plant);   // hands on the chair
+        if (!window.__solidOff && st.solid !== false) S.solveSolids(on, [scn.bench], 2);   // nothing passes into anything else (see Starlight.solveSolids)
         for (const ch of on) S.fadeMarks(ch, dt);
         for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
         for (const ch of on) S.bustContact(ch, on);

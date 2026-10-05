@@ -529,6 +529,6 @@ function showRules() {
 }
 
 window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro };
-function boot() { if (window.FairyShoeOverrides) window.FairyShoeOverrides.load(); showIntro(); }
+function boot() { showIntro(); }
 if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', boot); else boot();
 })();
