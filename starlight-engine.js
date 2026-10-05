@@ -1178,7 +1178,7 @@ function dress(ch, layers = lookLayers(ch.spec.m)) {
   // A shirt (a top with a collar, a placket or rolled cuffs): the painted fastening, and the 3D collar and cuffs.
   const shirtIdx = layers.findIndex(L => L.kind === 'top' && L.placket);
   if (shirtIdx >= 0) {
-    const L = layers[shirtIdx], H = spec.H, Y = spec.Y, from = { underbust: Y.under - 0.012 * H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
+    const L = layers[shirtIdx], H = spec.H, Y = spec.Y, from = { underbust: Y.under - 0.012 * H, waist: Y.waist - 0.01 * H, belly: Y.belly - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
     const tip = Y.neckBase - 0.016 * H - ((L.neck || '') === 'v' ? VNECK_DEPTH * H : 0);
     u.uShirt.value.set((L.placketWidth || 0.0125) * H / 1.78, tip, from + 0.004, 1);
     u.uShirtA.value.set(...[0, 1, 2, 3].map(i => i === shirtIdx ? 1 : 0)); u.uShirtB.value.set(...[4, 5, 6, 7].map(i => i === shirtIdx ? 1 : 0));
@@ -1186,6 +1186,8 @@ function dress(ch, layers = lookLayers(ch.spec.m)) {
   } else u.uShirt.value.w = 0;
   const shirt = layers.find(L => L.kind === 'top' && (L.collar || L.cuffs));
   if (shirt) buildShirtParts(ch, shirt); else removeShirtParts(ch);
+  const belted = layers.find(L => L.belt && (L.kind === 'bottom' || L.kind === 'top' || L.kind === 'skirt') && !(ch.lowered && ch.lowered.has(L)));
+  if (belted) buildBelt(ch, belted); else removeBelt(ch);
 }
 // The crease where each thigh takes over from the torso, as a smooth curve: around
 // the thigh's axis (CREASE_BINS angles), how far down the axis from the hip joint
@@ -6134,6 +6136,53 @@ function buildShirtParts(ch, L) {
     }
   }
   ch.shirtParts = parts;
+}
+
+
+// ════════════════════════════════════════════════════════════════
+// BELT — on a layer with `belt` (a colour, or { color, buckle, width, at: 'belly' | 'waist' | 'hip' | 'under', buckleScale }): a leather band round the body, with a
+// metal buckle at the front. On bottoms it sits at the belly line, where a top and the bottoms meet; on a dress (a top or a skirt) at the waist. It is skinned to the same pelvis/spine blend as the body at that height, so it bends with the
+// waist; it comes off with the bottoms when they are lowered.
+// ════════════════════════════════════════════════════════════════
+function removeBelt(ch) {
+  if (!ch.belt) return;
+  for (const m of ch.belt) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); }
+  ch.belt = null;
+}
+function buildBelt(ch, L) {
+  removeBelt(ch);
+  const spec = ch.spec, H = spec.H, Y = spec.Y, B = typeof L.belt === 'object' ? L.belt : { color: L.belt };
+  const half = (B.width || 0.017) * H / 1.78, y = Y[B.at || (L.kind === 'bottom' ? 'belly' : 'waist')], ring = loftRing(spec.prims[0], y);
+  const W = loftWeights(spec, y), names = BONES, boneIdx = W.map(([b]) => names.indexOf(b));
+  const mk = (pos, idx, color, metal) => {
+    const g = new THREE.BufferGeometry(), n = pos.length / 3, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) for (let k = 0; k < W.length; k++) { si[4 * i + k] = boneIdx[k]; sw[4 * i + k] = W[k][1]; }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+    g.setIndex(idx); g.computeVertexNormals();
+    const mesh = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: lin(color), roughness: metal ? 0.35 : 0.7, metalness: metal ? 0.8 : 0, side: THREE.DoubleSide, skinning: true }));
+    mesh.bind(ch.mesh.skeleton, ch.mesh.bindMatrix); mesh.castShadow = mesh.receiveShadow = true; mesh.frustumCulled = false;
+    ch.group.add(mesh); return mesh;
+  };
+  // The band: an ellipse hugging the torso's loft ring at the belly, a rounded rectangle in section.
+  const [a, bf, bb, zc] = ring, N = 72, sect = [[0.002, -half], [0.0075, -half * 0.8], [0.0075, half * 0.8], [0.002, half]], pos = [], idx = [];
+  for (let i = 0; i <= N; i++) {
+    const th = 2 * Math.PI * i / N, c = Math.cos(th), sn = Math.sin(th), d = c > 0 ? bf : bb, x = a * sn, z = zc + d * c;
+    // outward normal of the ellipse (x/a)^2 + (z/d)^2 = 1
+    const nx = sn / a, nz = c / d, nl = Math.hypot(nx, nz) || 1;
+    for (const [off, dy] of sect) pos.push(x + nx / nl * off, y + dy, z + nz / nl * off);
+  }
+  for (let i = 0; i < N; i++) for (let j = 0; j < 4; j++) { const a0 = i * 4 + j, b0 = i * 4 + (j + 1) % 4; idx.push(a0, b0, b0 + 4, a0, b0 + 4, a0 + 4); }
+  const parts = [mk(pos, idx, B.color != null ? B.color : 0x4a3220, false)];
+  // The buckle: a flat metal frame on the front centre.
+  const bw = 0.022 * H / 1.78 * (B.buckleScale || 1), bh = half * 1.35, t = 0.004, z0 = zc + bf + 0.0085, bpos = [], bidx = [];
+  const box = (x0, y0, x1, y1, zz0, zz1) => { const o = bpos.length / 3; for (const [x, yy, z] of [[x0, y0, zz0], [x1, y0, zz0], [x1, y1, zz0], [x0, y1, zz0], [x0, y0, zz1], [x1, y0, zz1], [x1, y1, zz1], [x0, y1, zz1]]) bpos.push(x, yy, z);
+    for (const f of [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [2, 3, 7], [2, 7, 6], [1, 2, 6], [1, 6, 5], [3, 0, 4], [3, 4, 7]]) bidx.push(o + f[0], o + f[1], o + f[2]); };
+  const w = 0.0035;
+  box(-bw, y - bh, -bw + w * 2, y + bh, z0, z0 + t); box(bw - w * 2, y - bh, bw, y + bh, z0, z0 + t);   // sides of the frame
+  box(-bw, y + bh - w * 2, bw, y + bh, z0, z0 + t); box(-bw, y - bh, bw, y - bh + w * 2, z0, z0 + t);    // top and bottom
+  box(-0.0015, y - bh * 0.9, 0.0015, y + bh * 0.9, z0 - 0.001, z0 + t + 0.001);                          // the prong
+  parts.push(mk(bpos, bidx, B.buckle != null ? B.buckle : 0xb8aa80, true));
+  ch.belt = parts;
 }
 
 // ════════════════════════════════════════════════════════════════
