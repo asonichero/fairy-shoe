@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const Ov = require('../js/overrides.js');
+const Ov = require('../js/edits.js');
 const R = require('../js/rules.js');
 
 test('designs merge key by key; arrays replace; null removes', () => {
@@ -59,22 +59,31 @@ test('pose JSON: one entry, a list, or {subject, giver}', () => {
   assert.throws(() => Ov.parsePoses('{"position":"lap","who":"subject","bones":{"neck":[1,2]}}'), /three numbers/);
 });
 
-test('adding poses for the same slot merges bones; entries can be listed and removed', () => {
-  Ov.set(Ov.empty());
-  Ov.addPoses([{ position: 'case', who: 'subject', beat: 'base', bones: { neck: [1, 2, 3] } }]);
-  Ov.addPoses([{ position: 'case', who: 'subject', beat: 'base', bones: { head: [4, 5, 6] } }]);
-  assert.equal(Ov.posesFor('case').length, 1); assert.deepEqual(Object.keys(Ov.posesFor('case')[0].bones).sort(), ['head', 'neck']);
-  assert.equal(Ov.posesFor('lap').length, 0);
-  Ov.removePose(0); assert.equal(Ov.posesFor('case').length, 0);
+test('pose entries are grouped per position, the same slot merged, and reported the way js/poses.js holds them', () => {
+  const entries = [
+    { position: 'case', who: 'subject', beat: 'base', bones: { neck: [1, 2, 3] } },
+    { position: 'case', who: 'subject', beat: 'base', bones: { head: [4, 5, 6] } },
+    { position: 'lap', who: 'giver', beat: 'raised', bones: { spine1: [0, 0, 5] } },
+  ];
+  const g = Ov.groupPoses(entries);
+  assert.equal(g.case.length, 1); assert.deepEqual(Object.keys(g.case[0].bones).sort(), ['head', 'neck']);
+  const text = Ov.poseReport(entries);
+  assert.match(text, /^lap: \[\n  \{ who: 'giver', beat: 'raised', bones: \{ spine1: \[0, 0, 5\] \} \},\n\],$/m);
+  assert.match(text, /case: \[/);
+  // the report is code the file can hold: evaluating it as an object literal gives back the entries
+  const back = new Function('return {' + text.split('\n').filter(l => !l.startsWith('//')).join('\n') + '}')();
+  assert.deepEqual(back.case, g.case); assert.deepEqual(back.lap, g.lap);
 });
 
-test('design overrides apply by id and can be cleared', () => {
-  Ov.set(Ov.empty());
-  Ov.setDesign('red', { height: 170 });
-  Ov.setDesign('red', { outfit: { hair: 5 } });
-  assert.deepEqual(Ov.applyDesign({ height: 160, outfit: { hair: 1, hairStyle: 'long' } }, 'red'), { height: 170, outfit: { hair: 5, hairStyle: 'long' } });
-  assert.deepEqual(Ov.applyDesign({ height: 160 }, 'jack'), { height: 160 });
-  Ov.clearDesign('red'); assert.equal(Ov.designFor('red'), null);
+test('a design report names only what changed from the built-in design, in a form the design parser reads back', () => {
+  const base = { height: 160, outfit: { hair: 0x5a1e12, hairStyle: 'long' }, wardrobe: { top: { color: 2, sleeves: 1 } } };
+  const cur = { height: 170, outfit: { hair: 0x112233, hairStyle: 'long' }, wardrobe: { top: { color: 2 } } };
+  const text = Ov.designReport('red', 'Red', base, cur);
+  assert.match(text, /Design: Red \(red\)/);
+  const patch = Ov.parseDesign(text.split('\n\n')[0].split('\n').slice(2).join('\n'));
+  assert.deepEqual(patch, { height: 170, outfit: { hair: 0x112233 }, wardrobe: { top: { sleeves: null } } });
+  assert.deepEqual(Ov.deepMerge(base, patch), cur);
+  assert.match(Ov.designReport('red', 'Red', base, base), /No changes/);
 });
 
 test('asking for an implement: options follow the resident, replies are filled, only a first exchange counts', () => {

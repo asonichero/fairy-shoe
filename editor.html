@@ -126,23 +126,18 @@
   </div>
   <textarea id="pe-out" readonly style="width:100%;box-sizing:border-box;height:120px;margin-top:6px;background:#101014;color:#b8b8c4;border:1px solid #2c2c36;font:11px ui-monospace,Consolas,monospace;display:none"></textarea>
 
-  <h3>Save to the game</h3>
-  <div id="ed-override" class="sub" style="color:#e0a85a;border:1px solid #6b5a2a;border-radius:4px;padding:6px 8px" hidden></div>
-  <div class="sub" style="margin:0 0 6px">Everything above is a preview until it is saved. Saved designs and pose edits are used by <a href="index.html" style="color:#c9a84c">the game</a> whenever it next builds a scene, in this browser (they are kept in <code>localStorage</code>).</div>
+  <h3>Report — to make an edit permanent</h3>
+  <div class="sub" style="margin:0 0 6px">Everything here is a preview: nothing is saved, and <a href="index.html" style="color:#c9a84c">the game</a> never sees it. To keep an edit, make a report, copy it and paste it back into the chat, and it will be made permanent in the project.</div>
   <div class="toggles">
-    <button id="ed-save" class="on">Save this look</button>
-    <button id="ed-clear">Remove its saved changes</button>
-    <button id="ed-show">Show as JSON</button>
+    <button id="ed-rdesign" class="on">Design report (this character)</button>
+    <button id="ed-rall">Every changed design</button>
+    <button id="ed-rposes">Pose report</button>
+    <button id="ed-copy">Copy</button>
   </div>
-  <div class="sub" style="margin:8px 0 3px">Paste a design: a few fields as JSON (<code>{"height":172,"outfit":{"hair":"#5a1e12"}}</code>) or a whole preset as “Show JSON” prints it. Objects merge, arrays replace, <code>null</code> removes a field; colours can be numbers, <code>0xrrggbb</code> or <code>"#rrggbb"</code>.</div>
+  <textarea id="ed-report" class="ed-ta" spellcheck="false" readonly style="height:170px" placeholder="The report appears here."></textarea>
+  <div class="sub" style="margin:8px 0 3px">Try a design in the preview: a few fields as JSON (<code>{"height":172,"outfit":{"hair":"#5a1e12"}}</code>) or a whole preset as “Show as JSON” prints it. Objects merge, arrays replace, <code>null</code> removes a field; colours can be numbers, <code>0xrrggbb</code> or <code>"#rrggbb"</code>.</div>
   <textarea id="ed-design" class="ed-ta" spellcheck="false"></textarea>
-  <div class="toggles"><button id="ed-apply">Apply to the preview</button></div>
-  <div class="sub" style="margin:8px 0 3px">Paste poses: a pose-editor report as it is, or JSON such as <code>{"position":"case","who":"subject","beat":"base","bones":{"neck":[-40,0,0]}}</code> (a list works too). Positions: lap, case, head, chair, spread.</div>
-  <textarea id="ed-poses" class="ed-ta" spellcheck="false"></textarea>
-  <div class="toggles"><select id="ed-pos"><option value="auto">position from the report</option></select><button id="ed-padd">Add poses</button><button id="ed-pe-save" title="Parses the Report above and saves it">Save pose-editor edits</button><button id="ed-pclear">Remove all saved poses</button></div>
-  <div id="ed-plist"></div>
-  <div class="toggles" style="margin-top:8px"><button id="ed-export">Export all</button><button id="ed-import">Import</button><button id="ed-undo">Undo</button><button id="ed-reset">Reset everything</button></div>
-  <textarea id="ed-blob" class="ed-ta" spellcheck="false" hidden></textarea>
+  <div class="toggles"><button id="ed-apply">Apply to the preview</button><button id="ed-show">Show as JSON</button><button id="ed-revert">Revert this character</button></div>
   <div id="ed-msg" class="sub" style="margin-top:8px;min-height:2.4em;white-space:pre-wrap"></div>
 
   <h3>Measurements — <span id="m-name"></span></h3>
@@ -171,7 +166,7 @@
 <script src="vendor/OrbitControls.js"></script>
 <script src="starlight-engine.js"></script>
 <script src="js/content.js"></script>
-<script src="js/overrides.js"></script>
+<script src="js/edits.js"></script><script src="js/poses.js"></script>
 <script src="js/room.js"></script>
 <script src="js/bodies.js"></script>
 <script src="js/scene.js"></script>
@@ -179,7 +174,7 @@
 <script>
 (function () {
 'use strict';
-// The models and discipline scene live in starlight-engine.js; the cast, its saved changes and the furniture come from js/editor-setup.js.
+// The models and discipline scene live in starlight-engine.js; the cast and the furniture come from js/editor-setup.js.
 // This file is the viewer's UI around them, plus what saves to the game.
 const S = window.Starlight;
 const { PRESETS, ORDER, BONES, POSES, clone } = S;
@@ -205,7 +200,7 @@ const SLIDERS = [
   ['head', 'Head size', 0.9, 1.1, 0.01, '×'],
 ];
 const current = {};                       // live (editable) measurements per character
-ORDER.forEach(k => current[k] = EDITOR.initial(k));   // the built-in design with whatever has been saved over it
+ORDER.forEach(k => current[k] = EDITOR.initial(k));   // the design in js/bodies.js, to be edited as a preview
 
 // ════════════════════════════════════════════════════════════════
 // SCENE
@@ -319,16 +314,7 @@ const allTab = document.createElement('button');
 allTab.textContent = 'All'; allTab.id = 'tab-all';
 allTab.onclick = () => { view.lineup = true; refreshTabs(); placeChars(); };
 tabsEl.appendChild(allTab);
-// Saved changes sit over bodies.js: say so, so an edit to the file is not mistaken for being ignored.
-function noteOverrides() {
-  const el = document.getElementById('ed-override'); if (!el || !window.EDITOR) return;
-  const d = EDITOR.Ov.designFor(view.selected), all = Object.keys(EDITOR.Ov.get().designs);
-  el.hidden = !all.length;
-  el.textContent = d ? PRESETS[view.selected].name + ' has saved changes (' + Object.keys(d).join(', ') + ') that are applied over js/bodies.js, so edits to those fields in the file will not show here until you press “Remove its saved changes”.'
-    : all.length ? 'Saved changes exist for ' + all.map(k => PRESETS[k].name).join(', ') + ' (applied over js/bodies.js). ' + PRESETS[view.selected].name + ' has none.' : '';
-}
 function refreshTabs() {
-  noteOverrides();
   ORDER.forEach(k => document.getElementById('tab-' + k).classList.toggle('on', k === view.selected));
   allTab.classList.toggle('on', view.lineup);
   document.getElementById('t-lineup').classList.toggle('on', view.lineup);
@@ -689,7 +675,7 @@ function buildScene() {
   const seatTop = sc.position === 'knees' ? EDITOR.seatTop(g) : 0;   // (the chair the player sits in, for the hands-on-the-chair position)
   scn = S.createDisciplineScene(scene, g, s, { lower: !!lowered[sc.subject], position: sc.position });
   scn.chairPlant = EDITOR.furnish(scene, scn, s, sc.position, seatTop);   // cottage furniture in place of the engine's cases
-  EDITOR.poses(scn, sc.position);                                         // saved pose edits, as the game applies them
+  EDITOR.poses(scn, sc.position);                                         // the pose edits in js/poses.js, as the game applies them
   EDITOR.skirt(scn, sc.skirt);                                            // the subject's skirt, draped over the pose
   if (lowered[sc.giver]) S.setLowered(g, 'bottom', true);
   for (const c of [g, s]) if (briefsDown[c.key]) S.setLowered(c, 'briefs', true);
@@ -1306,66 +1292,36 @@ function animate() {
 }
 
 // ════════════════════════════════════════════════════════════════
-// SAVE TO THE GAME — designs (the look as edited above, or pasted) and pose edits, kept by overrides.js.
+// REPORTS — the editor changes nothing in the game. A design or a pose is made permanent by pasting a report into the project.
 // ════════════════════════════════════════════════════════════════
 (() => {
-  const Ov = EDITOR.Ov, $ = id => document.getElementById(id), undo = [];
+  const Ed = EDITOR.Ed, $ = id => document.getElementById(id);
   const say = (t, kind) => { const m = $('ed-msg'); m.textContent = t || ''; m.style.color = kind === 'bad' ? '#f1a39b' : kind === 'ok' ? '#b9d9a5' : '#8a8a96'; };
-  const snap = () => { undo.push(JSON.stringify(Ov.get())); if (undo.length > 30) undo.shift(); };
-  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
-  // What `cur` changes about `base`, as a patch Ov.deepMerge understands (null removes a field).
-  function diff(base, cur) {
-    const out = {};
-    for (const k of Object.keys(cur)) { if (same(base[k], cur[k])) continue; out[k] = isObj(cur[k]) && isObj(base[k]) ? diff(base[k], cur[k]) : cur[k]; }
-    for (const k of Object.keys(base)) if (!(k in cur)) out[k] = null;
-    return out;
-  }
   const label = k => PRESETS[k].name;
   const refresh = keys => { buildSliders(); buildClothing(); rebuild(keys); };
-  $('ed-save').onclick = () => {
-    const k = view.selected, base = clone(EDITOR.builtIn[k]);
-    base.expr = { ...S.EXPR_DEFAULTS, ...(base.expr || {}) };   // (the expression sliders fill in the defaults; that is not a change)
-    const patch = diff(base, current[k]);
-    snap();
-    if (!Object.keys(patch).length) { Ov.clearDesign(k); return say(label(k) + ' matches the built-in design: nothing to save (any earlier saved changes were removed).', 'ok'); }
-    Ov.setDesign(k, patch, { replace: true }); noteOverrides(); say('Saved ' + label(k) + ': ' + Object.keys(patch).join(', ') + '.', 'ok');
+  const baseOf = k => { const b = clone(EDITOR.builtIn[k]); b.expr = { ...S.EXPR_DEFAULTS, ...(b.expr || {}) }; return b; };   // (the expression sliders fill in the defaults; that is not a change)
+  const designOf = k => Ed.designReport(k, label(k), baseOf(k), current[k]);
+  const show = (text, note) => { const r = $('ed-report'); r.value = text; r.select(); say(note, 'ok'); };
+  $('ed-rdesign').onclick = () => show(designOf(view.selected), 'The report for ' + label(view.selected) + '. Copy it and paste it into the chat.');
+  $('ed-rall').onclick = () => {
+    const changed = ORDER.filter(k => Object.keys(Ed.diff(baseOf(k), current[k])).length);
+    show(changed.length ? changed.map(designOf).join('\n\n') : 'No design differs from the built-in one.', changed.length ? 'Reports for ' + changed.map(label).join(', ') + '.' : 'Nothing has been changed.');
   };
-  $('ed-clear').onclick = () => { const k = view.selected; snap(); Ov.clearDesign(k); noteOverrides(); current[k] = clone(PRESETS[k]); refresh([k]); say('Saved changes for ' + label(k) + ' removed; back to the built-in design.', 'ok'); };
+  $('ed-rposes').onclick = () => {
+    try { const r = Ed.parsePoses(peReport(), { position: 'auto' }); show(Ed.poseReport(r.entries), 'The pose report. Copy it and paste it into the chat.' + (r.warn.length ? '\n' + r.warn.join('\n') : '')); }
+    catch (e) { say('There is nothing to report yet: freeze the discipline scene in the pose editor, move something, then press this again. (' + e.message + ')', 'bad'); }
+  };
+  $('ed-copy').onclick = async () => {
+    const r = $('ed-report'); if (!r.value) return say('Make a report first.', 'bad');
+    r.select();
+    try { await navigator.clipboard.writeText(r.value); say('Copied.', 'ok'); } catch (e) { document.execCommand && document.execCommand('copy'); say('Selected: press Ctrl/Cmd+C to copy.'); }
+  };
   $('ed-show').onclick = () => { $('ed-design').value = JSON.stringify(current[view.selected], null, 1); say('This is ' + label(view.selected) + ' as shown. Edit it and paste the changes back, or copy it elsewhere.'); };
   $('ed-apply').onclick = () => {
-    try { const k = view.selected, patch = Ov.parseDesign($('ed-design').value); current[k] = Ov.deepMerge(current[k], patch); refresh([k]); say('Applied to the preview (' + Object.keys(patch).length + ' field(s)). Press Save this look to keep it.', 'ok'); }
+    try { const k = view.selected, patch = Ed.parseDesign($('ed-design').value); current[k] = Ed.deepMerge(current[k], patch); refresh([k]); say('Applied to the preview (' + Object.keys(patch).length + ' field(s)). Make a design report to keep it.', 'ok'); }
     catch (e) { say('Could not read that design: ' + e.message, 'bad'); }
   };
-  for (const p of Ov.POSITIONS) { const o = document.createElement('option'); o.value = p; o.textContent = p; $('ed-pos').appendChild(o); }
-  function drawPoses() {
-    const list = $('ed-plist'), poses = Ov.get().poses; list.replaceChildren();
-    if (!poses.length) { list.innerHTML = '<div class="sub">No saved pose edits.</div>'; return; }
-    poses.forEach((p, i) => {
-      const row = document.createElement('div'); row.className = 'ed-item';
-      const span = document.createElement('span'); span.append(p.position + ' · ' + (p.who === 'giver' ? 'player' : 'subject') + ' · ' + p.beat);
-      const sm = document.createElement('small'); sm.textContent = Object.keys(p.bones).join(', '); span.appendChild(sm); row.appendChild(span);
-      const b = document.createElement('button'); b.textContent = 'Remove'; b.onclick = () => { snap(); Ov.removePose(i); drawPoses(); if (sc.on) buildScene(); };
-      row.appendChild(b); list.appendChild(row);
-    });
-  }
-  function addFrom(text, position) {
-    const r = Ov.parsePoses(text, { position }); snap(); Ov.addPoses(r.entries); drawPoses(); if (sc.on) buildScene();
-    say('Saved ' + r.entries.length + ' pose edit(s).' + (r.warn.length ? '\n' + r.warn.join('\n') : '') + (sc.on ? '' : '\nShow the discipline scene to see them.'), 'ok');
-  }
-  $('ed-padd').onclick = () => { try { addFrom($('ed-poses').value, $('ed-pos').value); } catch (e) { say('Could not read those poses: ' + e.message, 'bad'); } };
-  $('ed-pe-save').onclick = () => { try { addFrom(peReport(), 'auto'); } catch (e) { say('Nothing to save from the pose editor: ' + e.message, 'bad'); } };
-  $('ed-pclear').onclick = () => { snap(); Ov.clearPoses(); drawPoses(); if (sc.on) buildScene(); say('All saved pose edits removed.', 'ok'); };
-  $('ed-export').onclick = () => { const b = $('ed-blob'); b.hidden = false; b.value = JSON.stringify(Ov.get(), null, 1); b.select(); say('Copy this to keep or move your saved changes.'); };
-  $('ed-import').onclick = () => {
-    const b = $('ed-blob');
-    if (b.hidden) { b.hidden = false; b.value = ''; return say('Paste an export here, then press Import again.'); }
-    try { const o = JSON.parse(b.value); if (!o || typeof o.designs !== 'object' || !Array.isArray(o.poses)) throw new Error('not an export from this editor'); snap(); Ov.set(o); drawPoses(); say('Imported. Reload to see saved designs in the preview.', 'ok'); }
-    catch (e) { say('Could not import: ' + e.message, 'bad'); }
-  };
-  $('ed-undo').onclick = () => { const s = undo.pop(); if (!s) return say('Nothing to undo.'); Ov.set(JSON.parse(s)); drawPoses(); if (sc.on) buildScene(); say('Undone.', 'ok'); };
-  $('ed-reset').onclick = () => { if (!confirm('Remove every saved design and pose change?')) return; snap(); Ov.set(Ov.empty()); ORDER.forEach(k => { current[k] = clone(PRESETS[k]); }); drawPoses(); refresh(ORDER); say('Everything is back to the built-in designs and poses.', 'ok'); };
-  drawPoses();
+  $('ed-revert').onclick = () => { const k = view.selected; current[k] = clone(PRESETS[k]); refresh([k]); say(label(k) + ' is back to the design in js/bodies.js.', 'ok'); };
 })();
 
 // Collapsible sections: each heading folds everything up to the next one. Which are
