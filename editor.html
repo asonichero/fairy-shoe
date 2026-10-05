@@ -1272,8 +1272,6 @@ function animate() {
     ch.group.updateMatrixWorld(true);
     S.bustSpring(ch, dt);
   }
-  // Everything is solid: nobody, and nothing in the room, passes into anything else, whatever pose was asked for (see SOLIDS in the engine).
-  { const solid = scn ? [scn.g, scn.s] : visibleChars(); if (solid.length <= 4) S.solveSolids(solid, [scn && scn.bench], 2); }
   // Nobody passes through anybody: busts yield first, then the skin (see CONTACT).
   for (const ch of onStage) S.bustContact(ch, onStage);
   S.updateContacts(onStage);

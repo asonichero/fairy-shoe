@@ -27,7 +27,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   for (const [who, pos, impl] of [['red', 'lap', 'hand'], ['red', 'case', 'hairbrush'], ['snow', 'head', 'hand'], ['snow', 'chair', 'hand'], ['goldilocks', 'spread', 'paddle'], ['goldilocks', 'lap', 'rod']]) {
     for (const mode of ['down', 'up']) {
     const r = await p.evaluate(([w, ps, im, m]) => { setup(w, ps, im, m); const st = run(4, 1 / 60, 1.0); return { st, finite: mesh(), speed: maxSpeed(), frozen: !!skirt.fz }; }, [who, pos, impl, mode]);
-    check(r.finite && r.st.inside <= 8 && r.st.furniture <= 2 && r.st.other <= 16 && r.st.deepest < 0.02 && (r.frozen || r.speed < 0.035), `${who}, ${pos}, ${impl}, ${mode}: ${r.st.inside} particles inside the body, ${r.st.furniture} in furniture, ${r.st.other} in the other person (deepest ${(r.st.deepest * 1000).toFixed(1)} mm), fastest ${(r.speed * 1000).toFixed(1)} mm/step`);
+    check(r.finite && r.st.inside <= 8 && r.st.furniture <= 2 && r.st.other <= 2 && r.st.deepest < 0.02 && (r.frozen || r.speed < 0.035), `${who}, ${pos}, ${impl}, ${mode}: ${r.st.inside} particles inside the body, ${r.st.furniture} in furniture, ${r.st.other} in the other person (deepest ${(r.st.deepest * 1000).toFixed(1)} mm), fastest ${(r.speed * 1000).toFixed(1)} mm/step`);
     }
   }
   // In the game a skirt is always hitched up (the stage forces it); in the engine it can still be taken off.
