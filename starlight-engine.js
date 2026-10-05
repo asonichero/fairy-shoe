@@ -5434,7 +5434,7 @@ function buildSkirt(ch, L) {
   pick.forEach((v, k) => { for (let a = 0; a < 3; a++) { skin.p[3 * k + a] = pa[3 * v + a]; skin.nr[3 * k + a] = na[3 * v + a]; } for (let a = 0; a < 4; a++) { skin.i[4 * k + a] = si[4 * v + a]; skin.w[4 * k + a] = sw[4 * v + a]; } });
   const sa = new Int32Array(springs.length), sb = new Int32Array(springs.length), sl = new Float32Array(springs.length), sk = new Float32Array(springs.length), sn = new Uint8Array(springs.length);
   springs.forEach(([a, b, l0, k, kind], i) => { sa[i] = a; sb[i] = b; sl[i] = l0; sk[i] = k; sn[i] = kind; });
-  ch.skirt = { L, rest, springs, sa, sb, sl, sk, sn, iw, R, N, mesh, p: null, prev: null, top, skin, grid: new Map(), acc: 0 };
+  ch.skirt = { L, rest, springs, sa, sb, sl, slHang: sl.slice(), sk, sn, iw, R, N, mesh, p: null, prev: null, top, skin, grid: new Map(), acc: 0 };
 }
 const len3 = v => Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
 // Takes a skirt off (hidden, not simulated) or puts it back on, restarting its cloth
@@ -5687,6 +5687,7 @@ function setSkirtGathered(ch, on) {
   const S = ch.skirt;
   if (!S || !!S.gathered === on) return;
   S.gathered = on; S.stillT = 0; S.hu = null; S.fz = null;
+  if (!on && S.slHang) S.sl.set(S.slHang);
   if (on) gatherPins(S, 0);
   syncBunch(ch);
 }
@@ -6168,14 +6169,15 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
 
 // The body's outer surface at angle th (0 = front) and height y, found by marching in along a horizontal ray (rest space, cached per character).
 function bodySurface(spec) {
-  const cache = new Map();
+  const cache = new Map(), trunk = spec.prims.filter(P => P.type === 'loft' || ['torso', 'bust', 'glute', 'perineum', 'thigh'].includes(P.tag || P.group));   // (the trunk only: not the arms, which hang beside it in the rest pose)
+  const inside = q => { for (const P of trunk) if (primDist(q, P) < 0) return true; return false; };
   return (th, y) => {
     const key = Math.round(th * 1000) + ',' + Math.round(y * 1000), hit = cache.get(key); if (hit !== undefined) return hit;
     const dx = Math.sin(th), dz = Math.cos(th), q = [0, y, 0];
     let r = 0.32;
-    for (; r > 0.005; r -= 0.006) { q[0] = dx * r; q[2] = dz * r; if (field(spec, q) < 0) break; }
+    for (; r > 0.005; r -= 0.006) { q[0] = dx * r; q[2] = dz * r; if (inside(q)) break; }
     let lo = r, hi = r + 0.006;
-    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (field(spec, q) < 0) lo = m; else hi = m; }
+    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (inside(q)) lo = m; else hi = m; }
     cache.set(key, hi); return hi;
   };
 }
@@ -6197,17 +6199,21 @@ function layHitched(ch) {
       T[o] = Math.sin(th) * rF; T[o + 1] = yF; T[o + 2] = Math.cos(th) * rF;
     }
   }
-  const idx = new Int32Array(n), loc = new Float32Array(n * 3);
+  const idx = new Int32Array(n), loc = new Float32Array(n * 3), onTrunk = new Uint8Array(K.n);
+  for (let a = 0; a < K.n; a++) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (K.w[4 * a + m] > bw) { bw = K.w[4 * a + m]; bb = K.i[4 * a + m]; } onTrunk[a] = /^(upperArm|forearm|hand|fingers|thumb|clav)/.test(BONES[bb]) ? 0 : 1; }   // (never bound to an arm)
   for (let k = 0; k < n; k++) {
     const x = T[3 * k], y = T[3 * k + 1], z = T[3 * k + 2];
     let best = Infinity, bi = -1;
     for (let a = 0; a < K.n; a++) {
+      if (!onTrunk[a]) continue;
       const dx = x - K.p[3 * a], dy = y - K.p[3 * a + 1], dz = z - K.p[3 * a + 2], d = dx * dx + dy * dy + dz * dz;
       if (d < best && dx * K.nr[3 * a] + dy * K.nr[3 * a + 1] + dz * K.nr[3 * a + 2] > -0.002) { best = d; bi = a; }
     }
     if (bi < 0) bi = 0;
     idx[k] = bi; loc[3 * k] = x - K.p[3 * bi]; loc[3 * k + 1] = y - K.p[3 * bi + 1]; loc[3 * k + 2] = z - K.p[3 * bi + 2];
   }
+  // the cloth is not stressed as laid out: every spring's rest length is its length in the layout (restored when the skirt hangs again)
+  for (let i = 0; i < S.sa.length; i++) { const a = 3 * S.sa[i], b = 3 * S.sb[i]; S.sl[i] = Math.hypot(T[a] - T[b], T[a + 1] - T[b + 1], T[a + 2] - T[b + 2]); }
   if (!K.lin) K.lin = new Float32Array(K.n * 9);
   S.fz = { idx, loc, off: new Float32Array(n * 3), vel: new Float32Array(n * 3), tprev: null, vprev: new Float32Array(n * 3), warm: 0 };
   ch.group.updateMatrixWorld(true);
@@ -6386,7 +6392,7 @@ function buildBelt(ch, L) {
 // trunk, by shifting the body. The correction is kept from frame to frame (the poses are re-applied each frame, so the correction is too),
 // so one or two passes a frame are enough, and it fades where nothing is touching any more.
 // ════════════════════════════════════════════════════════════════
-const SOLID = { STEP: 4, PAD: 0.0012, GIVE: { glute: 0.016, bust: 0.022 }, REACH: 0.05, MAX_TURN: 0.12, SHIFT: 0.02, GAIN: 0.6, ARM_SELF: 0.09 };
+const SOLID = { STEP: 4, HAND: 0.014, PAD: 0.0012, GIVE: { glute: 0.016, bust: 0.022 }, REACH: 0.05, MAX_TURN: 0.12, SHIFT: 0.02, GAIN: 0.8, ARM_SELF: 0.09 };
 const SOLID_CHAIN = { handL: [1, 0.5, 0.25], handR: [1, 0.5, 0.25], fingersL: [0.6, 0.6, 0.35], fingersR: [0.6, 0.6, 0.35], thumbL: [0.6, 0.6, 0.35], thumbR: [0.6, 0.6, 0.35], thumb2L: [0.6, 0.6, 0.35], thumb2R: [0.6, 0.6, 0.35] };
 const SOLID_TRUNK = new Set(['pelvis', 'spine1', 'spine2', 'bustL', 'bustR', 'clavL', 'clavR']);
 const SOLID_SHIFTS = { thighL: 0.3, thighR: 0.3, shinL: 0.15, shinR: 0.15, neck: 0.1, head: 0.1 };
@@ -6395,7 +6401,7 @@ function solidPrep(ch) {
   if (ch._solid) return ch._solid;
   const g = ch.mesh.geometry, pa = g.attributes.position.array, na = g.attributes.normal.array, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array, pick = [];
   for (let v = 0; v < pa.length / 3; v += SOLID.STEP) pick.push(v);
-  const n = pick.length, C = { n, p: new Float32Array(n * 3), nr: new Float32Array(n * 3), i: new Uint16Array(n * 4), w: new Float32Array(n * 4), dom: new Uint16Array(n), give: new Float32Array(n), arm: new Uint8Array(n), wp: new Float32Array(n * 3), wn: new Float32Array(n * 3) };
+  const n = pick.length, C = { n, p: new Float32Array(n * 3), nr: new Float32Array(n * 3), i: new Uint16Array(n * 4), w: new Float32Array(n * 4), dom: new Uint16Array(n), give: new Float32Array(n), hand: new Uint8Array(n), arm: new Uint8Array(n), wp: new Float32Array(n * 3), wn: new Float32Array(n * 3) };
   const soft = ch.spec.prims.filter(P => P.tag === 'glute' || P.tag === 'bust'), q = [0, 0, 0];
   pick.forEach((v, k) => {
     let best = -1, bw = -1;
@@ -6406,6 +6412,7 @@ function solidPrep(ch) {
     if (bn === 'bustL' || bn === 'bustR') C.give[k] = SOLID.GIVE.bust;
     else for (const P of soft) if (primDist(q, P) < 0.008) { C.give[k] = Math.max(C.give[k], SOLID.GIVE[P.tag]); }
     C.arm[k] = /^(upperArm|forearm|hand|fingers|thumb)/.test(bn) ? 1 : 0;
+    C.hand[k] = /^(hand|fingers|thumb)/.test(bn) ? 1 : 0;
   });
   return ch._solid = C;
 }
@@ -6456,7 +6463,8 @@ const _so = new THREE.Vector3(), _sq = new THREE.Quaternion(), _sq2 = new THREE.
 function solidPass(on, F, apply = true) {
   const W = on.map(solidWorld), out = [];
   on.forEach((ch, ci) => {
-    const A = W[ci], C = A.C, st = { body: 0, furniture: 0, floor: 0, self: 0, deepest: 0, near: new Set(), worst: null }, acc = {}, shift = [0, 0, 0]; let shiftW = 0;
+    const A = W[ci], C = A.C, st = { body: 0, furniture: 0, floor: 0, self: 0, deepest: 0, near: new Set(), worst: null, clear: {}, clearAll: SOLID.REACH }, acc = {}, shift = [0, 0, 0]; let shiftW = 0;
+    const clr = (b, v) => { if (v < (st.clear[b] === undefined ? SOLID.REACH : st.clear[b])) st.clear[b] = v; if (v < st.clearAll) st.clearAll = v; };   // how far a limb is from the nearest surface (it may relax its correction only that far)
     const jointOf = {}, pushes = [];
     const note = (k, dx, dy, dz, kind, depth) => {
       pushes.push([k, dx, dy, dz]); st[kind]++;
@@ -6477,9 +6485,10 @@ function solidPass(on, F, apply = true) {
         if (q[0] < B.lo[0] - 0.05 || q[0] > B.hi[0] + 0.05 || q[1] < B.lo[1] - 0.05 || q[1] > B.hi[1] + 0.05 || q[2] < B.lo[2] - 0.05 || q[2] > B.hi[2] + 0.05) continue;
         const j = solidNearest(B, B.grid, q); if (j < 0) continue;
         const o = 3 * j, sd = (q[0] - B.C.wp[o]) * B.C.wn[o] + (q[1] - B.C.wp[o + 1]) * B.C.wn[o + 1] + (q[2] - B.C.wp[o + 2]) * B.C.wn[o + 2];
-        const give = Math.max(C.give[k], B.C.give[j]), target = SOLID.PAD - give;
-        if (sd < target + 0.006) st.near.add(bn);
-        if (sd < target - 0.0004) take(target - sd, B.C.wn[o], B.C.wn[o + 1], B.C.wn[o + 2], 'body');
+        const give = Math.max(C.give[k], B.C.give[j], C.hand[k] ? SOLID.HAND : 0), target = SOLID.PAD - give;   // (a hand is set a little into the skin on purpose, and the scene flattens the skin under it, see setPress)
+        if (sd < target + 0.012) st.near.add(bn);
+        clr(bn, sd - target);
+        if (sd < target - 0.0015) take(target - sd, B.C.wn[o], B.C.wn[o + 1], B.C.wn[o + 2], 'body');
       }
       // furniture (boards, legs, the seat) and the floor
       // Out of which face? The nearest one is wrong for a thin board entered from one side; the right one is a face the skin itself is turned toward
@@ -6503,6 +6512,7 @@ function solidPass(on, F, apply = true) {
         if (q[0] < O.wb.min.x || q[0] > O.wb.max.x || q[1] < O.wb.min.y || q[1] > O.wb.max.y || q[2] < O.wb.min.z || q[2] > O.wb.max.z) continue;
         _so.set(q[0], q[1], q[2]).applyMatrix4(O.inv);
         const lo = O.bb.min, hi = O.bb.max, P = SOLID.PAD;
+        clr(bn, Math.hypot(Math.max(lo.x - _so.x, 0, _so.x - hi.x), Math.max(lo.y - _so.y, 0, _so.y - hi.y), Math.max(lo.z - _so.z, 0, _so.z - hi.z)));
         if (_so.x > lo.x - P && _so.x < hi.x + P && _so.y > lo.y - P && _so.y < hi.y + P && _so.z > lo.z - P && _so.z < hi.z + P) {
           const dir = (x, y, z) => { const e = new THREE.Vector3(x, y, z); e.transformDirection(O.m); return [e.x, e.y, e.z]; };   // (the box may be turned; these are not scaled)
           const faces = [[_so.x - (lo.x - P), ...dir(-1, 0, 0)], [(hi.x + P) - _so.x, ...dir(1, 0, 0)], [_so.y - (lo.y - P), ...dir(0, -1, 0)], [(hi.y + P) - _so.y, ...dir(0, 1, 0)], [_so.z - (lo.z - P), ...dir(0, 0, -1)], [(hi.z + P) - _so.z, ...dir(0, 0, 1)]];
@@ -6510,14 +6520,18 @@ function solidPass(on, F, apply = true) {
           take(f[0], f[1], f[2], f[3], 'furniture');
         }
       }
+      if (q[1] < SOLID.REACH) clr(bn, q[1]);
       if (q[1] < -0.003) take(-q[1], 0, 1, 0, 'floor');
-      // an arm through its own trunk
-      if (C.arm[k] && !best) {
-        const j = solidNearest(A, A.tgrid, q);
-        if (j >= 0 && C.dom[j] !== C.dom[k]) {
-          const o = 3 * j, sd = (q[0] - C.wp[o]) * C.wn[o] + (q[1] - C.wp[o + 1]) * C.wn[o + 1] + (q[2] - C.wp[o + 2]) * C.wn[o + 2];
-          const sh = shoulder[bn.slice(-1)];
-          if (sd < SOLID.PAD && Math.hypot(q[0] - sh.x, q[1] - sh.y, q[2] - sh.z) > SOLID.ARM_SELF && sd < -0.004) take(SOLID.PAD - sd, C.wn[o], C.wn[o + 1], C.wn[o + 2], 'self');
+      // an arm through its own trunk (not near the shoulder, where it joins it)
+      if (C.arm[k]) {
+        const sh = shoulder[bn.slice(-1)];
+        if (Math.hypot(q[0] - sh.x, q[1] - sh.y, q[2] - sh.z) > SOLID.ARM_SELF) {
+          const j = solidNearest(A, A.tgrid, q);
+          if (j >= 0 && C.dom[j] !== C.dom[k]) {
+            const o = 3 * j, sd = (q[0] - C.wp[o]) * C.wn[o] + (q[1] - C.wp[o + 1]) * C.wn[o + 1] + (q[2] - C.wp[o + 2]) * C.wn[o + 2];
+            clr(bn, sd - SOLID.PAD);
+            if (!best && sd < -0.004) take(SOLID.PAD - sd, C.wn[o], C.wn[o + 1], C.wn[o + 2], 'self');
+          }
         }
       }
       if (best) note(k, best[1] * best[0], best[2] * best[0], best[3] * best[0], best[4], best[5]);
@@ -6531,13 +6545,13 @@ function solidPass(on, F, apply = true) {
       let b = BONES[C.dom[k]];
       const x = C.wp[3 * k], y = C.wp[3 * k + 1], z = C.wp[3 * k + 2];
       if (SOLID_TRUNK.has(b)) { shift[0] += dx; shift[1] += dy; shift[2] += dz; shiftW++; fx.touch.add('trunk'); continue; }
-      const chain = SOLID_CHAIN[b] || [1, 0.5, 0.15];
+      const chain0 = SOLID_CHAIN[b] || [1, 0.5, 0.15], csum = chain0.reduce((p, c) => p + c, 0), chain = chain0.map(c => c / csum);   // (the shares add to one, so the whole chain moves the point by the push, not by a multiple of it)
       if (SOLID_SHIFTS[b]) { shift[0] += dx * SOLID_SHIFTS[b]; shift[1] += dy * SOLID_SHIFTS[b]; shift[2] += dz * SOLID_SHIFTS[b]; shiftW += SOLID_SHIFTS[b]; fx.touch.add('trunk'); }
       for (let lvl = 0; lvl < chain.length && b && !SOLID_TRUNK.has(b); lvl++, b = PARENT[b]) {
         const a = acc[b] || (acc[b] = { cx: 0, cy: 0, cz: 0, rr: 0 });
         const J = jointOf[b] || (jointOf[b] = ch.bones[b].getWorldPosition(new THREE.Vector3()));
         const rx = x - J.x, ry = y - J.y, rz = z - J.z, w = chain[lvl];
-        a.cx += w * (ry * dz - rz * dy); a.cy += w * (rz * dx - rx * dz); a.cz += w * (rx * dy - ry * dx); a.rr += w * (rx * rx + ry * ry + rz * rz);
+        a.cx += w * (ry * dz - rz * dy); a.cy += w * (rz * dx - rx * dz); a.cz += w * (rx * dy - ry * dx); a.rr += rx * rx + ry * ry + rz * rz;
         fx.touch.add(b);
       }
     }
@@ -6559,6 +6573,9 @@ function solidPass(on, F, apply = true) {
     }
     st.near.forEach(b => fx.touch.add(b));
     if (pushes.length || st.near.size) fx.touch.add('any');
+    // a limb's clearance is the least of its own and its descendants' (children come after their parents in BONES)
+    const cc = {}; for (let bi = BONES.length - 1; bi >= 0; bi--) { const b = BONES[bi], own = st.clear[b] === undefined ? SOLID.REACH : st.clear[b]; cc[b] = Math.min(cc[b] === undefined ? SOLID.REACH : cc[b], own); const par = PARENT[b]; if (par) cc[par] = Math.min(cc[par] === undefined ? SOLID.REACH : cc[par], cc[b]); }
+    fx.chainClear = cc; fx.clearAll = st.clearAll;
   });
   return out;
 }
@@ -6569,7 +6586,7 @@ function solveSolids(everyone, solids, iters = 1, stats = false) {
   if (on.length < 1) return [];
   const F = solidObbs(solids);
   for (const ch of on) {
-    const fx = ch.solid || (ch.solid = { fix: {}, base: {}, shift: new THREE.Vector3(), set: null, basePos: new THREE.Vector3(), touch: new Set() });
+    const fx = ch.solid || (ch.solid = { fix: {}, base: {}, chainClear: {}, clearAll: 0, shift: new THREE.Vector3(), set: null, basePos: new THREE.Vector3(), touch: new Set() });
     fx.touch = new Set();
     ch.group.updateMatrixWorld(true);
     // the scene re-poses the bones every frame; the body's position it may or may not have reset
@@ -6587,11 +6604,12 @@ function solveSolids(everyone, solids, iters = 1, stats = false) {
     const fx = ch.solid;
     for (const b of SOLID_FREE) {
       const d = (fx.fix[b] || (fx.fix[b] = new THREE.Quaternion())).copy(fx.base[b]).invert().multiply(ch.bones[b].quaternion);
-      if (!fx.touch.has(b)) d.slerp(_sIdent, 0.12);   // nothing is touching this limb: the correction fades
+      const free = fx.chainClear[b] === undefined ? SOLID.REACH : fx.chainClear[b];
+      if (free > 0.006) d.slerp(_sIdent, Math.min(0.1, (free - 0.006) * 6));   // relaxes only as far as the limb is clear of everything (so it never sinks back in and has to be pushed out again)
       if (d.w < 0) { d.x = -d.x; d.y = -d.y; d.z = -d.z; d.w = -d.w; }
     }
     fx.shift.copy(ch.group.position).sub(fx.basePos);
-    if (!fx.touch.has('any') && !fx.touch.has('trunk')) fx.shift.multiplyScalar(0.9);
+    if (fx.clearAll > 0.006) fx.shift.multiplyScalar(1 - Math.min(0.1, (fx.clearAll - 0.006) * 6));
     ch.group.position.copy(fx.basePos).add(fx.shift); fx.set = ch.group.position.clone();
     ch.group.updateMatrixWorld(true);
     if (fin) ch.solidStats = fin[i];
@@ -6602,7 +6620,7 @@ const _sIdent = new THREE.Quaternion();
 // What is inside what right now, without moving anything (for tests): per character, counts of skin points inside other bodies, furniture, the floor, its own trunk.
 function solidReport(everyone, solids) {
   const on = everyone.filter(c => c.group.parent && c.group.visible && c.mesh);
-  for (const ch of on) { ch.solid = ch.solid || { fix: {}, base: {}, shift: new THREE.Vector3(), set: null, basePos: new THREE.Vector3(), touch: new Set() }; ch.group.updateMatrixWorld(true); }
+  for (const ch of on) { ch.solid = ch.solid || { fix: {}, base: {}, chainClear: {}, clearAll: 0, shift: new THREE.Vector3(), set: null, basePos: new THREE.Vector3(), touch: new Set() }; ch.group.updateMatrixWorld(true); }
   return solidPass(on, solidObbs(solids), false).map(s => ({ body: s.body, furniture: s.furniture, floor: s.floor, self: s.self, deepest: +(s.deepest * 1000).toFixed(1), worst: s.worst }));
 }
 

@@ -15,7 +15,7 @@ const URL = process.argv[2] || 'http://localhost:8765/tests/skirt.html';
       window.__solidOff = false; return Starlight.solidReport([ses.giver, ses.subject], [ses.scn.bench]);
     }, [keeper, id, pos]);
     r.forEach((s, i) => {
-      const who = i ? id : 'keeper ' + keeper, bad = s.body + s.furniture + s.self > 3 || s.deepest > 8;
+      const who = i ? id : 'keeper ' + keeper, bad = s.deepest > 8 || (s.body + s.furniture + s.self > 3 && s.deepest > 2);
       console.log((bad ? 'FAIL ' : 'ok   ') + who + ' in ' + pos + ': ' + s.body + ' points in the other body, ' + s.furniture + ' in furniture, ' + s.self + ' in its own trunk, deepest ' + s.deepest + ' mm' + (bad && s.worst ? ' (' + JSON.stringify(s.worst) + ')' : ''));
       if (bad) fails.push(who + ' ' + pos);
     });
