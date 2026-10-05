@@ -2549,6 +2549,14 @@ const CASE_BUCK = { shift: [0.066, -0.025, -0.009], leftHand: [0, 0.025, -0.013]
 const CASE_BUCK_Q = { L: poseQuats(CASE_SUBJECT_BASE, CASE_BUCK), R: poseQuats(CASE_SUBJECT_BASE, mirrorPose(CASE_BUCK)) };
 CASE_BUCK_Q.B = Object.fromEntries(Object.keys(CASE_BUCK_Q.L).map(b => [b, CASE_BUCK_Q.L[b].clone().slerp(CASE_BUCK_Q.R[b], 0.5)]));
 const CASE_GIVER_Q = poseTable(CASE_GIVER_BASE, CASE_GIVER_BEAT);
+// Position X: the subject is bent over the table as in the case, but the disciplinarian stands at the subject's side, the pelvis turned
+// 126.5° (about its own vertical) over legs set as a pose-editor report has them (relaxed; the raised and contact beats are the case's own over
+// it), at (x, z) = X_GIVER_AT. The arms are the scene's own, as in the case.
+const X_GIVER_BASE = { ...CASE_GIVER_BASE, pelvis: [0, 126.5, 0],
+  thighL: [-0.7, -1.1, 4.3], shinL: [-2.7, -3.6, 1.4], footL: [3, 1, -15.1], thighR: [-0.1, 1.5, -4.1], shinR: [-2.3, 3.9, 0.9], footR: [3.6, -30.9, 18.5],
+  thumbR: [-3, 25.5, 19.5], thumb2L: [14, -41, 11.5] };
+const X_GIVER_Q = poseTable(X_GIVER_BASE, CASE_GIVER_BEAT);
+const X_GIVER_AT = [-0.282, -0.005];
 
 // ── Hands on knees ─────────────────────────────────────────────
 // The subject stands free with straight legs, bent forward at the hips (KNEES_PITCH from upright, nearly level)
@@ -2982,10 +2990,11 @@ function createDisciplineScene(parent, g, s, opts = {}) {
     beat: 'relaxed', side: 'L', g, s, bench: null, reaction: 0, loopT: 0, handR: null, handL: null, swing: 0,
     fitCache: {}, onImpact: null, dv: null, pendingFlip: false, raisedT: 0, faces: !!opts.faces, severity: opts.severity != null ? opts.severity : null,
     pain: opts.pain ? createPain(typeof opts.pain === 'object' ? opts.pain : { tolerance: s.spec.m.tolerance, resilience: s.spec.m.resilience }) : null,
-    atCase: opts.position === 'case' || opts.position === 'head' || opts.position === 'knees' || opts.position === 'spread', atHead: opts.position === 'head', atKnees: opts.position === 'knees' || opts.position === 'spread', atSpread: opts.position === 'spread', baseQ: SUBJ_BASE_Q, reactQ: SUBJ_REACT_Q, giverBaseQ: GIVER_Q, giverBase: GIVER_BASE, giverBeat: GIVER_BEAT };
+    atX: opts.position === 'x', atCase: opts.position === 'case' || opts.position === 'x' || opts.position === 'head' || opts.position === 'knees' || opts.position === 'spread', atHead: opts.position === 'head', atKnees: opts.position === 'knees' || opts.position === 'spread', atSpread: opts.position === 'spread', baseQ: SUBJ_BASE_Q, reactQ: SUBJ_REACT_Q, giverBaseQ: GIVER_Q, giverBase: GIVER_BASE, giverBeat: GIVER_BEAT };
   const atCase = scn.atCase, atHead = scn.atHead, atKnees = scn.atKnees;
   scn.wideContact = WIDE_CONTACT; scn.wideRaised = WIDE_RAISED; scn.wideRest = null;
-  if (atCase) { scn.wideContact = CASE_WIDE_CONTACT; scn.wideRaised = caseWideRaised(); scn.wideRest = caseWideRest(); scn.baseQ = CASE_SUBJ_BASE_Q; scn.reactQ = CASE_SUBJ_REACT_Q; scn.giverBaseQ = CASE_GIVER_Q; scn.giverBase = CASE_GIVER_BASE; scn.giverBeat = CASE_GIVER_BEAT; }
+  if (atCase) { scn.wideContact = CASE_WIDE_CONTACT; scn.wideRaised = caseWideRaised(); scn.wideRest = caseWideRest(); scn.baseQ = CASE_SUBJ_BASE_Q; scn.reactQ = CASE_SUBJ_REACT_Q; scn.giverBaseQ = CASE_GIVER_Q; scn.giverBase = CASE_GIVER_BASE; scn.giverBeat = CASE_GIVER_BEAT;
+    if (scn.atX) { scn.giverBaseQ = X_GIVER_Q; scn.giverBase = X_GIVER_BASE; } }
   if (atKnees) { scn.giverBaseQ = KNEES_GIVER_Q; scn.giverBeat = KNEES_GIVER_BEAT; scn.wideContact = { ...CASE_WIDE_CONTACT, roll: KNEES_ROLL };
     { const R = caseWideRest(), sc = 1; scn.wideRest = { ...R, face: [R.face[0] + KNEES_PADDLE_REST.dface[0], R.face[1] + KNEES_PADDLE_REST.dface[1], R.face[2] + KNEES_PADDLE_REST.dface[2]], elbow: KNEES_PADDLE_REST.elbow }; } scn.baseQ = KNEES_BASE_Q; scn.reactQ = KNEES_REACT_Q; scn.buckQ = KNEES_PADDLE_Q; }   // (the paddle's rise is the body's, in kneesBody)
   if (scn.atSpread) { scn.giverBaseQ = SPREAD_GIVER_Q; scn.giverBeat = SPREAD_GIVER_BEAT; scn.wideRest = { ...SPREAD_PADDLE_REST, face: [...SPREAD_PADDLE_REST.face] }; }
@@ -2999,7 +3008,7 @@ function createDisciplineScene(parent, g, s, opts = {}) {
     resetCharacter(g);
     g.target = scn.giverBaseQ[scn.beat];
     g.pose = {}; for (const b of BONES) { g.pose[b] = g.target[b].clone(); g.bones[b].quaternion.copy(g.pose[b]); }
-    const at = atHead ? HEAD_GIVER_AT : scn.atSpread ? SPREAD_GIVER_AT : CASE_GIVER_AT;
+    const at = atHead ? HEAD_GIVER_AT : scn.atSpread ? SPREAD_GIVER_AT : scn.atX ? X_GIVER_AT : CASE_GIVER_AT;
     standAt(g, new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), (atHead ? HEAD_YAW_RELAXED : scn.atSpread ? SPREAD_YAW : CASE_YAW) * Math.PI / 180),
       new THREE.Vector3(at[0], g.spec.J.pelvis[1], at[1]));
   } else {
@@ -6263,7 +6272,7 @@ global.Starlight = {
   buildCharacter, disposeCharacter, resetCharacter, setPose, groundFeet, wideStance, poseQuats, degQ, mirrorPose, animateCharacter, bustSpring, bustContact, updateContacts, faceStep, setExpression, setMood, setMoods, MOODS, moodFor, EXPR_RANGE, mouthOpening, EXPR_DEFAULTS, skirtStep, bunchStep, setSkirtOff, setSkirtGathered, setLowered, addMark, clearMarks, fadeMarks, fadeMarksMove, copyMarks, markStrength, markCount,
   hairStep, bodyColliders, hairReset, setFingerCurl, setFingerBend, fistPocket,
   ALL_MATS, lin, field, loftRing,
-  createPain, PAIN, clothCushion, FACE, glReport, watchGL, createDisciplineScene, POSITIONS: ['lap', 'case', 'head', 'knees', 'spread'], IMPLEMENTS, PADDLE, seatGiver, buildBench, DEFAULT_TIMING, GIVER_BASE, GIVER_BEAT, GIVER_SEATED,
+  createPain, PAIN, clothCushion, FACE, glReport, watchGL, createDisciplineScene, POSITIONS: ['lap', 'case', 'head', 'knees', 'spread', 'x'], IMPLEMENTS, PADDLE, seatGiver, buildBench, DEFAULT_TIMING, GIVER_BASE, GIVER_BEAT, GIVER_SEATED,
   armIK, armReach, humeralTwist, elbowClearance, posedSkinNear, skinSignedDist, lookAt,
   setHandWorld, rotateBoneWorld, seatExcess, seatPoints, restClearance, PARENT,
   DANCE_BASE, DANCE_SRC, DANCE_MOVES, SIDED, STUMBLE, mirrorName, createDancer,
