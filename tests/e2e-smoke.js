@@ -8,9 +8,9 @@ const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`,
 async function liveControls(p) {
   const dock = '.dock';
   for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
-  // the buttons are standard angles: after one, the user's own orbit takes over and no button stays lit
-  await p.evaluate(() => __fs.app.stage.controls.dispatchEvent({ type: 'start' }));
-  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'free') throw new Error('orbiting should free the camera');
+  // the buttons are anchors: the user orbits and zooms about the anchor's point, which stays chosen and keeps its pivot
+  await p.evaluate(() => { const st = __fs.app.stage; st.controls.dispatchEvent({ type: 'start' }); st.camera.position.add(new (st.camera.position.constructor)(0.3, 0.1, 0.2)); });
+  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'overview') throw new Error('orbiting should keep the anchor');
   await p.click(`${dock} >> button:text-is("Behind")`);
   if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'behind') throw new Error('a button should return to its angle');
   await p.click(`${dock} >> button:text-is("Overview")`);

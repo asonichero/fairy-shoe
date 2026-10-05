@@ -5689,6 +5689,62 @@ function setSkirtGathered(ch, on) {
   if (!S || !!S.gathered === on) return;
   S.gathered = on; S.stillT = 0; S.hu = null; S.fz = null;
   if (on) gatherPins(S, 0);
+  syncBunch(ch);
+}
+// ── The hitched-up skirt ─────────────────────────────────────────
+// Hitched up, a skirt is not free cloth: it is a roll of fabric gathered round the waist and lying on the lower back and hips, with the rest of the
+// skirt up inside it. So it is built as that, a thick wavy band skinned to the pelvis and spine exactly as the belt is, thickest at the back and
+// sides, thin at the front (where it would otherwise be pressed between the belly and a lap or a table edge) and with a rolled lower edge. It
+// follows every pose by skinning alone, so there is nothing to settle, drift or clip: it is as far outside the skin as it is built to be, in any pose.
+// A longer skirt has more fabric in the roll.
+function removeBunch(ch) {
+  const S = ch.skirt; if (!S || !S.roll) return;
+  ch.group.remove(S.roll); S.roll.geometry.dispose(); S.roll.material.dispose(); S.roll = null;
+}
+function syncBunch(ch) {
+  const S = ch.skirt; if (!S) return;
+  const show = !!S.gathered && !S.off;
+  if (show && !S.roll) buildRoll(ch, S);
+  if (S.roll) S.roll.visible = show;
+  S.mesh.visible = !S.off && !S.gathered;
+}
+function buildRoll(ch, S) {
+  const spec = ch.spec, H = spec.H, Y = spec.Y, L = S.L, R = 10, M = 72;
+  const yTop = S.top + 0.004 * H, yHem = Y.hip + 0.12 * (Y.belly - Y.hip) - Math.min(0.5, L.length || 0.18) * H * 0.03;
+  const fabric = 0.022 * H / 1.78 + Math.min(0.7, L.length || 0.18) * H * 0.07;   // how thick the roll is at the back
+  const pos = new Float32Array(R * (M + 1) * 3), si = new Uint16Array(R * (M + 1) * 4), sw = new Float32Array(R * (M + 1) * 4), names = BONES;
+  // the body's outer surface at angle th (0 = front) and height y, found by marching in along a horizontal ray (the hips and buttocks are not part of the torso loft)
+  const surf = (th, y) => {
+    const dx = Math.sin(th), dz = Math.cos(th), q = [0, y, 0];
+    let r = 0.3;
+    for (; r > 0.005; r -= 0.006) { q[0] = dx * r; q[2] = dz * r; if (field(spec, q) < 0) break; }
+    let lo = r, hi = r + 0.006;
+    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (field(spec, q) < 0) lo = m; else hi = m; }
+    return hi;
+  };
+  for (let i = 0; i < R; i++) {
+    const t = i / (R - 1), y = yTop + (yHem - yTop) * t;            // t = 0 at the waistband, 1 the rolled lower edge
+    const W = loftWeights(spec, y);
+    for (let j = 0; j <= M; j++) {
+      const th = 2 * Math.PI * j / M, c = Math.cos(th), sn = Math.sin(th), r = surf(th, y), x = sn * r, z = c * r;
+      const nx = sn, nz = c, nl = 1;
+      const back = 0.3 + 0.7 * (1 - c) / 2;                            // 0.3 at the front, 1 at the back
+      const profile = i === R - 1 ? 0.35 : Math.sin(Math.PI * Math.min(1, 0.25 + 0.75 * t)) ** 0.7 * (0.55 + 0.45 * t);   // thin at the band, full on the roll, closing to the skin at the end
+      const wave = 1 + 0.22 * Math.sin(5 * th + 4.1 * t) + 0.14 * Math.sin(9 * th - 2.3 * t + 1.0);    // folds
+      const off = 0.002 * H / 1.78 + fabric * back * profile * wave;
+      const v = (i * (M + 1) + j);
+      pos[3 * v] = x + nx / nl * off; pos[3 * v + 1] = y + (i === R - 1 ? 0.0 : 0.004 * H * Math.sin(5 * th + 2 * t) * profile); pos[3 * v + 2] = z + nz / nl * off;
+      for (let k = 0; k < W.length; k++) { si[4 * v + k] = names.indexOf(W[k][0]); sw[4 * v + k] = W[k][1]; }
+    }
+  }
+  const idx = [];
+  for (let i = 0; i + 1 < R; i++) for (let j = 0; j < M; j++) { const a0 = i * (M + 1) + j, b0 = a0 + 1, a1 = a0 + M + 1, b1 = b0 + M + 1; idx.push(a0, a1, b1, a0, b1, b0); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  g.setIndex(idx); g.computeVertexNormals();
+  const mesh = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: lin(L.color), roughness: 0.82, metalness: 0, side: THREE.DoubleSide, skinning: true }));
+  mesh.bind(ch.mesh.skeleton, ch.mesh.bindMatrix); mesh.castShadow = mesh.receiveShadow = true; mesh.frustumCulled = false;
+  ch.group.add(mesh); S.roll = mesh;
 }
 // Where the hitched-up hem is held. Bent over (the back near horizontal) it is the hem of the back panel, caught just outside and
 // below the waistband, with the cloth between it folding over; that works as it is. Standing (u → 1, the back vertical) the same
@@ -5710,11 +5766,13 @@ function gatherPins(S, u) {
 function setSkirtOff(ch, off) {
   if (!ch.skirt) return;
   ch.skirt.fz = null;
-  ch.skirt.off = off; ch.skirt.mesh.visible = !off;
+  ch.skirt.off = off;
   if (!off) ch.skirt.p = null;
+  syncBunch(ch);
 }
 function removeSkirt(ch) {
   if (!ch.skirt) return;
+  removeBunch(ch);
   ch.group.remove(ch.skirt.mesh); ch.skirt.mesh.geometry.dispose(); ch.skirt.mesh.material.dispose();
   ch.skirt = null;
 }
@@ -5805,7 +5863,7 @@ function frozenTargets(ch, S, dt) {
 }
 function skirtStep(ch, dt, everyone = [], solids = []) {
   const S = ch.skirt;
-  if (!S || S.off || !ch.group.parent || !ch.group.visible || dt <= 0) return;
+  if (!S || S.off || S.gathered || !ch.group.parent || !ch.group.visible || dt <= 0) return;
   const R = S.R, N = S.N, n = R * N, sk = ch.mesh.skeleton;
   ch.group.updateMatrixWorld(true);
   // The waistband follows the body: skinning matrices blended as the torso is at that height.
@@ -6114,7 +6172,7 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
 // `others` take part only for the last stretch, so the cloth settles onto them as they are. Call after the scene has placed the bodies.
 function settleSkirt(ch, others = [], solids = [], seconds = 1.5, freeze = true) {
   const S = ch.skirt;
-  if (!S || S.off) return;
+  if (!S || S.off || S.gathered) return;
   S.fz = null;
   const g = ch.group, endQ = g.quaternion.clone(), endP = g.position.clone();
   const endBones = {}; for (const b of BONES) endBones[b] = ch.bones[b].quaternion.clone();
