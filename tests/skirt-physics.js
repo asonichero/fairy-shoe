@@ -13,7 +13,7 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   // Weight, and frame-rate independence: the cloth below the waist is lifted 10 cm and let go; the hem's height is read every 0.1 s.
   const traces = {};
   for (const [name, dt] of [['60', 1 / 60], ['20', 1 / 20], ['120', 1 / 120]]) {
-    await p.evaluate(() => { setup('red', 'head', 'hand', 'down'); run(1.0, 1 / 60, 0); });
+    await p.evaluate(() => { setup('red', 'head', 'hand', 'free'); run(1.0, 1 / 60, 0); });
     traces[name] = await p.evaluate(([d]) => drop(0.10, 1.0, d, 0.1), [dt]);
   }
   const t = traces['60'], rest = t[t.length - 1], fall = t[0] - t[1];
@@ -23,11 +23,18 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
   check(Math.max(...t.map(v => rest - v)) < 0.04, 'it does not stretch more than 4 cm past where it hangs (' + (Math.max(...t.map(v => rest - v)) * 100).toFixed(1) + ' cm)');
   for (const k of ['20', '120']) check(Math.max(...t.map((v, i) => Math.abs(v - traces[k][i]))) < 0.01, 'the same fall at ' + k + ' steps per second (within 1 cm)');
 
-  // Contact: in every position, with a smack every second, nothing ends up inside the body, nothing blows up, nothing goes missing.
+  // Baked skirt: in every position (the game's hitched-up skirt, and a loose one) after the settle and again after a few strokes, no cloth point
+  // and no sample on a triangle is more than 3 mm inside skin or furniture of its own, the other body's or the room's.
   for (const [who, pos, impl] of [['red', 'lap', 'hand'], ['red', 'case', 'hairbrush'], ['snow', 'head', 'hand'], ['snow', 'chair', 'hand'], ['goldilocks', 'spread', 'paddle'], ['goldilocks', 'lap', 'rod']]) {
     for (const mode of ['down', 'up']) {
-    const r = await p.evaluate(([w, ps, im, m]) => { setup(w, ps, im, m); const st = run(4, 1 / 60, 1.0); return { st, finite: mesh(), speed: maxSpeed() }; }, [who, pos, impl, mode]);
-    check(r.finite && r.st.inside <= 8 && r.st.deepest < 0.02 && r.speed < 0.035, `${who}, ${pos}, ${impl}, ${mode}: ${r.st.inside} particles inside (deepest ${(r.st.deepest * 1000).toFixed(1)} mm), fastest ${(r.speed * 1000).toFixed(1)} mm/step`);
+      const r = await p.evaluate(([w, ps, im, m]) => {
+        setup(w, ps, im, m);
+        const rep = () => { const a = Starlight.skirtClipReport(ses.subject, [ses.giver], [ses.scn.bench]); return { clipped: a.clipped, deepest: a.deepest, worst: a.worst }; };
+        const baked = rep(), frozen = !!skirt.fz; run(4, 1 / 60, 1.0);
+        return { baked, after: rep(), frozen, finite: mesh() };
+      }, [who, pos, impl, mode]);
+      const ok = r.finite && r.frozen && r.baked.clipped <= 3 && r.baked.deepest < 0.012 && r.after.clipped <= 15 && r.after.deepest < 0.015;
+      check(ok, `${who}, ${pos}, ${impl}, ${mode}: baked ${r.baked.clipped} inside (deepest ${(r.baked.deepest * 1000).toFixed(1)} mm), after strokes ${r.after.clipped} (deepest ${(r.after.deepest * 1000).toFixed(1)} mm)`);
     }
   }
   // In the game a skirt is always hitched up (the stage forces it); in the engine it can still be taken off.

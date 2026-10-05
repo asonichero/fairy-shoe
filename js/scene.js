@@ -103,7 +103,7 @@ function furnishScene(parent, scn, s, position, seatTop) {
   const old = scn.bench; let made = null, plant = null;
   if (old) {
     const b = new T.Box3().setFromObject(old); parent.remove(old); Room.disposeGroup(old);
-    if (position === 'lap') { made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
+    if (position === 'lap') { scn.seatTop = b.max.y; made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
     else made = Room.buildTable(b.max.y, b.min.x, b.max.x, b.max.z - b.min.z);
   } else if (position === 'chair') {
     made = new T.Group(); const chair = Room.buildChair(seatTop); chair.rotation.y = -Math.PI / 2; made.add(chair);
@@ -272,6 +272,14 @@ function createStage(viewEl, { onGLProblem } = {}) {
       st.implement = impl; scn.setImplement(impl); scn.setBeat('relaxed');
       scn.timing = { ...scn.timing, speed: D.speed };
       furniture = null; plant = furnishScene(scene, scn, s, position, seatTop);
+      if (position === 'lap' && scn.seatTop != null) {
+        // The seated disciplinarian's weight is on the chair: the pair sit a little higher, so the thighs rest on the seat and not in it, and the
+        // seat flattens the glutes (the contact shader, as a palm flattens skin) so that they are pressed on it and never pass through it.
+        const up = 0.012 * g.spec.H / 1.7;
+        for (const c of [g, s]) { c.group.position.y += up; c.group.updateMatrixWorld(true); }
+        const pel = g.bones.pelvis.getWorldPosition(new T.Vector3());
+        S.setPress(g, new T.Vector3(pel.x, scn.seatTop, pel.z), new T.Vector3(0, -1, 0), 0.24 * g.spec.H / 1.7, 1, '', null, 0, 0.08);
+      }
       applyPoseOverrides(scn, position);
       if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
       if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench]); }   // the player's own skirt (a dress) drapes over the seat or the stance

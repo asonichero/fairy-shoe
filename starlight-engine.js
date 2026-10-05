@@ -5307,6 +5307,7 @@ function skinPoints(ch, S) {
       nx += w * (e[0] * qx + e[4] * qy + e[8] * qz); ny += w * (e[1] * qx + e[5] * qy + e[9] * qz); nz += w * (e[2] * qx + e[6] * qy + e[10] * qz);
     }
     const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    if (K.lin) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let v = 0; for (let a = 0; a < 4; a++) { const w = K.w[4 * k + a]; if (w) v += w * M[K.i[4 * k + a]][4 * c + r]; } K.lin[9 * k + 3 * r + c] = v; }   // (the blended turn of this skin point, row r column c)
     K.wp[3 * k] = x; K.wp[3 * k + 1] = y; K.wp[3 * k + 2] = z; K.wn[3 * k] = nx / nl; K.wn[3 * k + 1] = ny / nl; K.wn[3 * k + 2] = nz / nl;
     const key = cellKey(Math.floor(x / SKIN_CELL), Math.floor(y / SKIN_CELL), Math.floor(z / SKIN_CELL));
     let cell = S.grid.get(key); if (!cell) S.grid.set(key, cell = []); cell.push(k);
@@ -5333,7 +5334,7 @@ function otherSkin(o, hip) {
   const M = bones.map((b, i) => new THREE.Matrix4().multiplyMatrices(b.matrixWorld, inv[i]).elements);
   const near = new Uint8Array(bones.length);
   bones.forEach((b, i) => { b.getWorldPosition(_bv); near[i] = _bv.distanceToSquared(hip) < 1 ? 1 : 0; });
-  const grid = new Map(); let m = 0;
+  const grid = new Map(), lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; let m = 0;
   for (let k = 0; k < C.n; k++) {
     if (!near[C.dom[k]]) continue;
     let x = 0, y = 0, z = 0, nx = 0, ny = 0, nz = 0;
@@ -5348,8 +5349,9 @@ function otherSkin(o, hip) {
     C.wp[3 * m] = x; C.wp[3 * m + 1] = y; C.wp[3 * m + 2] = z; C.wn[3 * m] = nx / nl; C.wn[3 * m + 1] = ny / nl; C.wn[3 * m + 2] = nz / nl;
     const key = cellKey(Math.floor(x / SKIN_CELL), Math.floor(y / SKIN_CELL), Math.floor(z / SKIN_CELL));
     let cell = grid.get(key); if (!cell) grid.set(key, cell = []); cell.push(m++);
+    lo[0] = Math.min(lo[0], x); lo[1] = Math.min(lo[1], y); lo[2] = Math.min(lo[2], z); hi[0] = Math.max(hi[0], x); hi[1] = Math.max(hi[1], y); hi[2] = Math.max(hi[2], z);
   }
-  return { wp: C.wp, wn: C.wn, grid };
+  return { wp: C.wp, wn: C.wn, grid, lo, hi };
 }
 // The skin-plane test, for any body: the plane through the nearest skin point, and through the next nearest (a crease, the cleft
 // between thighs, the web of a hand has two surfaces; being outside one is not enough). Moves q out; true if it did.
@@ -5418,7 +5420,7 @@ function buildSkirt(ch, L) {
   for (let i = 0; i + 1 < R; i++) for (let j = 0; j < N; j++) index.push(id(i, j), id(i + 1, j), id(i + 1, j + 1), id(i, j), id(i + 1, j + 1), id(i, j + 1));
   geo.setIndex(index);
   const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: lin(L.color), roughness: 0.82, metalness: 0, side: THREE.DoubleSide }));
-  mesh.castShadow = mesh.receiveShadow = true;
+  mesh.castShadow = true; mesh.receiveShadow = false;   // (cloth held a few mm off the skin shadows itself in patches otherwise)
   mesh.frustumCulled = false;
   ch.group.add(mesh);
   // Own-body collisions use the actual skin: every other mesh vertex in the skirt's
@@ -5684,7 +5686,7 @@ function bunchOne(ch, B) {
 function setSkirtGathered(ch, on) {
   const S = ch.skirt;
   if (!S || !!S.gathered === on) return;
-  S.gathered = on; S.stillT = 0; S.hu = null;
+  S.gathered = on; S.stillT = 0; S.hu = null; S.fz = null;
   if (on) gatherPins(S, 0);
 }
 // Where the hitched-up hem is held. Bent over (the back near horizontal) it is the hem of the back panel, caught just outside and
@@ -5706,6 +5708,7 @@ function gatherPins(S, u) {
 }
 function setSkirtOff(ch, off) {
   if (!ch.skirt) return;
+  ch.skirt.fz = null;
   ch.skirt.off = off; ch.skirt.mesh.visible = !off;
   if (!off) ch.skirt.p = null;
 }
@@ -5739,6 +5742,7 @@ const _sD = new THREE.Matrix4(), _sI = new THREE.Matrix4(), _sV2 = new THREE.Vec
 function skirtStep(ch, dt, everyone = [], solids = []) {
   const S = ch.skirt;
   if (!S || S.off || !ch.group.parent || !ch.group.visible || dt <= 0) return;
+  if (S.fz) { frozenFollow(ch, everyone, solids); return; }   // a baked skirt is carried by the skin, not simulated (see freezeSkirt)
   const R = S.R, N = S.N, n = R * N, sk = ch.mesh.skeleton;
   ch.group.updateMatrixWorld(true);
   // The waistband follows the body: skinning matrices blended as the torso is at that height.
@@ -6026,13 +6030,175 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
 }
 
 
+// ── The baked skirt ─────────────────────────────────────────────
+// A skirt is simulated once per position (settleSkirt) and then baked: every cloth point, and a few sample points on every triangle (the middle
+// and the middle of each edge, since a triangle can cut through a corner that its three corners clear), are pushed out of the wearer's skin, the
+// other bodies' skin and the furniture until none is inside anything. Then the skirt is frozen: each point is fixed to the skin point nearest it
+// (in that point's own frame), so it goes wherever the body goes and nothing is simulated again.
+const SKIRT_CLEAR = 0.003, SKIRT_TOL = 0.0006;   // clear of skin by 3 mm (a sample is 'not clear' when it is more than 0.6 mm short of that)
+function skirtContext(ch, others, solids, skinDone = false) {
+  const S = ch.skirt; ch.group.updateMatrixWorld(true); if (!skinDone) skinPoints(ch, S);
+  const hip = ch.bones.pelvis.getWorldPosition(new THREE.Vector3());
+  const bodies = others.filter(o => o !== ch && o.group.parent && o.group.visible && o.mesh && o.bones.pelvis.getWorldPosition(new THREE.Vector3()).distanceTo(hip) < 2.2).map(o => otherSkin(o, hip));
+  const boxes = [], obbs = [];
+  for (const o of (solids || []).filter(Boolean)) {
+    if (!o.userData || !o.userData.obb) { boxes.push(new THREE.Box3().setFromObject(o)); continue; }
+    o.updateMatrixWorld(true);
+    o.traverse(m => { if (!m.isMesh || !m.visible) return; if (!m.geometry.boundingBox) m.geometry.computeBoundingBox(); obbs.push({ inv: m.matrixWorld.clone().invert(), m: m.matrixWorld, bb: m.geometry.boundingBox, wb: new THREE.Box3().copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld).expandByScalar(0.03) }); });
+  }
+  return { bodies, boxes, obbs };
+}
+// The two skin points nearest q (a crease has two surfaces; being outside one is not enough), as indices, within 3 cm.
+const _sn2 = [-1, -1];
+function skinNear2(wp, grid, q) {
+  const cs = SKIN_CELL, cx = Math.floor(q[0] / cs), cy = Math.floor(q[1] / cs), cz = Math.floor(q[2] / cs);
+  let n1 = 0.03 * 0.03, i1 = -1, n2 = 0.03 * 0.03, i2 = -1;
+  for (let ix = cx - 1; ix <= cx + 1; ix++) for (let iy = cy - 1; iy <= cy + 1; iy++) for (let iz = cz - 1; iz <= cz + 1; iz++) {
+    const cell = grid.get(cellKey(ix, iy, iz)); if (!cell) continue;
+    for (let c = 0; c < cell.length; c++) { const k = cell[c], dx = q[0] - wp[3 * k], dy = q[1] - wp[3 * k + 1], dz = q[2] - wp[3 * k + 2], d2 = dx * dx + dy * dy + dz * dz; if (d2 < n1) { n2 = n1; i2 = i1; n1 = d2; i1 = k; } else if (d2 < n2) { n2 = d2; i2 = k; } }
+  }
+  _sn2[0] = i1; _sn2[1] = i2; return _sn2;
+}
+// How far, and which way, a point at q has to go to be clear of everything: writes the displacement to out, returns its length (0: clear).
+const _so2 = new THREE.Vector3();
+function skirtPush(S, X, q, out) {
+  let best = 0; out[0] = out[1] = out[2] = 0;
+  let src = '';
+  const take = (a, x, y, z) => { if (a > best) { best = a; out[0] = x * a; out[1] = y * a; out[2] = z * a; X.src = src; } };
+  const planes = (wp, wn, grid, margin = SKIRT_CLEAR) => { for (const i of skinNear2(wp, grid, q)) { if (i < 0) continue; const o = 3 * i, sd = (q[0] - wp[o]) * wn[o] + (q[1] - wp[o + 1]) * wn[o + 1] + (q[2] - wp[o + 2]) * wn[o + 2]; if (sd < margin) take(margin - sd, wn[o], wn[o + 1], wn[o + 2]); } };
+  src = 'own skin'; if (X.own !== false) planes(S.skin.wp, S.skin.wn, S.grid, X.ownMargin);
+  src = 'other body'; for (const B of X.bodies) planes(B.wp, B.wn, B.grid);
+  src = 'furniture';
+  // the way out of a board is a face on the cloth's own side: the side the wearer's skin faces
+  let ownN = null; if (X.obbs.length || X.boxes.length) { const i = skinNear2(S.skin.wp, S.grid, q)[0]; if (i >= 0) ownN = [S.skin.wn[3 * i], S.skin.wn[3 * i + 1], S.skin.wn[3 * i + 2]]; }
+  const exit = faces => {
+    let least = Infinity; for (const f of faces) least = Math.min(least, f[0]);
+    let pick = null;
+    if (ownN) for (const f of faces) if (f[0] <= least + 0.03 && f[1] * ownN[0] + f[2] * ownN[1] + f[3] * ownN[2] > 0.15 && (!pick || f[0] < pick[0])) pick = f;
+    if (!pick) for (const f of faces) if (!pick || f[0] < pick[0]) pick = f;
+    return pick;
+  };
+  const t = SKIRT_CLEAR;
+  for (const Bx of X.boxes) if (q[0] > Bx.min.x - t && q[0] < Bx.max.x + t && q[1] > Bx.min.y - t && q[1] < Bx.max.y + t && q[2] > Bx.min.z - t && q[2] < Bx.max.z + t) {
+    const f = exit([[q[0] - (Bx.min.x - t), -1, 0, 0], [(Bx.max.x + t) - q[0], 1, 0, 0], [q[1] - (Bx.min.y - t), 0, -1, 0], [(Bx.max.y + t) - q[1], 0, 1, 0], [q[2] - (Bx.min.z - t), 0, 0, -1], [(Bx.max.z + t) - q[2], 0, 0, 1]]);
+    take(f[0], f[1], f[2], f[3]);
+  }
+  for (const O of X.obbs) {
+    if (q[0] < O.wb.min.x || q[0] > O.wb.max.x || q[1] < O.wb.min.y || q[1] > O.wb.max.y || q[2] < O.wb.min.z || q[2] > O.wb.max.z) continue;
+    _so2.set(q[0], q[1], q[2]).applyMatrix4(O.inv);
+    const lo = O.bb.min, hi = O.bb.max;
+    if (_so2.x > lo.x - t && _so2.x < hi.x + t && _so2.y > lo.y - t && _so2.y < hi.y + t && _so2.z > lo.z - t && _so2.z < hi.z + t) {
+      const dir = (x, y, z) => { const e = new THREE.Vector3(x, y, z); e.transformDirection(O.m); return [e.x, e.y, e.z]; };
+      const f = exit([[_so2.x - (lo.x - t), ...dir(-1, 0, 0)], [(hi.x + t) - _so2.x, ...dir(1, 0, 0)], [_so2.y - (lo.y - t), ...dir(0, -1, 0)], [(hi.y + t) - _so2.y, ...dir(0, 1, 0)], [_so2.z - (lo.z - t), ...dir(0, 0, -1)], [(hi.z + t) - _so2.z, ...dir(0, 0, 1)]]);
+      take(f[0], f[1], f[2], f[3]);
+    }
+  }
+  src = 'floor'; if (q[1] < t) take(t - q[1], 0, 1, 0);   // the floor
+  return best;
+}
+// Pushes the cloth clear (apply) or only counts what is not clear. Counts points and triangle samples that are more than SKIRT_TOL inside.
+function clearSkirt(ch, X, iters = 40, apply = true) {
+  const S = ch.skirt, p = S.p, N = S.N, n = S.R * N, idx = S.mesh.geometry.index.array, q = [0, 0, 0], d = [0, 0, 0];
+  const fixed = k => k < N || (S.gathered && S.pinned && S.pinned.has(k));
+  const SAMPLES = apply && !X.light ? [[1 / 3, 1 / 3, 1 / 3], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5]] : [[1 / 3, 1 / 3, 1 / 3], [0.5, 0.5, 0], [0, 0.5, 0.5], [0.5, 0, 0.5]];
+  const own0 = X.own !== false;
+  let res = { inside: 0, clipped: 0, deepest: 0, worst: null };
+  for (let it = 0; it < (apply ? iters : 1); it++) {
+    res = { inside: 0, clipped: 0, deepest: 0, worst: null };
+    const note = (a, at, what) => { if (a > SKIRT_TOL) { res.inside++; if (a > SKIRT_CLEAR + 0.0005) res.clipped++; if (a > res.deepest) { res.deepest = a; res.worst = { what: what + ' vs ' + X.src, at: at.map(v => +v.toFixed(3)) }; } return true; } return false; };
+    X.own = own0;
+    for (let k = N; k < n; k++) {
+      if (fixed(k)) continue;
+      q[0] = p[3 * k]; q[1] = p[3 * k + 1]; q[2] = p[3 * k + 2];
+      const a = skirtPush(S, X, q, d);
+      if (note(a, q.slice(), 'point') && apply) { p[3 * k] += d[0]; p[3 * k + 1] += d[1]; p[3 * k + 2] += d[2]; }
+    }
+    for (let t = 0; t < idx.length; t += 3) {
+      const v = [idx[t], idx[t + 1], idx[t + 2]];
+      for (const w of SAMPLES) {
+        X.own = own0 && !X.verticesOwn;
+        q[0] = q[1] = q[2] = 0; for (let i = 0; i < 3; i++) for (let c = 0; c < 3; c++) q[c] += w[i] * p[3 * v[i] + c];
+        const a = skirtPush(S, X, q, d);
+        if (!note(a, q.slice(), 'triangle') || !apply) continue;
+        let den = 0; for (let i = 0; i < 3; i++) if (!fixed(v[i])) den += w[i] * w[i];
+        if (den < 1e-6) continue;
+        for (let i = 0; i < 3; i++) if (!fixed(v[i])) { const f = w[i] / den; for (let c = 0; c < 3; c++) p[3 * v[i] + c] += d[c] * f; }
+      }
+    }
+    if (apply && ch.skirt.debug) (ch.skirt.log = ch.skirt.log || []).push([res.inside, res.clipped]);
+    if (!res.inside || (X.quick && res.deepest < 0.0016)) break;   // (a frame's pass stops once nothing is more than 1.6 mm short of clear)
+  }
+  return res;
+}
+// Fixes each cloth point to the skin point nearest it, on the outward side (and never an arm's), as an offset in that skin point's own frame.
+function bindSkirtToSkin(ch) {
+  const S = ch.skirt, K = S.skin, n = S.R * S.N, p = S.p;
+  const ok = new Uint8Array(K.n);
+  for (let a = 0; a < K.n; a++) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (K.w[4 * a + m] > bw) { bw = K.w[4 * a + m]; bb = K.i[4 * a + m]; } ok[a] = /^(upperArm|forearm|hand|fingers|thumb|clav)/.test(BONES[bb]) ? 0 : 1; }
+  const idx = new Int32Array(n), loc = new Float32Array(n * 3), m3 = new THREE.Matrix3(), v = new THREE.Vector3();
+  for (let k = 0; k < n; k++) {
+    const x = p[3 * k], y = p[3 * k + 1], z = p[3 * k + 2];
+    let best = Infinity, bi = -1, any = Infinity, ai = 0;
+    for (let a = 0; a < K.n; a++) {
+      if (!ok[a]) continue;
+      const dx = x - K.wp[3 * a], dy = y - K.wp[3 * a + 1], dz = z - K.wp[3 * a + 2], d = dx * dx + dy * dy + dz * dz;
+      if (d < any) { any = d; ai = a; }
+      if (d < best && dx * K.wn[3 * a] + dy * K.wn[3 * a + 1] + dz * K.wn[3 * a + 2] > -0.002) { best = d; bi = a; }
+    }
+    if (bi < 0) bi = ai;
+    const L = K.lin, o = 9 * bi;
+    m3.set(L[o], L[o + 1], L[o + 2], L[o + 3], L[o + 4], L[o + 5], L[o + 6], L[o + 7], L[o + 8]).invert();
+    v.set(x - K.wp[3 * bi], y - K.wp[3 * bi + 1], z - K.wp[3 * bi + 2]).applyMatrix3(m3);
+    idx[k] = bi; loc[3 * k] = v.x; loc[3 * k + 1] = v.y; loc[3 * k + 2] = v.z;
+  }
+  S.fz = { idx, loc };
+}
+// A baked skirt for one frame: each point where its skin point has taken it. Then, where something else has come into the cloth since (a
+// hand or an arm swinging by, the other body's reaction, a board), the cloth is pushed clear of it for this frame only (the next frame starts
+// again from the bake, so nothing builds up and nothing quivers); the wearer's own skin is tested again too, since a bent knee or a turning hip can carry a point into it.
+function frozenFollow(ch, everyone = [], solids = []) {
+  const S = ch.skirt, K = S.skin, F = S.fz, n = S.R * S.N, p = S.p, L = K.lin;
+  ch.group.updateMatrixWorld(true); skinPoints(ch, S);
+  for (let k = 0; k < n; k++) {
+    const b = F.idx[k], o = 9 * b, lx = F.loc[3 * k], ly = F.loc[3 * k + 1], lz = F.loc[3 * k + 2];
+    p[3 * k] = K.wp[3 * b] + L[o] * lx + L[o + 1] * ly + L[o + 2] * lz;
+    p[3 * k + 1] = K.wp[3 * b + 1] + L[o + 3] * lx + L[o + 4] * ly + L[o + 5] * lz;
+    p[3 * k + 2] = K.wp[3 * b + 2] + L[o + 6] * lx + L[o + 7] * ly + L[o + 8] * lz;
+  }
+  if (everyone.length || solids.length) { const X = skirtContext(ch, everyone.filter(o => o !== ch), solids, true); X.quick = true; clearSkirt(ch, X, 3, true); }
+  drawSkirt(ch);
+}
+function drawSkirt(ch) {
+  const S = ch.skirt, n = S.R * S.N, p = S.p, pos = S.mesh.geometry.attributes.position.array, inv = _sT.copy(ch.group.matrixWorld).invert();
+  for (let k = 0; k < n; k++) { _sV.set(p[3 * k], p[3 * k + 1], p[3 * k + 2]).applyMatrix4(inv); pos[3 * k] = _sV.x; pos[3 * k + 1] = _sV.y; pos[3 * k + 2] = _sV.z; }
+  S.mesh.geometry.attributes.position.needsUpdate = true;
+  S.mesh.geometry.computeVertexNormals();
+}
+function freezeSkirt(ch, others = [], solids = []) {
+  const S = ch.skirt; if (!S || S.off || !S.p) return;
+  S.fz = null;
+  if (!S.skin.lin) S.skin.lin = new Float32Array(S.skin.n * 9);
+  const X = skirtContext(ch, others, solids); X.ownMargin = 0.009;   // (6 mm more than a frozen skirt needs at rest: room for a knee to bend or a hip to turn)
+  S.clip = clearSkirt(ch, X, 60, true);
+  bindSkirtToSkin(ch);
+  frozenFollow(ch, others, solids);
+}
+// What of the skirt is inside anything, for tests: counts of cloth points and triangle samples more than a millimetre inside skin, furniture or the floor.
+function skirtClipReport(ch, others = [], solids = []) {
+  const S = ch.skirt; if (!S || !S.p) return null;
+  const X = skirtContext(ch, others, solids), r = clearSkirt(ch, X, 1, false);
+  return r;
+}
+function unfreezeSkirt(ch) { if (ch.skirt) { ch.skirt.fz = null; ch.skirt.p = null; ch.skirt.lastM = null; } }
+
 // Puts a skirt on a body that is already in a pose (a bent-over subject), so that it hangs the way it would have if she had bent over
 // in it: the body is walked from standing into the pose over a moment, pelvis fixed, while the cloth falls and drapes, and is then put
 // back exactly where it was. (Starting the cloth in its rest shape around an already-bent body leaves it lying on the back like a lampshade.)
 // `others` take part only for the last stretch, so the cloth settles onto them as they are. Call after the scene has placed the bodies.
-function settleSkirt(ch, others = [], solids = [], seconds = 1.5) {
+function settleSkirt(ch, others = [], solids = [], seconds = 1.5, freeze = true) {
   const S = ch.skirt;
   if (!S || S.off) return;
+  S.fz = null;
   const g = ch.group, endQ = g.quaternion.clone(), endP = g.position.clone();
   const endBones = {}; for (const b of BONES) endBones[b] = ch.bones[b].quaternion.clone();
   const stand = poseQuats(POSES.Relaxed), yaw = new THREE.Euler().setFromQuaternion(endQ, 'YXZ').y;
@@ -6053,6 +6219,7 @@ function settleSkirt(ch, others = [], solids = [], seconds = 1.5) {
   for (const b of BONES) ch.bones[b].quaternion.copy(endBones[b]);
   g.updateMatrixWorld(true);
   S.lastM = null; S.stillT = 0;
+  if (freeze) freezeSkirt(ch, others, solids);   // baked: from here the skirt is carried by the skin (unfreezeSkirt to simulate it again)
 }
 
 
@@ -6259,11 +6426,11 @@ function bustContact(ch, everyone) {
 }
 
 global.Starlight = {
-  SKIRT, SKIRT_THICK, settleSkirt, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
+  SKIRT, SKIRT_THICK, settleSkirt, freezeSkirt, unfreezeSkirt, skirtClipReport, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
   buildCharacter, disposeCharacter, resetCharacter, setPose, groundFeet, wideStance, poseQuats, degQ, mirrorPose, animateCharacter, bustSpring, bustContact, updateContacts, faceStep, setExpression, setMood, setMoods, MOODS, moodFor, EXPR_RANGE, mouthOpening, EXPR_DEFAULTS, skirtStep, bunchStep, setSkirtOff, setSkirtGathered, setLowered, addMark, clearMarks, fadeMarks, fadeMarksMove, copyMarks, markStrength, markCount,
   hairStep, bodyColliders, hairReset, setFingerCurl, setFingerBend, fistPocket,
   ALL_MATS, lin, field, loftRing,
-  createPain, PAIN, clothCushion, FACE, glReport, watchGL, createDisciplineScene, POSITIONS: ['lap', 'case', 'head', 'knees', 'spread'], IMPLEMENTS, PADDLE, seatGiver, buildBench, DEFAULT_TIMING, GIVER_BASE, GIVER_BEAT, GIVER_SEATED,
+  setPress, createPain, PAIN, clothCushion, FACE, glReport, watchGL, createDisciplineScene, POSITIONS: ['lap', 'case', 'head', 'knees', 'spread'], IMPLEMENTS, PADDLE, seatGiver, buildBench, DEFAULT_TIMING, GIVER_BASE, GIVER_BEAT, GIVER_SEATED,
   armIK, armReach, humeralTwist, elbowClearance, posedSkinNear, skinSignedDist, lookAt,
   setHandWorld, rotateBoneWorld, seatExcess, seatPoints, restClearance, PARENT,
   DANCE_BASE, DANCE_SRC, DANCE_MOVES, SIDED, STUMBLE, mirrorName, createDancer,
