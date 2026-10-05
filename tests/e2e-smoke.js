@@ -7,10 +7,25 @@ const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`,
 // Everything the live dock offers, once: cameras, layers, pace and strength, a change of position, a fetched implement.
 async function liveControls(p) {
   const dock = '.dock';
+  // the hitched-up skirt is the gathered roll, not cloth; and the orbit pivot follows the bodies
+  const sk = await p.evaluate(() => { const s = __fs.app.live.subject, S = s && s.skirt; return S ? { roll: !!S.roll && S.roll.visible, cloth: S.mesh.visible, who: s.spec.m && s.spec.m.name } : null; });
+  console.log('skirt in the live game:', JSON.stringify(sk));
+  if (sk && (!sk.roll || sk.cloth)) throw new Error('the live skirt should be the roll');
   for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
+  // a real drag on the view orbits it, and the wheel zooms, from an anchor angle
+  await p.click(`${dock} >> button:text-is("Behind")`); await p.waitForTimeout(2500);
+  const cp = () => p.evaluate(() => { const c = __fs.app.stage.camera, t = __fs.app.stage.controls.target; return { p: c.position.toArray(), d: c.position.distanceTo(t) }; });
+  console.log(await p.evaluate(([x, y]) => { const el = document.elementFromPoint(x, y), c = __fs.app.stage.controls; return JSON.stringify({ el: el && (el.tagName + '.' + el.className), enabled: c.enabled, zoom: c.enableZoom, rotate: c.enableRotate, min: c.minDistance, max: c.maxDistance, pan: c.enablePan, canvas: __fs.app.stage.renderer.domElement.getBoundingClientRect().toJSON() }); }, [640, 250]));
+  const c0 = await cp(), box = await p.locator('canvas').first().boundingBox(), mx = box.x + box.width * 0.5, my = box.y + box.height * 0.3;
+  await p.mouse.move(mx, my); await p.mouse.down(); await p.mouse.move(mx + 160, my + 20, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(1500);
+  const c1 = await cp(); console.log('drag moved the camera by', Math.hypot(...c1.p.map((v, i) => v - c0.p[i])).toFixed(3));
+  if (Math.hypot(...c1.p.map((v, i) => v - c0.p[i])) < 0.2) throw new Error('dragging should orbit the camera');
+  await p.mouse.move(mx, my); await p.mouse.wheel(0, -400); await p.waitForTimeout(1200);
+  const c2 = await cp(); console.log('zoom changed the distance', c1.d.toFixed(2), '->', c2.d.toFixed(2));
+  if (c2.d > c1.d - 0.03) throw new Error('the wheel should zoom');
   // the buttons are anchors: the user orbits and zooms about the anchor's point, which stays chosen and keeps its pivot
   await p.evaluate(() => { const st = __fs.app.stage; st.controls.dispatchEvent({ type: 'start' }); st.camera.position.add(new (st.camera.position.constructor)(0.3, 0.1, 0.2)); });
-  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'overview') throw new Error('orbiting should keep the anchor');
+  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'behind') throw new Error('orbiting should keep the anchor');
   await p.click(`${dock} >> button:text-is("Behind")`);
   if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'behind') throw new Error('a button should return to its angle');
   await p.click(`${dock} >> button:text-is("Overview")`);
