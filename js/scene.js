@@ -604,6 +604,7 @@ function createTableau(scene, kind, opts, env = {}) {
     ch.group.updateMatrixWorld(true);
     return { furn, top, pel };
   };
+  const at0 = (c, n) => c.bones[n].getWorldPosition(new V3());
   let view = { pos: new V3(0, 1.4, 3), tgt: new V3(0, 1, 0), fov: 38 }, hold = () => {}, gaze = () => {};
   // Where the eyes go (the engine's own: a gaze offset in the head's frame, read by faceStep), once the heads have turned.
   const eyesAt = (ch, point, w = 0.9) => {
@@ -703,6 +704,50 @@ function createTableau(scene, kind, opts, env = {}) {
     };
     gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3()), 0.7); eyesAt(s, g.bones.spine2.getWorldPosition(new V3()), 0.7); };
     view = { pos: new V3(0.5, 1.35, 2.5), tgt: new V3(0, 1.15, 0), fov: 36 };
+  } else if (kind === 'heldstand') {
+    // Standing, chest to chest, the subject leaning into it with the feet held back: their arms inside (round the player's waist, under the player's arms), the player's outside
+    // (wide round the subject's back). Everything is measured off the two bodies, so any pair of sizes finds its own distance and its own reach.
+    const kg = g.spec.H / 1.7, ks = s.spec.H / 1.7, avg = (kg + ks) / 2, Z = new V3(0, 0, 1);
+    standing(g, Math.PI / 2, 0, 0);
+    const lean = 0.14, pivotY = 0;
+    const placeS = x => {   // the subject faces the player (-X), the feet at x, the body tipped about them toward the player
+      standing(s, -Math.PI / 2, x, 0);
+      const feet = ['L', 'R'].map(sd => s.bones['foot' + sd].getWorldQuaternion(new T.Quaternion()));
+      const pivot = new V3(x, pivotY, 0), q = new T.Quaternion().setFromAxisAngle(Z, lean);
+      s.group.quaternion.premultiply(q); s.group.position.sub(pivot).applyQuaternion(q).add(pivot); s.group.updateMatrixWorld(true);
+      ['L', 'R'].forEach((sd, i) => { const f = s.bones['foot' + sd]; f.quaternion.copy(f.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(feet[i])); });
+      s.group.updateMatrixWorld(true);
+    };
+    // torso skin points of the subject, and the player's torso shapes: closer until they just meet
+    const geo = s.mesh.geometry, si = geo.attributes.skinIndex.array, sw = geo.attributes.skinWeight.array, pos = geo.attributes.position, chest = [];
+    for (let v = 0; v < pos.count; v += 3) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (sw[4 * v + m] > bw) { bw = sw[4 * v + m]; bb = si[4 * v + m]; } if (['pelvis', 'spine1', 'spine2', 'bustL', 'bustR'].includes(S.BONES[bb])) chest.push(v); }
+    const meet = () => {
+      const all = S.posedProxies(g), nE = g.proxies.ells.length, keep = all.filter((P, i) => { const b = i < nE ? g.proxies.ells[i].bone : g.proxies.cones[i - nE].bone; return ['pelvis', 'spine1', 'spine2', 'bustL', 'bustR'].includes(b); });
+      const vv = new V3(); let m = Infinity;
+      for (const i of chest) { vv.fromBufferAttribute(pos, i); s.mesh.boneTransform(i, vv); vv.applyMatrix4(s.mesh.matrixWorld); const p = [vv.x, vv.y, vv.z]; for (const P of keep) m = Math.min(m, S.primDist(p, P)); }
+      return m;
+    };
+    let x = 0.6 * avg; placeS(x);
+    for (let it = 0; it < 90 && meet() > 0.004; it++) { x -= 0.008; placeS(x); }
+    hold = () => {
+      g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
+      const at = (c, n) => c.bones[n].getWorldPosition(new V3());
+      const sBack = new V3(1, 0, 0), gBack = new V3(-1, 0, 0), dep = c => 0.1 * c;
+      // the player's arms, outside: hands on the subject's back, high and low, the elbows wide and up
+      const gR = at(g, 'upperArmR'), gL = at(g, 'upperArmL');
+      S.armIK(g, 'R', at(s, 'spine2').addScaledVector(sBack, dep(ks)).add(new V3(0, 0.03 * ks, 0.045 * ks)), gR.clone().add(new V3(-0.1, 0.12, 0.55)), sBack.clone(), new V3(0, 0.3, -1));
+      S.armIK(g, 'L', at(s, 'spine1').addScaledVector(sBack, dep(ks)).add(new V3(0, 0.0, -0.045 * ks)), gL.clone().add(new V3(-0.1, 0.0, -0.55)), sBack.clone(), new V3(0, -0.3, 1));
+      // the subject's arms, inside: hands round the player's waist, against their back, the elbows in and low
+      const sR = at(s, 'upperArmR'), sL = at(s, 'upperArmL');
+      S.armIK(s, 'R', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.02 * kg, 0.06 * kg)), sR.clone().add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1));
+      S.armIK(s, 'L', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.02 * kg, -0.06 * kg)), sL.clone().add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1));
+      // the subject's head laid against the player (the shoulder if it reaches it, else the chest), the player's bowed over them
+      const sh = at(s, 'head'), gc = at(g, 'spine2'), gn = at(g, 'neck');
+      const ty = Math.min(gn.y, Math.max(gc.y, sh.y - 0.02));
+      S.lookAt(s, new V3(gc.x + 0.05 * kg, ty, gc.z + 0.07 * kg), 1.5); S.lookAt(g, sh, 0.9);
+    };
+    gaze = () => { eyesAt(g, at0(s, 'head'), 0.7); eyesAt(s, at0(g, 'spine2'), 0.4); };
+    view = { pos: new V3(0.4, 1.3, 2.5), tgt: new V3(0, 1.05, 0), fov: 36 };
   } else {   // 'warm'
     const st = seated(g, 0, 0, -0.25);
     standing(s, Math.PI, 0, 0.85);
@@ -824,5 +869,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, tableau, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after'], ['heldalt', 'Held after (alternate)'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after'], ['heldstand', 'Held after (adaptive, standing)'], ['heldalt', 'Held after (alternate, seated)'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

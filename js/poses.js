@@ -16,10 +16,12 @@ root.FairyShoePoses = {
   lines: [
     { who: 'subject', beat: 'base', bones: { neck: [25.9, 0.1, -0.4], upperArmL: [-53.7, 96.4, -88.9], forearmL: [-6.6, -65.7, -70.8], handL: [28.6, -62.2, -12.7], upperArmR: [-38.8, -94.6, 97.3], forearmR: [-28.2, 86, 89.3], handR: [52.9, 6.2, -4.7], fingersR: [0, 0, -7], thumbR: [-25.5, 0, 0] } },
   ],
+  // Held after as hand-posed for Mother Hubbard and Hans (the sizes it was made for); 'heldstand' (adaptive, standing) and 'heldalt' (seated) are the ones laid out in code for any pair.
   held: [
-    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [22.1, -46.1, -5.3], forearmL: [-70.5, 99.5, -139.2], handL: [14.4, -42, -5.5], upperArmR: [-27.1, 43.1, 22.7], forearmR: [15, -82.1, 147.5], handR: [67.5, -128, -167.5] } },
-    { who: 'subject', beat: 'base', bones: { spine1: [9.6, 1, 5.7], spine2: [19, 16.9, 0.5], neck: [5.4, -54.1, -2.4], head: [5.5, -50.5, 0], clavL: [10, -16.8, 17.8], upperArmL: [-53.8, 151.6, -125.6], forearmL: [21.1, -11.4, -123.6], handL: [14, -26.5, -18.5], clavR: [9.6, 13.6, -28.2], upperArmR: [-16.1, -64.7, 83.6], forearmR: [-58.5, -40.5, 147.6], handR: [-18.2, 11.5, 28.9], thighL: [1.3, 0, -3.8], shinL: [-2.1, -0.4, 0.4], footL: [3.8, 0.2, 0.5], thighR: [2, 0, -0.6], shinR: [-5.3, 0.5, -0.3], footR: [5.3, -0.3, 3.9] } },
+    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [23.7, -24.2, -6.8], forearmL: [-11.6, -83.9, 52.3], handL: [-53.7, 52, -38.2], upperArmR: [-9.8, 63.6, -31.4], forearmR: [-61.2, -70.6, 131], handR: [18.1, -17.6, -4.1], thumbL: [1.1, 3.8, 3.6] } },
+    { who: 'subject', beat: 'base', bones: { spine1: [9.6, 1, 5.7], spine2: [26.5, 22.5, 12.5], neck: [19.8, -3.6, 0.5], head: [5.5, -50.5, 0], clavL: [11.7, -50.4, 5.7], upperArmL: [-9.4, 120.7, -41.3], forearmL: [-25.5, 0.9, -119.4], handL: [33.1, -17.1, -48.5], clavR: [9.6, 13.6, -28.2], upperArmR: [-10.1, -42.9, 57.1], forearmR: [-65.3, 91.5, 12.3], handR: [27.8, 1.7, 30.5], thighL: [1.6, 0, -2], shinL: [-2.5, -0.6, 1.1], footL: [3.9, 0.2, -2], thighR: [2, 0, -0.6], shinR: [-5.3, 0.5, -0.3], footR: [5.3, -0.3, 3.9] } },
   ],
+  heldstand: [],
   // Editor-only base position ("Hips"): bent at the hips, arms forward; the game never offers it.
   // Editor-only base position ("Astride"): the lap scene, seated, with its own poses; the game never offers it.
   // Astride is laid out in code (setupAstride in scene.js: the hips, legs and the reach of the arms); these edits go on top, the same at every beat.
