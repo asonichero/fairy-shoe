@@ -506,7 +506,7 @@ function buildSpec(m) {
   // Male builds: a soft rounded volume at the front of the pelvis, just above the
   // crotch, so the front isn't flat under trunks or trousers. Kept simple and smooth
   // (a mannequin's form, not anatomy); clothing treats it as torso (tag 'groin').
-  if (!female) {
+  if (!female && (m.endowment == null || m.endowment > 0.02)) {   // (0: left out, as in the scenes where the body is bent over and it only shows as an artefact between the legs)
     const fr = loftRing(prims[0], Y.crotch + 0.012 * H), front = fr[1] + fr[3];
     // Long and flat: from just below the belly line down to a little below the crotch, only about 2.5 cm proud of the pelvis at its fullest; `endowment` scales it.
     const e = m.endowment == null ? 1 : m.endowment, lowest = Y.crotch + 0.003 * H - 0.03 * H, highest = Y.hip;   // (the top of the front is level with the hips)
@@ -917,8 +917,10 @@ function topCoverage(spec, L, tag, torso, p, t, coneLen) {
   let from = { underbust: Y.under - 0.012 * H, belly: Y.belly - 0.01 *H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
   if (L.hemUp) from = Math.max(from, Y.belly - 0.01 * H);   // (bottoms are down: a long top is drawn up to the belly line, see buildHem)
   const neck = L.neck || (spec.m.build === 'male' ? 'crew' : 'scoop');
+  const base = Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0);   // (a V is cut into the front only)
+  // A collared shirt is painted right up to the neck at the back and the shoulders (the collar band lies over the edge, so no skin shows at the nape), and keeps its own opening at the front, which the collar's points follow.
   const neckline = neck === 'crew' || neck === 'v'
-    ? (L.collar ? Y.neckBase + 0.03 * H : Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]))   // (a collared shirt is painted right up to the neck: the collar band lies over the edge, so no skin shows at the shoulders or the nape) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
+    ? (L.collar ? lerp(Y.neckBase + 0.03 * H, base, smooth01(-0.025, 0.025, p[2])) : base)
     : Y.armpit + 0.022 * H + 0.018 * H * smooth01(0.02, -0.02, p[2]);
   if (torso || tag === 'thigh') return Math.min(p[1] - from, neckline - p[1]);   // long tops reach the upper thigh
   if (tag === 'deltoid') return L.sleeves > 0 ? 0.05 : NONE;
@@ -1662,8 +1664,9 @@ function makeBodyMaterial(m) {
           float stitch = (1.0 - smoothstep(0.0003, 0.0003 + e, abs(ax - uShirt.x * 0.82))) * span;
           outfitCol = mix(outfitCol, outfitCol * 0.9, strip);
           outfitCol = mix(outfitCol, outfitCol * 0.74, stitch * strip);
-          float k = (uShirt.y - vRest.y) / uShirtBtn.w;
-          float cy = uShirt.y - (floor(k) + 0.5) * uShirtBtn.w;
+          float top = uShirt.y + 0.2 * uShirtBtn.w;   // the top button sits just under the point of the opening
+          float k = (top - vRest.y) / uShirtBtn.w;
+          float cy = top - (floor(k) + 0.5) * uShirtBtn.w;
           float bd = length(vec2(vRest.x, vRest.y - cy));
           float btn = (1.0 - smoothstep(0.0052 - e, 0.0052 + e, bd)) * span * step(0.0, k);
           float rim = (1.0 - smoothstep(0.0042 - e, 0.0042 + e, bd));

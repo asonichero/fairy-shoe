@@ -275,10 +275,9 @@ function renderMorning() {
     h('div', { class: 'morning' },
       h('div', { class: 'narration' }, g.narration.map(t => h('p', {}, t))),
       h('div', { class: 'col' }, h('h2', {}, 'Today\'s chores'), h('div', { class: 'hint' }, 'Tap a resident below, then a chore, or drag one across. The day starts once every resident has something to do; tap a placed name to take it back.'), h('div', { class: 'chorelist' }, chores),
-        ready ? h('div', { class: 'starting' }, 'The day begins…') : null),
+        ready ? h('div', { class: 'starting' }, h('button', { class: 'primary big', onclick: beginDay }, 'Begin the day')) : null),
       h('div', { class: 'col' }, h('h2', {}, 'The house'), h('div', { class: 'hint' }, 'The “story” tab opens a resident\'s file. At chores is how well their state lets them work today.'), h('div', { class: 'residents' }, residents)))));
-  if (ready) { const day = g.day; app.advance = setTimeout(() => { if (app.g === g && g.day === day && g.phase === 'assign' && R.allAssigned(g)) beginDay(); }, 1100); }
-  else clearTimeout(app.advance);
+  clearTimeout(app.advance);   // (the day does not start by itself: the button does it)
 }
 function beginDay() {
   const g = app.g, out = R.resolveDay(g, app.rng);

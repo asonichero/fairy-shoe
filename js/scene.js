@@ -452,7 +452,8 @@ function createSession(scene, opts, env = {}) {
       teardown();
       st.position = position;
       const mk = (spec, role) => env.build ? env.build(spec, role) : S.buildCharacter(S.clone(spec), { voxel: 0.011, key: spec.name });
-      g = mk(opts.giver, 'giver'); s = mk(opts.subject, 'subject');
+      const bent = position !== 'head' && position !== 'astride';   // (bent over or face down, the male front only shows as an artefact between the legs: left out there)
+      g = mk(opts.giver, 'giver'); s = mk(bent ? { ...opts.subject, endowment: 0 } : opts.subject, 'subject');
       for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
       const sv = marks[opts.subjectId];
       if (sv) { s.marks = sv.marks; s.stripes = sv.stripes; S.copyMarks(s, s); }

@@ -65,6 +65,8 @@ async function liveControls(p) {
   await p.click('.overlay >> text=Close');
   for (let day = 1; day <= 2; day++) {
     for (let i = 0; i < 3; i++) { await p.locator('.res:not(.placed)').first().click(); await p.locator('.slot:not(.full)').first().click(); }
+    await p.waitForTimeout(1500); if (await p.locator('.evening').count()) throw new Error('the day must not begin by itself');
+    await p.click('button:text-is("Begin the day")');
     await p.waitForSelector('.evening, .overlay:not([hidden])', { timeout: 8000 });
     if (await p.locator('.overlay:not([hidden]) .primary').count()) await p.click('.overlay .primary');
     let guard = 0;
