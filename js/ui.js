@@ -371,7 +371,7 @@ async function startLive(card, set) {
   await busy('Setting the room…', async () => {
     const stage = await ensureStage();
     showStage(true); setScreen(h('div')); document.body.classList.add('live');   // the view takes the pointer (see css .live)
-    app.live = stage.begin({ giver: B.keeper(app.keeper), subject: B.spec(id), subjectId: id, position: set.position, implement: set.implement, layers: { ...set.layers }, pain: { ...d.pain }, composure: app.g.chars[id].stats.com });
+    app.live = stage.begin({ giver: B.keeper(app.keeper), subject: B.spec(id), subjectId: id, position: set.position, implement: set.implement, layers: { ...set.layers }, pain: { ...d.pain }, composure: app.g.chars[id].stats.com, stats: { ...app.g.chars[id].stats } });
     stage.setCamera(app.camera || 'overview');
   });
   const ses = app.live; SC.Sound.set(app.settings.sound);

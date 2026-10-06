@@ -3321,6 +3321,7 @@ const FACE = {
 };
 const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const glanceW = G => { if (!G) return 0; const t = G.f.t - G.t0; return t < 0 || t > G.dur ? 0 : Math.min(1, t / 0.25, (G.dur - t) / 0.35); };
+const LEG_BONES = new Set(['thighL', 'thighR', 'shinL', 'shinR', 'footL', 'footR']);
 function faceState(scn, dt) {
   const g = scn.g, s = scn.s, P = scn.pain;
   const f = scn.fx || (scn.fx = { t: 0, heat: 0, wince: 0, since: 9, impacts: 0, ps: 0, exert: 0, sG: null, gG: null, sGw: 0, gGw: 0 });
@@ -3344,18 +3345,20 @@ function faceState(scn, dt) {
     f.wince = Math.max(f.wince, Math.min(1, 1.6 * r * (0.35 + 0.65 * Math.min(1, share * 1.6))));
     f.heat += (r - f.heat) * 0.5;
     // The disciplinarian reads the reaction (a longer look for firmer correction); the subject looks back once the sting passes, if composed.
-    f.gG = { f, t0: f.t + 0.2, dur: 0.7 + 1.0 * sev };
     if (Math.random() < 0.5 * (1 - ss(0.4, 0.8, L))) f.sG = { f, t0: f.t + 0.9 + Math.random() * 0.7, dur: 0.7 + Math.random() * 0.5 };
   }
   // The arm comes up: the disciplinarian checks the subject's face; the subject may peek back.
   if (swing > 0.6 && prev <= 0.6) {
-    f.gG = { f, t0: f.t, dur: 0.8 + 0.5 * (1 - sev) };
     if (Math.random() < 0.65 * (1 - ss(0.5, 0.9, L))) f.sG = { f, t0: f.t + 0.3 + Math.random() * 0.5, dur: 0.7 + Math.random() * 0.5 };
   }
   f.ps = swing;
   const striking = swing > 1.05 && swing < 1.95 && swing >= prev - 1e-6;
   const ease = P ? Math.max(ss(1.1, PAIN.TOO_HARSH, d), P.tooHarsh ? 1 : 0) : 0;
-  let gT = glanceW(f.gG); if (swing > 1.05 && swing < 1.95) gT = 0; gT = Math.max(gT, 0.85 * ease);
+  // The disciplinarian watches the contact sites while the arm is up and down (with now and then a glance at the subject's head, on a clock of its own and not tied to the smacks),
+  // and looks at the subject's head when at rest.
+  if (f.gNext == null) f.gNext = f.t + 3 + Math.random() * 4;
+  if (f.t >= f.gNext) { f.gG = { f, t0: f.t, dur: 0.7 + Math.random() * 0.7 }; f.gNext = f.t + 4 + Math.random() * 6; }
+  let gT = glanceW(f.gG); if (swing > 1.05 && swing < 1.95) gT = 0; if (swing < 0.3) gT = 1; gT = Math.max(gT, 0.85 * ease);
   let sT = glanceW(f.sG) * (1 - ss(0.75, 1.0, L));   // at the edge, eyes shut: no peeking
   f.gGw += (gT - f.gGw) * (1 - Math.exp(-dt * 7)); f.sGw += (sT - f.sGw) * (1 - Math.exp(-dt * 7));
 
@@ -3461,7 +3464,7 @@ function updateScene(scn, dt) {
   // Joint-angle poses (subject blends toward the reaction pose).
   const a = 1 - Math.exp(-dt * 9);
   for (const b of BONES) {
-    _q.copy(scn.baseQ[b]).slerp((scn.buck ? scn.buckQ : scn.reactQ)[timed ? scn.reactSide : scn.reactKey()][b], scn.reaction);
+    _q.copy(scn.baseQ[b]).slerp((scn.buck ? scn.buckQ : scn.reactQ)[timed ? scn.reactSide : scn.reactKey()][b], scn.reaction * (scn.legK != null && LEG_BONES.has(b) ? scn.legK : 1));   // (`legK`: how much of the reaction the legs take: see the game's session)
     s.pose[b].slerp(_q, timed ? 1 : a);
     s.bones[b].quaternion.copy(s.pose[b]);
     g.pose[b].slerp(g.target[b], timed ? 1 - Math.exp(-dt * 14) : a);

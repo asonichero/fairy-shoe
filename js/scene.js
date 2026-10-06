@@ -148,7 +148,7 @@ function lapLookAhead(s) {
   const faceY = () => { s.group.updateMatrixWorld(true); return new V3(0, 0, 1).applyQuaternion(head.getWorldQuaternion(new T.Quaternion())).y; };
   const at = (sign, e) => { neck.quaternion.copy(q0).multiply(new T.Quaternion().setFromAxisAngle(X, sign * e * 0.4 * Math.PI / 180)); head.quaternion.copy(q1).multiply(new T.Quaternion().setFromAxisAngle(X, sign * e * 0.6 * Math.PI / 180)); return faceY(); };
   const y0 = at(1, 0), up = at(1, 30) > at(-1, 30) ? 1 : -1; best.sign = up;
-  for (let e = 0; e <= 100; e += 2) { best.e = e; if (at(up, e) >= -0.02) break; }
+  for (let e = 0; e <= 42; e += 2) { best.e = e; if (at(up, e) >= -0.02) break; }   // (as far as a neck and head comfortably go; the rest of the way, the eyes)
   neck.quaternion.copy(q0); head.quaternion.copy(q1); s.group.updateMatrixWorld(true);
   return y0 >= -0.02 ? null : best;
 }
@@ -336,6 +336,19 @@ function createSession(scene, opts, env = {}) {
       for (const [b, w] of [['neck', 0.4], ['head', 0.6]]) s.bones[b].quaternion.multiply(new T.Quaternion().setFromAxisAngle(new V3(1, 0, 0), e * w));
       s.group.updateMatrixWorld(true);
     }
+    // How much the legs kick at each smack. The wilful hold out (a centimetre or two, lifted only by the force of the impact), the compliant and the uncomposed kick; the more
+    // worked up they are (the severity / composure scale in the scene), the more it gives way: a low composure stat kicks freely at the high end, a wilful one kicks less hard than
+    // that but more than they did at the start. Frequency follows the same figure: a stoic one kicks only now and then.
+    function kickLegs() {
+      const S_ = opts.stats; if (!S_ || !scn) { if (scn) scn.legK = 1; return; }
+      const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+      const wil = clamp((S_.wil - 1) / 5, 0, 1), com = clamp((S_.com - 1) / 4, 0, 1), d = scn.pain ? scn.pain.distress() : 0;
+      const base = 1 - 0.72 * wil - 0.2 * com;                        // at ease: 0.08 (most wilful) … 1 (not wilful, uncomposed)
+      const ceiling = 1 - 0.4 * wil;                                  // worked up: the wilful never quite let go
+      const gain = Math.max(0.06, base + (ceiling - base) * ss(0.35, 1.1, d));
+      const freq = clamp(0.25 + 0.9 * gain, 0, 1);
+      scn.legK = Math.random() < freq ? gain * (0.8 + 0.4 * Math.random()) : gain * 0.25;
+    }
     function make(cfg = {}) {
       const position = cfg.position || st.position;
       const oldP = scn && scn.pain;
@@ -364,9 +377,9 @@ function createSession(scene, opts, env = {}) {
         if (!st.frozen) scn.pain.update(cfg.elapsed || 0, false);   // the time it took
       }
       if (scn.pain) { const real = scn.pain.update; scn.pain.update = (dt, onSkin) => { if (!st.frozen) real(dt, onSkin); }; }   // (composure held still while frozen)
-      scn.onImpact = (side, strength) => { st.lookT = 3; st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
+      scn.onImpact = (side, strength) => { st.lookT = 3; kickLegs(); st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
-      lookAhead = position === 'lap' ? lapLookAhead(s) : null; st.look = 0;
+      lookAhead = position === 'lap' ? lapLookAhead(s) : null; st.look = 0; scn.legK = opts.stats ? 0.1 : 1;
       pins = null; if (st.pinFeet || position === 'hips') { st.pinFeet = true; pins = { g: footMarks(g), s: footMarks(s) }; }
       if (env.afterMake) env.afterMake(g, s);
     }
@@ -438,7 +451,6 @@ function createSession(scene, opts, env = {}) {
         if (!api.frozen) {   // (frozen: the editor's pose editor holds the scene still and moves it by hand)
           for (const ch of on) S.animateCharacter(ch, dt, t);
           scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
-          if (st.position === 'hips') scn.gaze = scn.swing < 0.3 ? 'head' : null;   // at rest the giver looks at the subject's head; for a smack, at the skin as usual
           scn.update(dt);
           if (lookAhead) lapLook(dt);
           if (plant) holdChairHands(s, plant);   // hands on the chair
