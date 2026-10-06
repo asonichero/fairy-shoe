@@ -83,7 +83,8 @@ function showIntro() {
     h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => { saveSettings(); startNew(); } }, 'Open the door'),
       saved ? h('button', { onclick: () => { saveSettings(); continueGame(saved); } }, 'Continue (Day ' + saved.g.day + ')') : null,
-      h('a', { class: 'linkbtn', href: 'editor.html', target: '_blank', rel: 'noopener' }, 'Character editor')))));
+      h('a', { class: 'linkbtn', href: 'editor.html', target: '_blank', rel: 'noopener' }, 'Character editor'),
+      h('button', { class: 'quiet', onclick: () => window.FairyShoeDebug && window.FairyShoeDebug.show() }, 'Debug scene')))));
 }
 function leaveToMenu() { teardownLive(); save(); showIntro(); }
 
@@ -533,7 +534,7 @@ function showRules() {
     h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: closeModal }, 'Close')));
 }
 
-window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro };
+window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro, ui: { h, $, setScreen, showStage, ensureStage, busy } };
 function boot() {
   const tag = document.createElement('div'); tag.textContent = 'build ' + (window.FS_BUILD || '?'); tag.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:9;font:10px monospace;color:#8a8a96;opacity:.6;pointer-events:none';
   document.body.appendChild(tag);   // so it is plain which version of the game this is

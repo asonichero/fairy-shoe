@@ -2975,7 +2975,7 @@ const easeIn = x => x * x * x, easeOut = x => 1 - (1 - x) ** 3, easeInOut = x =>
 // `impacts` counts strikes as they land; `onImpact(side, strength)` fires with each.
 // Where the subject's pelvis rests: this far from hip to knee along the right thigh,
 // and this fraction of its front depth above the thigh's top (below 1 settles in).
-const LAP_ALONG = 0.7, LAP_SETTLE = 0.9;
+const LAP_ALONG = 0.78, LAP_SETTLE = 0.9;
 // opts.lower (default true): lower the subject's bottoms to the knees for the correction.
 function createDisciplineScene(parent, g, s, opts = {}) {
   const scn = { mode: 'beat', impacts: 0, timing: { ...DEFAULT_TIMING }, plant: {}, reactSide: 'L', palmAim: 0.65,

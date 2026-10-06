@@ -99,11 +99,17 @@ function chairSeatTop(g) {
   const probe = S.seatGiver(g), top = new T.Box3().setFromObject(probe.bench).max.y;
   Room.disposeGroup(probe.bench); return top;
 }
-function furnishScene(parent, scn, s, position, seatTop) {
-  const old = scn.bench; let made = null, plant = null;
+function furnishScene(parent, scn, s, position, seatTop, giver) {
+  const old = scn.bench; s.__giver = giver || null; let made = null, plant = null;
   if (old) {
     const b = new T.Box3().setFromObject(old); parent.remove(old); Room.disposeGroup(old);
-    if (position === 'lap') { scn.seatTop = b.max.y; made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2); }
+    if (position === 'lap') { scn.seatTop = b.max.y; made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
+      // Seated firmly: the chair is slid under the disciplinarian until the backrest meets the small of the back and the seat runs under the thighs (a straight-backed chair is
+      // for the lower back and thighs to be supported, so they are not straining to take the subject's weight or to reach).
+      { const gp = s.__giver; if (gp) { gp.group.updateMatrixWorld(true); const sp = gp.bones.spine1.getWorldPosition(new T.Vector3()), P0 = gp.spec.prims[0], ring = S.loftRing ? S.loftRing(P0, gp.spec.Y.belly) : null;
+          const backDepth = ring ? ring[2] : 0.1;   // how far the body's back is behind its centre, at the small of the back
+          made.updateMatrixWorld(true); let postFront = -Infinity; made.traverse(m => { if (m.isMesh) { const bb = new T.Box3().setFromObject(m); if (bb.max.y > b.max.y + 0.2 && bb.max.x - bb.min.x < 0.08) postFront = Math.max(postFront, bb.max.z); } });
+          if (isFinite(postFront)) made.position.z += (sp.z - backDepth - 0.008) - postFront; } } }
     else made = Room.buildTable(b.max.y, b.min.x, b.max.x, b.max.z - b.min.z);
   } else if (position === 'chair') {
     made = new T.Group(); const chair = Room.buildChair(seatTop); chair.rotation.y = -Math.PI / 2; made.add(chair);
@@ -136,7 +142,7 @@ const LAP_CLOTH_LIFT = 0.016;   // metres per layer of cloth between the subject
 function prepareSubject(s) { if (s.skirt) S.setSkirtHybrid(s, true); }
 // Furniture in place, the seat under a seated disciplinarian, and the pose edits from js/poses.js. Returns `plant` (where the hands go on the chair).
 function furnishDiscipline(parent, scn, g, s, position, seatTop) {
-  const plant = furnishScene(parent, scn, s, position, seatTop);
+  const plant = furnishScene(parent, scn, s, position, seatTop, g);
   g.pressFloor = null;
   if (position === 'lap' && scn.seatTop != null) {
     // The seat flattens the seated disciplinarian's glutes (the contact shader, as a palm flattens skin) so that the skin lies flush on it and never
@@ -345,6 +351,9 @@ function createStage(viewEl, { onGLProblem } = {}) {
   const camera = new T.PerspectiveCamera(35, 1, 0.05, 40);
   const controls = new T.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.minDistance = 0.35; controls.maxDistance = 6; controls.maxPolarAngle = Math.PI * 0.55;
   const room = Room.buildRoom(scene);
+  // The debug scene is drawn without the room (walls, beams, hearth: none of it is needed to look at a pose and it costs frames): a plain ground instead.
+  const ground = new T.Mesh(new T.CircleGeometry(3, 48), new T.MeshStandardMaterial({ color: 0x3a3a42, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; ground.visible = false; scene.add(ground);
+  const setEnvironment = on => { room.group.visible = !!on; ground.visible = !on; scene.background.set(on ? 0x120d08 : 0x24242a); };
   const resize = () => {
     const w = viewEl.clientWidth || 1, h = viewEl.clientHeight || 1;
     camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
@@ -406,7 +415,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   // The editor draws its own things in the room: a per-frame callback keeps the loop going with or without a session.
   function loop(fn) { onFrame = fn; if (fn && !running) { running = true; last = performance.now(); requestAnimationFrame(frame); } if (!fn && !session) running = false; }
   function clearMarks() { for (const k of Object.keys(marks)) delete marks[k]; }
-  return { begin, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
+  return { begin, end, loop, clearMarks, setCamera, setEnvironment, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
 root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
