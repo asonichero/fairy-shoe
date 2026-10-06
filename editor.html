@@ -162,18 +162,11 @@
   <div id="stat"></div>
 </div>
 
-<script src="vendor/three.min.js"></script>
-<script src="vendor/OrbitControls.js"></script>
-<script src="starlight-engine.js"></script>
-<script src="js/content.js"></script>
-<script src="js/edits.js"></script><script src="js/poses.js"></script>
-<script src="js/room.js"></script>
-<script src="js/bodies.js"></script>
-<script src="js/scene.js"></script>
-<script src="js/editor-setup.js"></script>
+<script>window.FS_BUILD="20261006-0941";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
+{ const tag = document.createElement('div'); tag.textContent = 'build ' + (window.FS_BUILD || '?'); tag.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:9;font:10px monospace;color:#8a8a96;opacity:.6;pointer-events:none'; document.body.appendChild(tag); }
 // The models and discipline scene live in starlight-engine.js; the cast and the furniture come from js/editor-setup.js.
 // This file is the viewer's UI around them, plus what saves to the game.
 const S = window.Starlight;
@@ -250,7 +243,8 @@ const view = { lineup: false, skeleton: false, weights: false, wire: false, spin
 let chars = {};
 // Discipline scene settings (applied to the engine's scene state when it's built).
 const sc = { sound: true, position: 'lap', implement: 'hand', on: false, giver: 'keeper-a', subject: ORDER[0], beat: 'relaxed', loop: false, side: 'L', timing: { ...S.DEFAULT_TIMING }, palmAim: 0.65, skirt: 'down' };
-let scn = null;   // the engine's scene state while shown
+let scn = null;   // the engine's scene state while shown (sess.scn)
+let sess = null;  // the game's own session (FairyShoeScene.createSession) running the discipline scene: the same code as in the game
 // Pose editor state (see POSE EDITOR); while `on`, the scene is frozen and edited by hand.
 const PE = { on: false };
 
@@ -619,12 +613,11 @@ window.addEventListener('resize', () => {
 // characters, so it never disturbs the ones on the turntable.
 // ════════════════════════════════════════════════════════════════
 function clearScene() {
-  if (!scn) return;
+  if (!sess) return;
   // Marks stay with the person when the scene closes.
   for (const c of [scn.g, scn.s]) if (chars[c.key]) S.copyMarks(c, chars[c.key]);
-  scn.dispose();
-  for (const c of [scn.g, scn.s]) S.disposeCharacter(c);
-  scn = null;
+  sess.dispose();   // (the session disposes its bodies)
+  sess = null; scn = null;
 }
 // Impact sound: the game's clap (two band-passed noise bursts), louder for a firmer smack.
 // Audio can only start after a click, so it's created on the first one in the panel.
@@ -669,20 +662,20 @@ document.getElementById('panel').addEventListener('pointerdown', () => Sound.ini
 function buildScene() {
   if (PE.on) PE.keep();   // a new pairing or rebuilt body: keep the edits made so far
   clearScene();
-  const g = build(sc.giver), s = build(sc.subject);
-  for (const c of [g, s]) { if (chars[c.key]) S.copyMarks(chars[c.key], c); if (moodSel[c.key] && moodSel[c.key] !== 'none') S.setMood(c, moodSel[c.key]); }
-  for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); applyViewToChar(c); }
-  const seatTop = sc.position === 'knees' ? EDITOR.seatTop(g) : 0;   // (the chair the player sits in, for the hands-on-the-chair position)
-  scn = S.createDisciplineScene(scene, g, s, { lower: !!lowered[sc.subject], position: sc.position });
-  EDITOR.prepare(scn);                                                    // the game's own set-up: the hybrid skirt,
-  scn.chairPlant = EDITOR.furnish(scene, scn, g, s, sc.position, seatTop);   // the cottage furniture, the seat and the pose edits in js/poses.js
-  EDITOR.skirt(scn, sc.skirt);                                            // the subject's skirt, draped over the pose
+  // The scene is the game's own session: the same bodies' set-up, skirt, seat, furniture, pose edits (js/poses.js) and per-frame step. Only the bodies
+  // are the editor's (built from the designs being edited, so a change shows at once) and the editor's toggles say what is lowered.
+  sess = EDITOR.session(scene, { giver: sc.giver, subject: sc.subject, position: sc.position, implement: sc.implement,
+    layers: { bottoms: !!lowered[sc.subject], briefs: !!briefsDown[sc.subject], skirt: sc.skirt } }, {
+    build: k => build(k),
+    prepare: c => { if (chars[c.key]) S.copyMarks(chars[c.key], c); if (moodSel[c.key] && moodSel[c.key] !== 'none') S.setMood(c, moodSel[c.key]); applyViewToChar(c); } });
+  scn = sess.scn; scn.chairPlant = sess.plant;
+  const g = scn.g, s = scn.s;
   if (lowered[sc.giver]) S.setLowered(g, 'bottom', true);
   for (const c of [g, s]) if (briefsDown[c.key]) S.setLowered(c, 'briefs', true);
   scn.onImpact = (side, strength) => Sound.clap(strength);
-  scn.setImplement(sc.implement);
   scn.timing = sc.timing; scn.palmAim = sc.palmAim; scn.side = sc.side;
   if (sc.loop) scn.setLoop(true); else scn.setBeat(sc.beat);
+  sess.frozen = PE.on;
   placeChars();
   if (PE.on) PE.settle();   // a new pairing or implement: re-freeze at the beat
 }
@@ -761,11 +754,11 @@ Object.keys(S.IMPLEMENTS).forEach(name => {
   b.onclick = () => { if (PE.on) PE.keep(); sc.implement = name; if (scn) scn.setImplement(name); if (PE.on) PE.settle(); refreshImplements(); };
   document.getElementById('sc-implements').appendChild(b);
 });
-// The skirt in the scene: down (simulated cloth), hitched up at the back, or off.
+// The skirt in the scene: down, hitched up at the back (the game's), or off.
 [['down', 'Down'], ['up', 'Hitched up'], ['off', 'Off']].forEach(([id, label]) => {
   const b = document.createElement('button');
   b.textContent = label; b.dataset.skirt = id;
-  b.onclick = () => { sc.skirt = id; document.querySelectorAll('#sc-skirt button').forEach(x => x.classList.toggle('on', x.dataset.skirt === id)); if (sc.on) buildScene(); };
+  b.onclick = () => { sc.skirt = id; document.querySelectorAll('#sc-skirt button').forEach(x => x.classList.toggle('on', x.dataset.skirt === id)); if (sc.on && sess) sess.setLayer('skirt', id); };
   b.classList.toggle('on', sc.skirt === id);
   document.getElementById('sc-skirt').appendChild(b);
 });
@@ -1263,11 +1256,11 @@ function animate() {
     ch.group.position.y += (-(ch.stanceDrop || 0) - ch.group.position.y) * (1 - Math.exp(-dt * 7));
     if (view.spin) ch.group.rotation.y += dt * 0.5;
   }
-  if (scn && !PE.on) { scn.clothLift = EDITOR.lift(scn); scn.update(dt); if (scn.chairPlant) EDITOR.hold(scn.s, scn.chairPlant); }
+  if (sess) { sess.frozen = PE.on; sess.tick(dt, t); }   // the game's own per-frame step for the scene (held still while the pose editor is on)
   if (PE.on) PE.frame();
-  // Marks fade slowly.
-  for (const ch of [...Object.values(chars), ...(scn ? [scn.g, scn.s] : [])]) S.fadeMarks(ch, dt);
-  const onStage = [...visibleChars(), ...(scn ? [scn.g, scn.s] : [])];
+  // Marks fade slowly (the scene's bodies fade in the session).
+  for (const ch of Object.values(chars)) S.fadeMarks(ch, dt);
+  const onStage = visibleChars();   // the bodies outside the scene (the line-up, the turntable)
   for (const ch of onStage) {
     ch.group.updateMatrixWorld(true);
     S.bustSpring(ch, dt);
@@ -1278,8 +1271,7 @@ function animate() {
   const colliders = onStage.flatMap(S.bodyColliders);
   for (const ch of onStage) S.hairStep(ch, dt, colliders);
   for (const ch of onStage) S.faceStep(ch, view.faceLife === false ? 0 : dt);   // expression, blinks, eye movements
-  if (scn && scn.tool && scn.tool.grp) scn.tool.grp.userData.obb = true;
-  for (const ch of onStage) S.skirtStep(ch, dt, onStage, [scn && scn.bench, scn && scn.tool && scn.tool.grp]);
+  for (const ch of onStage) S.skirtStep(ch, dt, onStage, []);
   for (const ch of onStage) S.bunchStep(ch);   // lowered garments' gathered waistbands
   if (camGo) {   // a standard camera angle: eased to, then the view is yours again
     const e = 1 - Math.exp(-dt * 5);
@@ -1345,7 +1337,7 @@ animate();
 
 // Test hooks for automated screenshots
 window.__viewer = { S, view, chars, rebuild, placeChars, camera, controls,
-  applyViewToChar, current, sc, PE, placeTool, toolPose, rightClearance, get scn() { return scn; }, buildScene, buildClothing, applyPose, refreshTabs, fieldAt: (ch, q) => S.field(ch.spec, [q.x, q.y, q.z]) };
+  applyViewToChar, current, sc, PE, placeTool, toolPose, rightClearance, get scn() { return scn; }, get sess() { return sess; }, buildScene, buildClothing, applyPose, refreshTabs, fieldAt: (ch, q) => S.field(ch.spec, [q.x, q.y, q.z]) };
 })();
 </script>
 </body>

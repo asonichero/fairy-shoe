@@ -190,6 +190,144 @@ function cameraPose(mode, ses) {
   return { pos: inRoom(pos, 0.25), tgt: f.C.clone().addScaledVector(f.fwd, 0.15).add(new V3(0, 0.1 + 0.3 * f.up, 0)), fov: 35 };
 }
 
+// ── A session: two bodies in the room, set up, run and torn down in one place. The game's stage runs one (see createStage.begin) and so does the editor, so
+// what is seen in the editor is what is in the game. opts: { giver, subject (specs), subjectId, position, implement, layers, pain }.
+// env: { marks (kept through the day), build(spec, role) (how to make a character), prepare(char, role), afterMake(giver, subject), onDispose(api) }.
+function createSession(scene, opts, env = {}) {
+  const marks = env.marks || {};
+    const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
+      layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: (opts.layers && opts.layers.skirt) || 'up' }   /* a skirt is always hitched up for a correction (the editor may ask for another) */, implement: opts.implement || 'hand', position: opts.position || 'case' };
+    let g = null, s = null, scn = null, furniture = null, plant = null;
+
+    const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
+
+    function teardown() {
+      if (!scn) return;
+      marks[opts.subjectId] = { marks: s.marks, stripes: s.stripes };
+      scn.dispose();
+      for (const c of [g, s]) S.disposeCharacter(c);
+      g = s = scn = furniture = plant = null;
+    }
+    function applyLayers(settle) {
+      const L = st.layers;
+      S.setLowered(s, 'bottom', !!L.bottoms);
+      S.setLowered(s, 'briefs', !!L.bottoms && !!L.briefs);
+      if (!s.skirt) return;
+      const mode = skirtMode(L.skirt), was = s.skirt.off ? 'off' : s.skirt.gathered ? 'up' : 'down';
+      S.setSkirtOff(s, mode === 'off');
+      if (mode !== 'off') S.setSkirtGathered(s, mode === 'up');
+      if (settle && mode !== 'off' && mode !== was && !s.skirt.hybrid) settleSkirt();   // (a hybrid skirt is cloth held at the waist and carried by the body: bottoms or briefs coming down or up never restart it)
+    }
+    // The skirt is put on over the pose she is already in: it is dropped and draped (see Starlight.settleSkirt).
+    function settleSkirt() { scn.update(0.016); scn.update(0.016); S.settleSkirt(s, [g], [scn.bench]); }
+    function make(cfg = {}) {
+      const position = cfg.position || st.position;
+      const oldP = scn && scn.pain;
+      teardown();
+      st.position = position;
+      const mk = (spec, role) => env.build ? env.build(spec, role) : S.buildCharacter(S.clone(spec), { voxel: 0.011, key: spec.name });
+      g = mk(opts.giver, 'giver'); s = mk(opts.subject, 'subject');
+      for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
+      const sv = marks[opts.subjectId];
+      if (sv) { s.marks = sv.marks; s.stripes = sv.stripes; S.copyMarks(s, s); }
+      if (env.prepare) { env.prepare(g, 'giver'); env.prepare(s, 'subject'); }
+      const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
+      const D = derive();
+      scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
+      prepareSubject(s);
+      applyLayers();
+      let impl = cfg.implement || st.implement;
+      if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
+      st.implement = impl; scn.setImplement(impl); scn.setBeat('relaxed');
+      scn.timing = { ...scn.timing, speed: D.speed };
+      furniture = null; plant = furnishDiscipline(scene, scn, g, s, position, seatTop);   // furniture, the seat, the pose edits (shared with the editor)
+      if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
+      if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench], 1.5, false); }   // the player's own skirt (a dress) drapes over the seat or the stance
+      if (oldP && scn.pain) {
+        for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
+        scn.pain.update(cfg.elapsed || 0, false);   // the time it took
+      }
+      scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
+      api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
+      if (env.afterMake) env.afterMake(g, s);
+    }
+
+    const api = {
+      st, scn: null, pain: null, subject: null, giver: null, frozen: false,
+      get plant() { return plant; },
+      get position() { return st.position; },
+      get implement() { return st.implement; },
+      get busy() { return scn.busy(); },
+      get layers() { return st.layers; },
+      layerAvailable() { const w = s.spec.m.wardrobe || {}; return { bottoms: !!w.bottom, briefs: !!w.briefs }; },
+      setLayer(name, on) {
+        st.layers[name] = on; if (name === 'bottoms' && !on) st.layers.briefs = false;
+        applyLayers(true);
+      },
+      // A live change of implement (to or from the hand). Anything else is fetched: see rebuild.
+      setImplement(n) { if (st.position === 'spread' && !S.IMPLEMENTS[n].dual) return false; st.implement = n; scn.setImplement(n); scn.setBeat('relaxed'); return true; },
+      // Builds the room and bodies again (a new position, or a new implement that has been fetched), keeping the pain and the marks.
+      rebuild(cfg) { make(cfg); },
+      setBeat(b) { scn.setBeat(b); },
+      get pace() { return PACE[st.paceIdx]; }, get strengthMult() { return STRENGTH[st.strengthIdx]; }, get runLength() { return RUN[st.runIdx]; },
+      stepPace(d) { st.paceIdx = clamp(st.paceIdx + d, 0, PACE.length - 1); const D = derive(); scn.timing = { ...scn.timing, speed: D.speed }; scn.severity = D.face; },
+      stepStrength(d) { st.strengthIdx = clamp(st.strengthIdx + d, 0, STRENGTH.length - 1); scn.severity = derive().face; },
+      stepRun(d) { st.runIdx = clamp(st.runIdx + d, 0, RUN.length - 1); },
+      canStrike() { return !st.ended && !scn.busy() && !(scn.pain && scn.pain.tooHarsh); },
+      // One whole smack: lift, hold, strike, and the hand stays on the skin until the next.
+      smack() { if (!api.canStrike()) return false; st.mode = 'single'; Sound.init(); const D = derive(); scn.cycle(D.strength, undefined, undefined, D.hold); st.since = 0; return true; },
+      run(n) { if (st.ended) return; Sound.init(); st.mode = 'run'; st.toRun = n == null ? RUN[st.runIdx] : n; st.since = derive().dwell; },
+      stop() { st.mode = 'idle'; st.toRun = 0; },
+      get running() { return st.mode === 'run'; },
+      distress() { return scn.pain ? scn.pain.distress() : 0; },
+      band() { return scn.pain ? scn.pain.band() : ''; },
+      receptivity() { return scn.pain ? scn.pain.receptivity() : 0; },
+      // The end of the correction: nothing more is struck; what was done is returned for the rules to score.
+      finish() {
+        st.ended = true; st.mode = 'idle'; scn.lower(0.8);
+        marks[opts.subjectId] = { marks: s.marks, stripes: s.stripes };
+        const P = scn.pain;
+        return { peak: Math.max(st.peak, P ? P.distress() : 0), tooHarsh: !!(P && P.tooHarsh), smacks: st.smacks, implement: st.implement };
+      },
+      onChange: null, onImpact: null,
+      tick(dt, t) {
+        if (!scn) return;
+        const P = scn.pain;
+        if (st.mode === 'run' && !st.ended) {
+          st.since += dt;
+          const D = derive();
+          if (!scn.busy() && st.since > D.dwell) {
+            if (st.toRun <= 0 || (P && P.tooHarsh)) st.mode = 'idle';
+            else { scn.cycle(D.strength, undefined, undefined, D.hold); st.toRun--; st.since = 0; }
+          }
+        }
+        if (P && P.tooHarsh && !st.ended) { st.mode = 'idle'; st.tooHarsh = true; }
+        const on = [g, s];
+        if (!api.frozen) {   // (frozen: the editor's pose editor holds the scene still and moves it by hand)
+          for (const ch of on) S.animateCharacter(ch, dt, t);
+          scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
+          scn.update(dt);
+          if (plant) holdChairHands(s, plant);   // hands on the chair
+        }
+        for (const ch of on) S.fadeMarks(ch, dt);
+        for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
+        for (const ch of on) S.bustContact(ch, on);
+        S.updateContacts(on);
+        const colliders = on.flatMap(S.bodyColliders);
+        for (const ch of on) S.hairStep(ch, dt, colliders);
+        for (const ch of on) S.faceStep(ch, dt);
+        if (scn.tool && scn.tool.grp) scn.tool.grp.userData.obb = true;
+        for (const ch of on) S.skirtStep(ch, dt, on, [scn.bench, scn.tool && scn.tool.grp]);
+        for (const ch of on) S.bunchStep(ch);
+        if (P) st.peak = Math.max(st.peak, P.distress());
+        if (api.onChange) api.onChange(api);
+      },
+      dispose() { teardown(); if (env.onDispose) env.onDispose(api); },
+    };
+    make({});
+    return api;
+}
+
 // ── The stage ───────────────────────────────────────────────────
 function createStage(viewEl, { onGLProblem } = {}) {
   const renderer = new T.WebGLRenderer({ antialias: true });
@@ -246,136 +384,15 @@ function createStage(viewEl, { onGLProblem } = {}) {
     renderer.render(scene, camera);
   }
 
-  // ── A session: two bodies in the room. opts: { giver, subject (specs), subjectId, position, implement, layers, pain }
+  // A session on the stage: the camera follows the bodies, the loop keeps it running.
   function begin(opts) {
     if (session) session.dispose();
-    const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
-      layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: 'up' }   /* a skirt is always hitched up for a correction */, implement: opts.implement || 'hand', position: opts.position || 'case' };
-    let g = null, s = null, scn = null, furniture = null, plant = null;
-
-    const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
-
-    function teardown() {
-      if (!scn) return;
-      marks[opts.subjectId] = { marks: s.marks, stripes: s.stripes };
-      scn.dispose();
-      for (const c of [g, s]) S.disposeCharacter(c);
-      g = s = scn = furniture = plant = null;
-    }
-    function applyLayers(settle) {
-      const L = st.layers;
-      S.setLowered(s, 'bottom', !!L.bottoms);
-      S.setLowered(s, 'briefs', !!L.bottoms && !!L.briefs);
-      if (!s.skirt) return;
-      const mode = skirtMode(L.skirt), was = s.skirt.off ? 'off' : s.skirt.gathered ? 'up' : 'down';
-      S.setSkirtOff(s, mode === 'off');
-      if (mode !== 'off') S.setSkirtGathered(s, mode === 'up');
-      if (settle && mode !== 'off' && mode !== was && !s.skirt.hybrid) settleSkirt();   // (a hybrid skirt is cloth held at the waist and carried by the body: bottoms or briefs coming down or up never restart it)
-    }
-    // The skirt is put on over the pose she is already in: it is dropped and draped (see Starlight.settleSkirt).
-    function settleSkirt() { scn.update(0.016); scn.update(0.016); S.settleSkirt(s, [g], [scn.bench]); }
-    function make(cfg = {}) {
-      const position = cfg.position || st.position;
-      const oldP = scn && scn.pain;
-      teardown();
-      st.position = position;
-      const mk = spec => S.buildCharacter(S.clone(spec), { voxel: 0.011, key: spec.name });
-      g = mk(opts.giver); s = mk(opts.subject);
-      for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
-      const sv = marks[opts.subjectId];
-      if (sv) { s.marks = sv.marks; s.stripes = sv.stripes; S.copyMarks(s, s); }
-      const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
-      const D = derive();
-      scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
-      prepareSubject(s);
-      applyLayers();
-      let impl = cfg.implement || st.implement;
-      if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
-      st.implement = impl; scn.setImplement(impl); scn.setBeat('relaxed');
-      scn.timing = { ...scn.timing, speed: D.speed };
-      furniture = null; plant = furnishDiscipline(scene, scn, g, s, position, seatTop);   // furniture, the seat, the pose edits (shared with the editor)
-      if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
-      if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench], 1.5, false); }   // the player's own skirt (a dress) drapes over the seat or the stance
-      if (oldP && scn.pain) {
-        for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
-        scn.pain.update(cfg.elapsed || 0, false);   // the time it took
-      }
-      scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
-      api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
-      if (cam.mode !== 'free') { const o = cameraPose(cam.mode, { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; }
-      else if (!cam.framed) { const o = cameraPose('overview', { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.framed = true; }
-    }
-
-    const api = {
-      st, scn: null, pain: null, subject: null, giver: null,
-      get position() { return st.position; },
-      get implement() { return st.implement; },
-      get busy() { return scn.busy(); },
-      get layers() { return st.layers; },
-      layerAvailable() { const w = s.spec.m.wardrobe || {}; return { bottoms: !!w.bottom, briefs: !!w.briefs }; },
-      setLayer(name, on) {
-        st.layers[name] = on; if (name === 'bottoms' && !on) st.layers.briefs = false;
-        applyLayers(true);
+    const api = createSession(scene, opts, { marks,
+      afterMake: (g, s) => {
+        if (cam.mode !== 'free') { const o = cameraPose(cam.mode, { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.go = null; }
+        else if (!cam.framed) { const o = cameraPose('overview', { subject: s, giver: g }); camera.position.copy(o.pos); controls.target.copy(o.tgt); camera.fov = o.fov; camera.updateProjectionMatrix(); camera.lookAt(o.tgt); cam.framed = true; }
       },
-      // A live change of implement (to or from the hand). Anything else is fetched: see rebuild.
-      setImplement(n) { if (st.position === 'spread' && !S.IMPLEMENTS[n].dual) return false; st.implement = n; scn.setImplement(n); scn.setBeat('relaxed'); return true; },
-      // Builds the room and bodies again (a new position, or a new implement that has been fetched), keeping the pain and the marks.
-      rebuild(cfg) { make(cfg); },
-      setBeat(b) { scn.setBeat(b); },
-      get pace() { return PACE[st.paceIdx]; }, get strengthMult() { return STRENGTH[st.strengthIdx]; }, get runLength() { return RUN[st.runIdx]; },
-      stepPace(d) { st.paceIdx = clamp(st.paceIdx + d, 0, PACE.length - 1); const D = derive(); scn.timing = { ...scn.timing, speed: D.speed }; scn.severity = D.face; },
-      stepStrength(d) { st.strengthIdx = clamp(st.strengthIdx + d, 0, STRENGTH.length - 1); scn.severity = derive().face; },
-      stepRun(d) { st.runIdx = clamp(st.runIdx + d, 0, RUN.length - 1); },
-      canStrike() { return !st.ended && !scn.busy() && !(scn.pain && scn.pain.tooHarsh); },
-      // One whole smack: lift, hold, strike, and the hand stays on the skin until the next.
-      smack() { if (!api.canStrike()) return false; st.mode = 'single'; Sound.init(); const D = derive(); scn.cycle(D.strength, undefined, undefined, D.hold); st.since = 0; return true; },
-      run(n) { if (st.ended) return; Sound.init(); st.mode = 'run'; st.toRun = n == null ? RUN[st.runIdx] : n; st.since = derive().dwell; },
-      stop() { st.mode = 'idle'; st.toRun = 0; },
-      get running() { return st.mode === 'run'; },
-      distress() { return scn.pain ? scn.pain.distress() : 0; },
-      band() { return scn.pain ? scn.pain.band() : ''; },
-      receptivity() { return scn.pain ? scn.pain.receptivity() : 0; },
-      // The end of the correction: nothing more is struck; what was done is returned for the rules to score.
-      finish() {
-        st.ended = true; st.mode = 'idle'; scn.lower(0.8);
-        marks[opts.subjectId] = { marks: s.marks, stripes: s.stripes };
-        const P = scn.pain;
-        return { peak: Math.max(st.peak, P ? P.distress() : 0), tooHarsh: !!(P && P.tooHarsh), smacks: st.smacks, implement: st.implement };
-      },
-      onChange: null, onImpact: null,
-      tick(dt, t) {
-        if (!scn) return;
-        const P = scn.pain;
-        if (st.mode === 'run' && !st.ended) {
-          st.since += dt;
-          const D = derive();
-          if (!scn.busy() && st.since > D.dwell) {
-            if (st.toRun <= 0 || (P && P.tooHarsh)) st.mode = 'idle';
-            else { scn.cycle(D.strength, undefined, undefined, D.hold); st.toRun--; st.since = 0; }
-          }
-        }
-        if (P && P.tooHarsh && !st.ended) { st.mode = 'idle'; st.tooHarsh = true; }
-        const on = [g, s];
-        for (const ch of on) S.animateCharacter(ch, dt, t);
-        scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
-        scn.update(dt);
-        if (plant) holdChairHands(s, plant);   // hands on the chair
-        for (const ch of on) S.fadeMarks(ch, dt);
-        for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
-        for (const ch of on) S.bustContact(ch, on);
-        S.updateContacts(on);
-        const colliders = on.flatMap(S.bodyColliders);
-        for (const ch of on) S.hairStep(ch, dt, colliders);
-        for (const ch of on) S.faceStep(ch, dt);
-        if (scn.tool && scn.tool.grp) scn.tool.grp.userData.obb = true;
-        for (const ch of on) S.skirtStep(ch, dt, on, [scn.bench, scn.tool && scn.tool.grp]);
-        for (const ch of on) S.bunchStep(ch);
-        if (P) st.peak = Math.max(st.peak, P.distress());
-        if (api.onChange) api.onChange(api);
-      },
-      dispose() { teardown(); if (session === api) session = null; },
-    };
-    make({});
+      onDispose: a => { if (session === a) session = null; } });
     session = api;
     if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
     return api;
@@ -387,5 +404,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

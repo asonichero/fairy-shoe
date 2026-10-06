@@ -21,7 +21,7 @@ npm test             # rules unit tests (Node, no dependencies)
 npm run e2e          # browser smoke test, needs Playwright (see the header of tests/e2e-smoke.js)
 ```
 
-Any static server works; there is no build step. Progress autosaves in `localStorage` at the start of each morning.
+Any static server works; there is no build step. Each page shows a small `build …` stamp in its bottom-left corner and loads its scripts with that stamp as a version, so a stale browser cache can be spotted at a glance (update `FS_BUILD` in `index.html` and `editor.html` when you change files). Progress autosaves in `localStorage` at the start of each morning.
 
 ## The day
 
@@ -124,7 +124,7 @@ Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuff
 - **Characters**: the six residents and the player's two looks (Mother Hubbard, in a plum dress, and The Huntsman, in a white shirt and brown breeches, both in their forties), one at a time or in a line-up.
 - **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.
 - **View**: skeleton, weights, wireframe, turntable, head camera.
-- **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The furniture is the game's cottage chair and table.
+- **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The scene is the game's own: the editor runs the same session code as the game (`FairyShoeScene.createSession` in `js/scene.js`), with the bodies built from the designs being edited, so a change to the game's scenes shows here too. The furniture is the game's cottage chair and table.
 - **Pose editor**: freeze the scene at a beat, drag joints or the implement, pin hands, and print a **Report**.
 - **Measurements, face and expression sliders**, voxel size, and the design's JSON.
 
