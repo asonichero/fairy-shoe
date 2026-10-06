@@ -731,13 +731,20 @@ function createTableau(scene, kind, opts, env = {}) {
     const { kg, ks } = placeClose(0.14);
     // an arm to a hand-hold, its elbow and forearm kept out of both bodies: the pole is pushed outward until neither is in the skin
     const armTo = (c, other, side, target, pole, n, fingers, out) => {
-      for (let i = 0; i < 8; i++) {
-        S.armIK(c, side, target, pole.clone().addScaledVector(out, 0.1 * i), n, fingers);
-        const el = c.bones['forearm' + side].getWorldPosition(new V3()), wr = c.bones['hand' + side].getWorldPosition(new V3()), mid = el.clone().lerp(wr, 0.5);
+      // the elbow is tried further and further out (and out and back), and the arm that keeps best clear of the other body is the one kept
+      let best = null;
+      const tryPole = P => {
+        S.armIK(c, side, target, P, null, null, n.clone().negate());   // (the palm presses toward the other body, fingers following the forearm)
+        c.group.updateMatrixWorld(true);
+        const up = c.bones['upperArm' + side].getWorldPosition(new V3()), el = c.bones['forearm' + side].getWorldPosition(new V3()), wr = c.bones['hand' + side].getWorldPosition(new V3());
         let m = Infinity;
-        for (const pt of [el, mid, c.bones['upperArm' + side].getWorldPosition(new V3()).lerp(el, 0.5)]) { const pts = S.posedSkinNear(other, pt, 0.15); if (pts.length) m = Math.min(m, S.skinSignedDist(pts, pt)); }
-        if (m > 0.02) break;
-      }
+        for (const pt of [up.clone().lerp(el, 0.5), el, el.clone().lerp(wr, 0.35), el.clone().lerp(wr, 0.65)]) { const pts = S.posedSkinNear(other, pt, 0.15); if (pts.length) m = Math.min(m, S.skinSignedDist(pts, pt)); }
+        if (!best || m > best.m) best = { m, P: P.clone() };
+        return m;
+      };
+      for (let i = 0; i < 14 && tryPole(pole.clone().addScaledVector(out, 0.12 * i)) < 0.02; i++);
+      if (best.m < 0.02) for (let i = 0; i < 8; i++) tryPole(pole.clone().addScaledVector(out, 0.5 + 0.1 * i).addScaledVector(n, 0.15 * i));
+      S.armIK(c, side, target, best.P, null, null, n.clone().negate());
     };
     // where a palm goes on the other's back: the outermost skin behind the bone at that height and that far to the side, the palm a hair off it
     const backAt = (c, bone, back, dy, dz) => {
@@ -751,11 +758,11 @@ function createTableau(scene, kind, opts, env = {}) {
       const at = (c, n) => c.bones[n].getWorldPosition(new V3());
       const sBack = new V3(1, 0, 0), gBack = new V3(-1, 0, 0), Zp = new V3(0, 0, 1), Zm = new V3(0, 0, -1);
       // the player's arms, outside the subject's: hands apart on the upper back, each on its own side (the right is +Z, the subject's left), the elbows wide
-      armTo(g, s, 'R', backAt(s, 'spine2', sBack, 0.03 * ks, 0.05 * ks), at(g, 'upperArmR').add(new V3(-0.1, 0.12, 0.5)), sBack.clone(), new V3(0, 0.3, -1), Zp);
-      armTo(g, s, 'L', backAt(s, 'spine2', sBack, -0.02 * ks, -0.05 * ks), at(g, 'upperArmL').add(new V3(-0.1, 0.0, -0.5)), sBack.clone(), new V3(0, -0.3, 1), Zm);
+      armTo(g, s, 'R', backAt(s, 'spine2', sBack, 0.03 * ks, 0.1 * ks), at(g, 'upperArmR').add(new V3(-0.1, 0.12, 0.5)), sBack.clone(), new V3(0, 0.3, -1), Zp);
+      armTo(g, s, 'L', backAt(s, 'spine2', sBack, -0.03 * ks, -0.1 * ks), at(g, 'upperArmL').add(new V3(-0.1, 0.0, -0.5)), sBack.clone(), new V3(0, -0.3, 1), Zm);
       // the subject's arms, inside: hands apart on the player's lower back, the subject's left (+Z) on the player's right side, the elbows in and low
-      armTo(s, g, 'L', backAt(g, 'spine1', gBack, -0.03 * kg, 0.06 * kg), at(s, 'upperArmL').add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1), Zp);
-      armTo(s, g, 'R', backAt(g, 'spine1', gBack, -0.03 * kg, -0.06 * kg), at(s, 'upperArmR').add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1), Zm);
+      armTo(s, g, 'L', backAt(g, 'spine1', gBack, -0.03 * kg, 0.11 * kg), at(s, 'upperArmL').add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1), Zp);
+      armTo(s, g, 'R', backAt(g, 'spine1', gBack, -0.03 * kg, -0.11 * kg), at(s, 'upperArmR').add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1), Zm);
       // the subject's head on the player's right shoulder (the side they stand to), the face turned away to that side; the player's bowed to the subject's other shoulder
       const sh = at(s, 'head'), gs = at(g, 'upperArmR'), gn = at(g, 'neck'), gc = at(g, 'spine2');
       const ty = sh.y > gs.y ? gs.y + 0.02 * kg : Math.max(gc.y, sh.y - 0.02);   // (the shoulder if the head reaches it, else the chest)
