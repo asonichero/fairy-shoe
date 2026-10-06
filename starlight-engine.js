@@ -6042,6 +6042,14 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   // The cloth's own layers keep apart: once a frame is enough (folds persist), then one more collision so nothing ends inside the body.
   selfPass();
   for (let k = N; k < n; k++) if (!(S.hybrid ? (S.kinSet && S.kinSet.has(k)) : (S.gathered && S.pinned.has(k)))) collide(k);
+  // The cloth between its points: a triangle draped over a corner (the front edge of a seat, a table's edge, a thigh) has its points on both sides and
+  // its middle through it. Samples on every triangle are pushed clear of the same things the points are, each frame (see clearSkirt), and a point so moved
+  // keeps no speed from it.
+  {
+    const was = new Float32Array(p), X = skirtContext(ch, everyone.filter(o => o !== ch), solids, true); X.quick = true;
+    clearSkirt(ch, X, 3, true);
+    for (let i = 0; i < p.length; i++) if (p[i] !== was[i]) prev[i] = p[i];
+  }
   if (S.debug) {   // (for tests: how many particles are inside the body, and how far)
     let pc = 0, mp = 0;
     let wk = -1; for (let k = N; k < n; k++) { const h = ownPen(p[3 * k], p[3 * k + 1], p[3 * k + 2]); if (h && h[0] > 0.004) { pc++; if (h[0] > mp) { mp = h[0]; wk = k; } } }
@@ -6565,7 +6573,7 @@ function bustContact(ch, everyone) {
 }
 
 global.Starlight = {
-  SKIRT, SKIRT_THICK, settleSkirt, freezeSkirt, unfreezeSkirt, skirtClipReport, setSkirtShell, setSkirtHybrid, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
+  SKIRT, SKIRT_THICK, posedProxies, primDist, settleSkirt, freezeSkirt, unfreezeSkirt, skirtClipReport, setSkirtShell, setSkirtHybrid, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
   buildCharacter, disposeCharacter, resetCharacter, setPose, groundFeet, wideStance, poseQuats, degQ, mirrorPose, animateCharacter, bustSpring, bustContact, updateContacts, faceStep, setExpression, setMood, setMoods, MOODS, moodFor, EXPR_RANGE, mouthOpening, EXPR_DEFAULTS, skirtStep, bunchStep, setSkirtOff, setSkirtGathered, setLowered, addMark, clearMarks, fadeMarks, fadeMarksMove, copyMarks, markStrength, markCount,
   hairStep, bodyColliders, hairReset, setFingerCurl, setFingerBend, fistPocket,
   ALL_MATS, lin, field, loftRing,

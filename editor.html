@@ -162,7 +162,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261006-0941";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261006-1020";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -242,7 +242,7 @@ scene.add(floor);
 const view = { lineup: false, skeleton: false, weights: false, wire: false, spin: false, voxel: 0.010, pose: 'Relaxed', selected: ORDER[0] };
 let chars = {};
 // Discipline scene settings (applied to the engine's scene state when it's built).
-const sc = { sound: true, position: 'lap', implement: 'hand', on: false, giver: 'keeper-a', subject: ORDER[0], beat: 'relaxed', loop: false, side: 'L', timing: { ...S.DEFAULT_TIMING }, palmAim: 0.65, skirt: 'down' };
+const sc = { sound: true, position: 'lap', implement: 'hand', on: false, giver: 'keeper-a', subject: ORDER[0], beat: 'relaxed', loop: false, side: 'L', timing: { ...S.DEFAULT_TIMING }, palmAim: 0.65, skirt: 'up' };
 let scn = null;   // the engine's scene state while shown (sess.scn)
 let sess = null;  // the game's own session (FairyShoeScene.createSession) running the discipline scene: the same code as in the game
 // Pose editor state (see POSE EDITOR); while `on`, the scene is frozen and edited by hand.
