@@ -5709,10 +5709,12 @@ function gatherPins(S, u) {
 }
 function setSkirtOff(ch, off) {
   if (!ch.skirt) return;
+  if (!!ch.skirt.off === !!off) return;
   ch.skirt.fz = null;
+  const changed = !!ch.skirt.off !== !!off;
   ch.skirt.off = off; ch.skirt.mesh.visible = !off && !ch.skirt.shell;
   if (ch.skirt.shellMesh) ch.skirt.shellMesh.visible = !off && !!ch.skirt.shell;
-  if (!off) ch.skirt.p = null;
+  if (!off && changed) ch.skirt.p = null;   // (only a skirt put back on starts again; asking for what it already is changes nothing)
 }
 function removeSkirt(ch) {
   if (!ch.skirt) return;
@@ -6045,18 +6047,26 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
 function trunkPrims(spec) { return spec.prims.filter(P => P.type === 'loft' || ['torso', 'bust', 'glute', 'perineum', 'thigh', 'hip'].includes(P.tag || P.group)); }
 function layShell(ch) {
   const S = ch.skirt, spec = ch.spec, H = spec.H, R = S.R, N = S.N, n = R * N, L = S.L; if (!S.shellPos) shellWeights(ch); const P = S.shellPos;
-  const trunk = ch._trunk || (ch._trunk = trunkPrims(spec)), cache = ch._shellSurf || (ch._shellSurf = new Map()), q = [0, 0, 0];
-  const inside = () => { for (const T of trunk) if (primDist(q, T) < 0) return true; return false; };
+  // The body's outer surface at angle th and height y, from the skin mesh itself (its trunk and leg vertices in the rest pose, binned by angle and
+  // height; the furthest out in each bin), so a band laid on it sits on the skin as drawn, glutes and all.
+  if (!ch._skinBins) {
+    const g = ch.mesh.geometry, pa = g.attributes.position.array, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array, bins = new Map();
+    for (let v = 0; v < pa.length / 3; v++) {
+      let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (sw[4 * v + m] > bw) { bw = sw[4 * v + m]; bb = si[4 * v + m]; }
+      if (!/^(pelvis|spine1|spine2|thigh)/.test(BONES[bb])) continue;
+      const x = pa[3 * v], y = pa[3 * v + 1], z = pa[3 * v + 2], r = Math.hypot(x, z), th = Math.atan2(x, z);
+      const key = Math.round(((th + Math.PI) / (2 * Math.PI)) * 96) % 96 + ',' + Math.round(y / 0.01);
+      if (!(bins.get(key) >= r)) bins.set(key, r);
+    }
+    ch._skinBins = bins;
+  }
   const surf = (th, y) => {
-    const key = Math.round(th * 500) + ',' + Math.round(y * 1000), hit = cache.get(key); if (hit !== undefined) return hit;
-    const dx = Math.sin(th), dz = Math.cos(th); q[1] = y;
-    let r = 0.32;
-    for (; r > 0.005; r -= 0.006) { q[0] = dx * r; q[2] = dz * r; if (inside()) break; }
-    let lo = r, hi = r + 0.006;
-    for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (inside()) lo = m; else hi = m; }
-    cache.set(key, hi); return hi;
+    const tt = ((th + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI), a = Math.round(tt / (2 * Math.PI) * 96) % 96, yb = Math.round(y / 0.01);
+    let best = 0;
+    for (let da = -1; da <= 1; da++) for (let dy = -1; dy <= 1; dy++) { const r = ch._skinBins.get(((a + da + 96) % 96) + ',' + (yb + dy)); if (r > best) best = r; }
+    return best || 0.15;
   };
-  const len = (L.length || 0.18) * H, rise = Math.min(len * 0.12, 0.035 * H), thick = Math.min(0.05, 0.016 + len * 0.04) * H / 1.78;   // (the gather is at the waistband and no lower: the glutes are clear of cloth; its bulk is in thickness, not length)
+  const len = (L.length || 0.18) * H, rise = Math.min(len * 0.06, 0.02 * H), thick = Math.min(0.022, 0.008 + len * 0.02) * H / 1.78;   // (the gather is at the waistband and no lower: the glutes are clear of cloth; its bulk is in thickness, not length)
   for (let k = 0; k < n * 3; k++) P[k] = S.rest[k];
   if (S.gathered) {
     for (let j = 0; j < N; j++) {
@@ -6064,7 +6074,7 @@ function layShell(ch) {
       if (a <= 0) continue;
       for (let i = 1; i < R; i++) {
         const t = i / (R - 1), o = 3 * (i * N + j), yG = S.top + 0.004 * H + rise * t;
-        const rG = surf(th, yG) + 0.006 + thick * (0.5 + 0.5 * t) * (1 + 0.3 * Math.sin(6 * th + 5 * t) + 0.15 * Math.sin(13 * th - 3 * t));
+        const rG = surf(th, yG) + 0.003 + thick * (0.35 + 0.65 * t) * (1 + 0.3 * Math.sin(6 * th + 5 * t) + 0.15 * Math.sin(13 * th - 3 * t));
         P[o] += (Math.sin(th) * rG - P[o]) * a; P[o + 1] += (yG - P[o + 1]) * a; P[o + 2] += (Math.cos(th) * rG - P[o + 2]) * a;
       }
     }

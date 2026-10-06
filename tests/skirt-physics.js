@@ -32,12 +32,18 @@ const check = (ok, what) => { console.log((ok ? 'ok   ' : 'FAIL ') + what); if (
         setup(w, ps, im, m);
         const S = skirt, n = S.R * S.N;
         const rep = () => { const a = Starlight.skirtClipReport(ses.subject, [ses.giver], [ses.scn.bench]), by = a.by || {}; return { own: by['own skin'] || 0, other: by['other body'] || 0, furn: by.furniture || 0 }; };
-        run(1.5, 1 / 60, 0); const at = rep(); run(3, 1 / 60, 1.0); const after = rep();
+        run(3, 1 / 60, 0); const at = rep();
+        // toggling bottoms and briefs must not move the skirt (no recalibration); the game's skirt is up, so only that mode is asked
+        let still = true;
+        if (m === 'up') { const before = Array.from(S.p), arr = S.p; ses.setLayer('bottoms', true); ses.setLayer('briefs', true); ses.setLayer('briefs', false); ses.setLayer('bottoms', false);
+          for (let i = 0; i < 3; i++) { clock += 1 / 60; ses.tick(1 / 60, clock); }
+          let moved = 0; for (let i = 0; i < before.length; i++) moved = Math.max(moved, Math.abs(before[i] - S.p[i])); still = arr === S.p && moved < 0.01; }
+        run(3, 1 / 60, 1.0); const after = rep();
         let far = 0; const pel = ses.subject.bones.pelvis.getWorldPosition(new THREE.Vector3());
         for (let k = 0; k < n; k++) far = Math.max(far, Math.hypot(S.p[3 * k] - pel.x, S.p[3 * k + 1] - pel.y, S.p[3 * k + 2] - pel.z));
-        return { hybrid: !!S.hybrid, driven: m === 'up' ? (S.kin ? S.kin.length : 0) : -1, at, after, far, n, finite: Array.from(S.p).every(Number.isFinite) };
+        return { still, hybrid: !!S.hybrid, driven: m === 'up' ? (S.kin ? S.kin.length : 0) : -1, at, after, far, n, finite: Array.from(S.p).every(Number.isFinite) };
       }, [who, pos, impl, mode]);
-      const ok = r.hybrid && r.finite && r.far < 1.0 && (mode === 'down' || r.driven > 100) && r.after.own <= 0.08 * r.n && r.after.furn <= 0.03 * r.n && r.after.other <= 0.10 * r.n;
+      const ok = r.hybrid && r.still && r.finite && r.far < 1.0 && (mode === 'down' || r.driven > 100) && r.after.own <= 0.08 * r.n && r.after.furn <= 0.03 * r.n && r.after.other <= 0.10 * r.n;
       check(ok, `${who}, ${pos}, ${impl}, ${mode}: hybrid skirt${r.driven > 0 ? ', ' + r.driven + ' points driven' : ''}; inside after strokes: own skin ${r.after.own}, furniture ${r.after.furn}, other body ${r.after.other} (of ${r.n}); farthest ${(r.far * 100).toFixed(0)} cm`);
     }
   }
