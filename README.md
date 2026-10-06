@@ -136,7 +136,7 @@ What it adds is **reports**. Everything in the editor is a preview: nothing is s
 - **Pose report** turns the pose editor's Report into entries for `js/poses.js`, grouped by position (`lap`, `case`, `head`, `chair`, `spread`). An entry names whose pose it is (`subject` or `giver`, the player), the beat (`base` / `contact` for the subject; `relaxed` / `raised` / `contact` for the player) and the bones, as the engine's pose-table Euler degrees; where the scene itself drives a bone (the swinging arm's IK) the report uses the table value.
 - **Try a design in the preview**: paste a few fields as JSON (`{"height":172,"outfit":{"hair":"#5a1e12"}}`) or a whole preset as *Show as JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`. *Revert this character* goes back to `js/bodies.js`.
 
-**Testing shortcut.** The menu has *Test: most severe correction*: it deals fresh days until one has a Severe expected correction (the highest the rules give, a Wilfulness band plus the maximum situational modifier) and drops you into that resident's set-up (pick position, implement and clothes, then *Bring them in*). It starts a throwaway game and does not touch your save.
+**Testing shortcut.** The menu has *Test: most severe correction*, next to the character editor: a pop-up asks for the giver and the subject, then a throwaway game is built with that resident at the top expected severity (Wilfulness high, the largest situational modifier) and you land on the correction's set-up (position, implement, clothes, *Bring them in*). Your save is not touched.
 
 ## Layout
 
