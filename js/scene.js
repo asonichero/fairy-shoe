@@ -370,6 +370,7 @@ function createSession(scene, opts, env = {}) {
       if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
       st.implement = impl; scn.setImplement(impl); scn.setBeat('relaxed');
       scn.timing = { ...scn.timing, speed: D.speed };
+      scn.noMarks = position === 'hips';   // the Hips base position takes no colour from a smack, and gives none back
       furniture = null; plant = furnishDiscipline(scene, scn, g, s, position, seatTop);   // furniture, the seat, the pose edits (shared with the editor)
       if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
       if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench], 1.5, false); }   // the player's own skirt (a dress) drapes over the seat or the stance
@@ -457,7 +458,7 @@ function createSession(scene, opts, env = {}) {
           if (plant) holdChairHands(s, plant);   // hands on the chair
         }
         api.applyPins();
-        for (const ch of on) S.fadeMarks(ch, dt);
+        if (st.position !== 'hips') for (const ch of on) S.fadeMarks(ch, dt);
         for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
         for (const ch of on) S.bustContact(ch, on);
         S.updateContacts(on);

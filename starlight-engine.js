@@ -3251,6 +3251,7 @@ function createDisciplineScene(parent, g, s, opts = {}) {
   // Each landed smack builds up the mark on that side (see addMark); a wide implement
   // marks both sides, each at its own site.
   scn.mark = side => {
+    if (scn.noMarks) return;   // (a base position that leaves the skin's colour alone)
     const w = IMPLEMENTS[scn.implement].mark;
     if (scn.tool && scn.tool.rod) { const F = scn.lastStrike; if (F && F.skin) addStripe(s, F.skin, F.a, scn.tool.halfLen); return; }
     if (scn.tool && scn.tool.wide) { const F = scn.lastStrike; if (F && F.skinL) { addMark(s, 'L', F.skinL, w); addMark(s, 'R', F.skinR, w); } return; }

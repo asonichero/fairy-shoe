@@ -163,7 +163,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261006-2300";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261006-2310";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -1266,7 +1266,7 @@ function animate() {
   if (sess) { sess.frozen = PE.on; sess.tick(dt, t); }   // the game's own per-frame step for the scene (held still while the pose editor is on)
   if (PE.on) { PE.frame(); if (sess) sess.applyPins(); }   // (the pose editor's own bones first, then the pinned feet are put back)
   // Marks fade slowly (the scene's bodies fade in the session).
-  for (const ch of Object.values(chars)) S.fadeMarks(ch, dt);
+  if (!(sc.on && sc.position === 'hips')) for (const ch of Object.values(chars)) S.fadeMarks(ch, dt);
   const onStage = visibleChars();   // the bodies outside the scene (the line-up, the turntable)
   for (const ch of onStage) {
     ch.group.updateMatrixWorld(true);
