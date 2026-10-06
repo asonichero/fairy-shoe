@@ -632,6 +632,33 @@ function createTableau(scene, kind, opts, env = {}) {
     }
   };
   const applyEdits = () => { for (const e of edits) { const c = e.who === 'giver' ? g : s; if (!(e.beat === 'base' || (e.who === 'giver' && e.beat === 'relaxed')) || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); } };
+  // Two standing bodies facing each other, the subject's feet held back and the body tipped `lean` toward the player, brought together until the torsos just meet: the same
+  // closeness for any pair of sizes and any pose (the edits are in place while it measures).
+  const placeClose = lean => {
+    const kg = g.spec.H / 1.7, ks = s.spec.H / 1.7, avg = (kg + ks) / 2, Z = new V3(0, 0, 1);
+    standing(g, Math.PI / 2, 0, 0); applyEdits();
+    const pivotY = 0;
+    const placeS = x => {   // the subject faces the player (-X), the feet at x, the body tipped about them toward the player
+      standing(s, -Math.PI / 2, x, 0); applyEdits();
+      const feet = ['L', 'R'].map(sd => s.bones['foot' + sd].getWorldQuaternion(new T.Quaternion()));
+      const pivot = new V3(x, pivotY, 0), q = new T.Quaternion().setFromAxisAngle(Z, lean);
+      s.group.quaternion.premultiply(q); s.group.position.sub(pivot).applyQuaternion(q).add(pivot); s.group.updateMatrixWorld(true);
+      ['L', 'R'].forEach((sd, i) => { const f = s.bones['foot' + sd]; f.quaternion.copy(f.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(feet[i])); });
+      s.group.updateMatrixWorld(true);
+    };
+    // torso skin points of the subject, and the player's torso shapes: closer until they just meet
+    const geo = s.mesh.geometry, si = geo.attributes.skinIndex.array, sw = geo.attributes.skinWeight.array, pos = geo.attributes.position, chest = [];
+    for (let v = 0; v < pos.count; v += 3) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (sw[4 * v + m] > bw) { bw = sw[4 * v + m]; bb = si[4 * v + m]; } if (['pelvis', 'spine1', 'spine2', 'bustL', 'bustR'].includes(S.BONES[bb])) chest.push(v); }
+    const meet = () => {
+      const all = S.posedProxies(g), nE = g.proxies.ells.length, keep = all.filter((P, i) => { const b = i < nE ? g.proxies.ells[i].bone : g.proxies.cones[i - nE].bone; return ['pelvis', 'spine1', 'spine2', 'bustL', 'bustR'].includes(b); });
+      const vv = new V3(); let m = Infinity;
+      for (const i of chest) { vv.fromBufferAttribute(pos, i); s.mesh.boneTransform(i, vv); vv.applyMatrix4(s.mesh.matrixWorld); const p = [vv.x, vv.y, vv.z]; for (const P of keep) m = Math.min(m, S.primDist(p, P)); }
+      return m;
+    };
+    let x = 0.6 * avg; placeS(x);
+    for (let it = 0; it < 90 && meet() > 0.004; it++) { x -= 0.008; placeS(x); }
+    return { kg, ks, avg };
+  };
   if (kind === 'corner') {
     g.group.visible = false; g.helper.visible = false;
     s.handsOnHead = true;
@@ -688,8 +715,7 @@ function createTableau(scene, kind, opts, env = {}) {
     gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3()), 0.7); eyesAt(s, g.bones.neck.getWorldPosition(new V3()), 0.5); };
     view = { pos: new V3(2.0, 1.35, 1.9), tgt: new V3(0, 0.95, 0.1), fov: 38 };
   } else if (kind === 'held') {
-    const k = (g.spec.H + s.spec.H) / 2 / 1.7, gap = 0.31 * k;
-    standing(g, Math.PI / 2, -gap / 2, 0); standing(s, -Math.PI / 2, gap / 2, 0);
+    const { avg: k } = placeClose(0);   // (the hand-posed one leans by its own spine edits)
     hold = () => {
       for (const [a, b] of [[g, s], [s, g]]) {
         a.group.updateMatrixWorld(true); b.group.updateMatrixWorld(true);
@@ -707,28 +733,7 @@ function createTableau(scene, kind, opts, env = {}) {
   } else if (kind === 'heldstand') {
     // Standing, chest to chest, the subject leaning into it with the feet held back: their arms inside (round the player's waist, under the player's arms), the player's outside
     // (wide round the subject's back). Everything is measured off the two bodies, so any pair of sizes finds its own distance and its own reach.
-    const kg = g.spec.H / 1.7, ks = s.spec.H / 1.7, avg = (kg + ks) / 2, Z = new V3(0, 0, 1);
-    standing(g, Math.PI / 2, 0, 0);
-    const lean = 0.14, pivotY = 0;
-    const placeS = x => {   // the subject faces the player (-X), the feet at x, the body tipped about them toward the player
-      standing(s, -Math.PI / 2, x, 0);
-      const feet = ['L', 'R'].map(sd => s.bones['foot' + sd].getWorldQuaternion(new T.Quaternion()));
-      const pivot = new V3(x, pivotY, 0), q = new T.Quaternion().setFromAxisAngle(Z, lean);
-      s.group.quaternion.premultiply(q); s.group.position.sub(pivot).applyQuaternion(q).add(pivot); s.group.updateMatrixWorld(true);
-      ['L', 'R'].forEach((sd, i) => { const f = s.bones['foot' + sd]; f.quaternion.copy(f.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(feet[i])); });
-      s.group.updateMatrixWorld(true);
-    };
-    // torso skin points of the subject, and the player's torso shapes: closer until they just meet
-    const geo = s.mesh.geometry, si = geo.attributes.skinIndex.array, sw = geo.attributes.skinWeight.array, pos = geo.attributes.position, chest = [];
-    for (let v = 0; v < pos.count; v += 3) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (sw[4 * v + m] > bw) { bw = sw[4 * v + m]; bb = si[4 * v + m]; } if (['pelvis', 'spine1', 'spine2', 'bustL', 'bustR'].includes(S.BONES[bb])) chest.push(v); }
-    const meet = () => {
-      const all = S.posedProxies(g), nE = g.proxies.ells.length, keep = all.filter((P, i) => { const b = i < nE ? g.proxies.ells[i].bone : g.proxies.cones[i - nE].bone; return ['pelvis', 'spine1', 'spine2', 'bustL', 'bustR'].includes(b); });
-      const vv = new V3(); let m = Infinity;
-      for (const i of chest) { vv.fromBufferAttribute(pos, i); s.mesh.boneTransform(i, vv); vv.applyMatrix4(s.mesh.matrixWorld); const p = [vv.x, vv.y, vv.z]; for (const P of keep) m = Math.min(m, S.primDist(p, P)); }
-      return m;
-    };
-    let x = 0.6 * avg; placeS(x);
-    for (let it = 0; it < 90 && meet() > 0.004; it++) { x -= 0.008; placeS(x); }
+    const { kg, ks } = placeClose(0.14);
     hold = () => {
       g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
       const at = (c, n) => c.bones[n].getWorldPosition(new V3());
