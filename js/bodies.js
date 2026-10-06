@@ -92,7 +92,7 @@ const BODIES = {
 // The player's own hands: who they appear as, chosen on the first screen. Never named. Both are in their forties or fifties, plainly and
 // conservatively dressed, the sort of figures the stories keep at the edge of the page: Mother Hubbard, and The Huntsman.
 const KEEPERS = {
-  a: { name: 'Mother Hubbard', label: 'Mother Hubbard: a woman in her forties, in a plum dress', make: () => {
+  a: { name: 'Mother Hubbard', label: 'Mother Hubbard: a woman in her forties, in jeans and a plum tank', make: () => {
     const m = S.clone(S.PRESETS.aya);
     A(m, { name: 'Mother Hubbard', height: 165, legs: 1.0, shoulders: 37, bust: 95, underbust: 78, cup: 4, waist: 72, hip: 103, glutes: 1.3, neck: 30, arm: 29, forearm: 23, wrist: 15, thigh: 57, knee: 37, calf: 35, ankle: 21,
       skin: 0xe6c6a8, youth: 0.05, brow: 0.3, lips: 0.95, cheeks: 0.9, jaw: 0.97,
@@ -102,13 +102,12 @@ const KEEPERS = {
     m.wardrobe = {
       bra: { kind: 'bra', name: 'Plain bodice', color: 0xe9e2d4, style: 'classic' },
       briefs: { kind: 'briefs', name: 'Cotton drawers', color: 0xe9e2d4, rise: 0.7, side: 1.0, back: 'brief', backCurve: 0.5 },
-      top: { kind: 'top', name: 'Plum dress, bodice', color: 0x5c3a56, from: 'hip', sleeves: 2 },
-      skirt: { kind: 'skirt', name: 'Plum dress, skirt', color: 0x5c3a56, above: 0.01, length: 0.45, flare: 0.05 },
-//      bottom: { kind: 'bottom', name: 'Jeans', color: 0x547085, legLen: 2.0, lowerTo: 'calf'},
-  //    top: { kind: 'top', name: 'Plum tank', color: 0x5c3a56, from: 'hip', sleeves: 0.25 },
+      // (the plum dress, a bodice and a long skirt, is set aside: a disciplinarian's skirt does not agree with the furniture)
+      bottom: { kind: 'bottom', name: 'Jeans', color: 0x547085, legLen: 2.0, lowerTo: 'calf' },
+      top: { kind: 'top', name: 'Plum tank', color: 0x5c3a56, from: 'hip', sleeves: 0.25 },
       shoes: { kind: 'shoes', name: 'Black buckled shoes', color: 0x1c1618 },
     };
-    m.looks = { Underwear: ['bra', 'briefs'], Everyday: ['bra', 'briefs', 'top', 'skirt', 'shoes'] }; m.look = 'Everyday';
+    m.looks = { Underwear: ['bra', 'briefs'], Everyday: ['bra', 'briefs', 'bottom', 'top', 'shoes'] }; m.look = 'Everyday';
     return m;
   } },
   b: { name: 'The Huntsman', label: 'The Huntsman: a man in his forties, in a white shirt and brown breeches', make: () => {

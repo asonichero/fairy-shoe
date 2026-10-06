@@ -138,7 +138,7 @@ function holdChairHands(s, plant) {
 
 // ── Setting up a discipline scene (the game and the editor both call these, so what is seen in one is what is in the other) ──
 // The subject's skirt in a discipline scene: the gathered back is driven by the body, the front and sides are cloth (see Starlight.setSkirtHybrid).
-const LAP_CLOTH_LIFT = 0.016;   // metres per layer of cloth between the subject and the disciplinarian's thighs, across the lap
+const LAP_BACK = -0.06;   // metres, for a 1.7 m subject: how far back along the lap she is set
 function prepareSubject(s) { if (s.skirt) S.setSkirtHybrid(s, true); }
 // Furniture in place, the seat under a seated disciplinarian, and the pose edits from js/poses.js. Returns `plant` (where the hands go on the chair).
 function furnishDiscipline(parent, scn, g, s, position, seatTop) {
@@ -150,10 +150,9 @@ function furnishDiscipline(parent, scn, g, s, position, seatTop) {
     // same flat (see skinPoints), not the glutes the shader has pressed away.
     const up = 0.009 * g.spec.H / 1.7;   // the pair sit a little higher: the thighs rest on the seat and not in it
     for (const c of [g, s]) { c.group.position.y += up; c.group.updateMatrixWorld(true); }
-    // Across the lap the subject's hips rest on the disciplinarian's thighs with the skin of each sunk into the other (the contact shader takes that up), so no
-    // cloth could be between them. With skirts on, the subject is laid higher by the thickness of what lies between: her own skirt and the disciplinarian's.
-    s.group.position.y += LAP_CLOTH_LIFT * (s.skirt ? 1 : 0) * (s.spec.H / 1.7) + LAP_CLOTH_LIFT * (g.skirt ? 1 : 0) * (s.spec.H / 1.7);
-    s.group.updateMatrixWorld(true);
+    // Across the lap the subject is slid 6 cm back along the lap (x): her body is clear of the disciplinarian's torso and the front of her skirt has room
+    // to hang between her thighs and the disciplinarian's. (Measured: her body inside theirs 13.6 mm deep → none.)
+    s.group.position.x += LAP_BACK * (s.spec.H / 1.7); s.group.updateMatrixWorld(true);
     const flat = scn.seatTop + (g.skirt ? 0.016 : 0.0015), pel = g.bones.pelvis.getWorldPosition(new T.Vector3());
     g.pressFloor = flat;
     S.setPress(g, new T.Vector3(pel.x, flat, pel.z), new T.Vector3(0, -1, 0), 0.24 * g.spec.H / 1.7, 1, '', null, 0, 0.09);
@@ -351,9 +350,6 @@ function createStage(viewEl, { onGLProblem } = {}) {
   const camera = new T.PerspectiveCamera(35, 1, 0.05, 40);
   const controls = new T.OrbitControls(camera, renderer.domElement); controls.enableDamping = true; controls.minDistance = 0.35; controls.maxDistance = 6; controls.maxPolarAngle = Math.PI * 0.55;
   const room = Room.buildRoom(scene);
-  // The debug scene is drawn without the room (walls, beams, hearth: none of it is needed to look at a pose and it costs frames): a plain ground instead.
-  const ground = new T.Mesh(new T.CircleGeometry(3, 48), new T.MeshStandardMaterial({ color: 0x3a3a42, roughness: 1 })); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; ground.visible = false; scene.add(ground);
-  const setEnvironment = on => { room.group.visible = !!on; ground.visible = !on; scene.background.set(on ? 0x120d08 : 0x24242a); };
   const resize = () => {
     const w = viewEl.clientWidth || 1, h = viewEl.clientHeight || 1;
     camera.aspect = w / h; camera.updateProjectionMatrix(); renderer.setSize(w, h);
@@ -415,7 +411,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
   // The editor draws its own things in the room: a per-frame callback keeps the loop going with or without a session.
   function loop(fn) { onFrame = fn; if (fn && !running) { running = true; last = performance.now(); requestAnimationFrame(frame); } if (!fn && !session) running = false; }
   function clearMarks() { for (const k of Object.keys(marks)) delete marks[k]; }
-  return { begin, end, loop, clearMarks, setCamera, setEnvironment, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
+  return { begin, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
 root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };

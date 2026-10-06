@@ -121,7 +121,7 @@ Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuff
 
 `editor.html` (linked from the title screen) is the Starlight character viewer, with the Fairy Shoe's cast in place of the stock bodies and no environment: just the figures on a plain floor. It has everything the viewer has:
 
-- **Characters**: the six residents and the player's two looks (Mother Hubbard, in a plum dress, and The Huntsman, in a white shirt and brown breeches, both in their forties), one at a time or in a line-up.
+- **Characters**: the six residents and the player's two looks (Mother Hubbard, in jeans and a plum tank, and The Huntsman, in a white shirt and brown breeches, both in their forties), one at a time or in a line-up.
 - **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.
 - **View**: skeleton, weights, wireframe, turntable, head camera.
 - **Discipline scene**: show it, loop the swing, smack, clear marks, sound; implements, disciplinarian, subject, position (lap, over the table, hands on head, hands on the chair, bent over with feet apart), beat, swing speed and holds, palm angle. The scene is the game's own: the editor runs the same session code as the game (`FairyShoeScene.createSession` in `js/scene.js`), with the bodies built from the designs being edited, so a change to the game's scenes shows here too. The furniture is the game's cottage chair and table.
@@ -136,8 +136,6 @@ What it adds is **reports**. Everything in the editor is a preview: nothing is s
 - **Pose report** turns the pose editor's Report into entries for `js/poses.js`, grouped by position (`lap`, `case`, `head`, `chair`, `spread`). An entry names whose pose it is (`subject` or `giver`, the player), the beat (`base` / `contact` for the subject; `relaxed` / `raised` / `contact` for the player) and the bones, as the engine's pose-table Euler degrees; where the scene itself drives a bone (the swinging arm's IK) the report uses the table value.
 - **Try a design in the preview**: paste a few fields as JSON (`{"height":172,"outfit":{"hair":"#5a1e12"}}`) or a whole preset as *Show as JSON* prints it. Objects merge, arrays replace, `null` removes a field, colours can be numbers, `0xrrggbb` or `"#rrggbb"`. *Revert this character* goes back to `js/bodies.js`.
 
-**Debug scene.** The menu has a *Debug scene* button: straight into the game's own discipline scene (the same session code, drawn without the room for speed) with the same giver, subject, position and implement choices, the beats, clothes and camera buttons, every joint posable (click a dot in the view or pick it from the list; sliders for its rotation and for moving the body), joints that can be anchored (held where they are while the rest is posed), and a *Make report* that lists what was changed in the form `js/poses.js` takes, plus how much of the subject's body and skirts overlap the giver and the furniture. Copy the report and paste it to Claude. Nothing is saved.
-
 ## Layout
 
 ```
@@ -149,7 +147,6 @@ js/edits.js           the editor's reports: parsing a pasted design or pose repo
 js/poses.js           pose edits (pasted from the editor's pose report)
 js/room.js            the cottage room, the chair and the table
 js/bodies.js          the residents' (and the player's) bodies, as Starlight presets
-js/debug.js           the debug scene (menu ▸ Debug scene)
 js/scene.js           the live-correction wrapper: cameras, rebuild-in-place, layers, pace and strength
 editor.html           the character editor: the Starlight viewer plus reports (js/editor-setup.js gives it the cast)
 js/ui.js              interface and game flow

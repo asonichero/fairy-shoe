@@ -5817,12 +5817,6 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   }
   skinPoints(ch, S);
   const bodies = everyone.filter(o => o !== ch && o.group.parent && o.group.visible && o.mesh && o.bones.pelvis.getWorldPosition(new THREE.Vector3()).distanceTo(hip) < 2.2).map(o => otherSkin(o, hip));
-  // Other people's cloth (their skirts) is solid too: its points, in a grid, each a small sphere the cloth is pushed out of.
-  const clothGrid = new Map(), CR = 0.026;
-  for (const o of everyone) {
-    const T = o !== ch && o.skirt && !o.skirt.off && o.skirt.p && o.skirt.mesh.visible && o.group.parent ? o.skirt : null; if (!T) continue;
-    for (let k = T.N; k < T.R * T.N; k++) { const key = cellKey(Math.floor(T.p[3 * k] / CR), Math.floor(T.p[3 * k + 1] / CR), Math.floor(T.p[3 * k + 2] / CR)); let c = clothGrid.get(key); if (!c) clothGrid.set(key, c = []); c.push(T.p[3 * k], T.p[3 * k + 1], T.p[3 * k + 2]); }
-  }
   const boxes = [], obbs = [];
   for (const o of solids.filter(Boolean)) {
     if (!o.userData || !o.userData.obb) { boxes.push(new THREE.Box3().setFromObject(o)); continue; }
@@ -5913,17 +5907,6 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     if (bp && best < T) { const g = [0, 0, 0], gl = grad(bp, q, g), push = T - best; for (let a = 0; a < 3; a++) q[a] += g[a] / gl * push; hit = true; }
     // Other bodies' skin (a hand, a thigh, an arm, whatever is near), by the same plane test as the wearer's own.
     for (const B of bodies) if (skinPush(B.wp, B.wn, B.grid, q)) hit = true;
-    if (clothGrid.size) {
-      const cx = Math.floor(q[0] / CR), cy = Math.floor(q[1] / CR), cz = Math.floor(q[2] / CR);
-      for (let ix = cx - 1; ix <= cx + 1; ix++) for (let iy = cy - 1; iy <= cy + 1; iy++) for (let iz = cz - 1; iz <= cz + 1; iz++) {
-        const c = clothGrid.get(cellKey(ix, iy, iz)); if (!c) continue;
-        for (let m = 0; m < c.length; m += 3) {
-          const dx = q[0] - c[m], dy = q[1] - c[m + 1], dz = q[2] - c[m + 2], d2 = dx * dx + dy * dy + dz * dz;
-          if (d2 >= CR * CR || d2 < 1e-10) continue;
-          const d = Math.sqrt(d2), f = (CR - d) / d; q[0] += dx * f; q[1] += dy * f; q[2] += dz * f; hit = true;
-        }
-      }
-    }
     // Hands (a capsule from wrist to fingertips): a palm comes down on top of the cloth.
     for (const P of hands) {
       const dx = q[0] - P.sc[0], dy = q[1] - P.sc[1], dz = q[2] - P.sc[2];
@@ -6042,14 +6025,6 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   // The cloth's own layers keep apart: once a frame is enough (folds persist), then one more collision so nothing ends inside the body.
   selfPass();
   for (let k = N; k < n; k++) if (!(S.hybrid ? (S.kinSet && S.kinSet.has(k)) : (S.gathered && S.pinned.has(k)))) collide(k);
-  // The cloth between its points: a triangle draped over a corner (the front edge of a seat, a table's edge, a thigh) has its points on both sides and
-  // its middle through it. Samples on every triangle are pushed clear of the same things the points are, each frame (see clearSkirt), and a point so moved
-  // keeps no speed from it.
-  {
-    const was = new Float32Array(p), X = skirtContext(ch, everyone.filter(o => o !== ch), solids, true); X.quick = true;
-    clearSkirt(ch, X, 3, true);
-    for (let i = 0; i < p.length; i++) if (p[i] !== was[i]) prev[i] = p[i];
-  }
   if (S.debug) {   // (for tests: how many particles are inside the body, and how far)
     let pc = 0, mp = 0;
     let wk = -1; for (let k = N; k < n; k++) { const h = ownPen(p[3 * k], p[3 * k + 1], p[3 * k + 2]); if (h && h[0] > 0.004) { pc++; if (h[0] > mp) { mp = h[0]; wk = k; } } }
@@ -6244,7 +6219,7 @@ function clearSkirt(ch, X, iters = 40, apply = true) {
   let res = { inside: 0, clipped: 0, points: 0, deepest: 0, worst: null };
   for (let it = 0; it < (apply ? iters : 1); it++) {
     res = { inside: 0, clipped: 0, points: 0, deepest: 0, worst: null };
-    const note = (a, at, what) => { if (a > SKIRT_TOL) { res.inside++; if (a > SKIRT_CLEAR + 0.0005) { res.clipped++; if (what === 'point') { res.points++; res.by = res.by || {}; res.by[X.src] = (res.by[X.src] || 0) + 1; } } if (a > res.deepest) { res.deepest = a; res.worst = { what: what + ' vs ' + X.src, at: at.map(v => +v.toFixed(3)) }; } return true; } return false; };
+    const note = (a, at, what) => { if (a > SKIRT_TOL) { res.inside++; if (a > SKIRT_CLEAR + 0.0005) { res.clipped++; res.by = res.by || {}; const kk = (what === 'point' ? '' : 'tri:') + X.src; res.by[kk] = (res.by[kk] || 0) + 1; if (what === 'point') res.points++; } if (a > res.deepest) { res.deepest = a; res.worst = { what: what + ' vs ' + X.src, at: at.map(v => +v.toFixed(3)) }; } return true; } return false; };
     X.own = own0;
     for (let k = N; k < n; k++) {
       if (fixed(k)) continue;
