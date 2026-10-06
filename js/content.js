@@ -537,6 +537,46 @@ const REOPEN = {
   },
 };
 
-root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN };
+// ── Afterwards: the scenes. By mood (rules.js fetchMood). `corner` and `lines` narrate how they are while it is done (the subject's bubble); `held` and `warm` are what the
+// player says (calming words, kind words); `bed` is how they leave the room, as it is read on the interstitial. {Name} {Subj} {Obj} {Poss} {Title} ─
+const AFTER_SCENES = {
+  corner: {
+    willing: ['{Name} stands very still with {Poss} fingers laced on top of {Poss} head, and does not fidget once. By the end {Subj} is breathing evenly.', '"I\'m thinking about it, {Title}. Properly." {Name} keeps {Poss} eyes on the join of the walls and means it.'],
+    sullen: ['{Name} stares at the wall as though it owed {Obj} something. Somewhere around the third minute {Poss} shoulders come down a little.', '{Name} mutters something to the corner. It does not answer. After a while neither of them is angry.'],
+    cheeky: ['{Name} counts the stones under {Poss} breath, loses count, and starts again. Once, quite quietly, {Subj} giggles at the wall.', '"Is this the good corner? It\'s a nice corner." {Name} falls silent, a minute later, with the air of someone who has run out of material.'],
+    flustered: ['{Name} fidgets for the first minute, and then, slowly, stops. The tension runs out of {Poss} shoulders a little at a time.', '{Name} whispers an apology to the wall, twice, and then simply breathes.'],
+    plain: ['{Name} waits in the corner with {Poss} hands on {Poss} head, and the room goes quiet round {Obj}.', '{Name} stands there, and thinks, and lets it settle.'],
+  },
+  lines: {
+    willing: ['{Name} bends over the page, tongue between {Poss} teeth, and writes every line as neatly as the first.', '"Nearly done, {Title}." {Name} does not hurry, and the last line is as careful as the first.'],
+    sullen: ['{Name} writes with the pen pressed down hard enough to dent the table. The lines come out straight, all the same.', '{Name} scowls at the paper, and writes, and by the fourth page the scowl has gone slack.'],
+    cheeky: ['{Name} writes the first lines in an enormous flourish, then in a cramped hand, then in a very good copy of {Poss} own signature, and then settles down and does them properly.', '"Do they have to be joined up?" {Name} asks no one. They do. {Subj} joins them up.'],
+    flustered: ['{Name} blots the first page and starts again, then again, and finally finds a rhythm and keeps it.', '{Name} writes, rubs a line out, and writes it again, and by the end {Poss} hand has stopped shaking.'],
+    plain: ['{Name} writes steadily, and the only sound is the scratch of the pen.', '{Name} works down the page one line at a time, and does not look up until the last one.'],
+  },
+  held: {
+    willing: ['"There. There now. You took it so well. It\'s over, and I\'m right here."', '"Breathe, {Name}. That\'s it. You\'ve done everything I asked, and I\'m proud of you."'],
+    sullen: ['"You don\'t have to say anything. I\'ve got you. It\'s done, and nothing between us is changed."', '"Let it go, {Name}. You can be cross tomorrow. For now, just let me hold you."'],
+    cheeky: ['"No jokes needed. It\'s over, and you were braver than you\'re letting on. Come here."', '"Shh. I know. I know. You\'re all right, you\'re all right."'],
+    flustered: ['"Slowly. In — and out. There\'s nothing more to do. It\'s all done, and you\'re safe."', '"Hush, now. You\'re shaking. Let me hold you until it passes."'],
+    plain: ['"It\'s done, {Name}. It\'s over. Breathe."', '"I\'ve got you. Take your time. There\'s no hurry at all."'],
+  },
+  warm: {
+    willing: ['"You did well, {Name}. I want you to know that I see how hard you try, and it matters to me."', '"Thank you for taking it as you did. I think a great deal of you."'],
+    sullen: ['"I know you don\'t agree with me. I only want you to know that this is not the end of how I think of you."', '"You may be angry; that\'s allowed. But you are not in trouble with me any more. We\'re square."'],
+    cheeky: ['"You\'re a handful, {Name}, and I wouldn\'t have you any other way. That\'s over, and I\'m glad you\'re here."', '"Come on, then. Fair is fair: you took it, and now it\'s done, and I\'m fond of you."'],
+    flustered: ['"You\'re doing better than you think, {Name}. Truly. Look at me — it\'s all right now."', '"It\'s over, and you did nothing wrong in how you bore it. I\'m not cross any more."'],
+    plain: ['"That\'s done with, {Name}. I won\'t hold it against you, and I hope you won\'t hold it against me."', '"You did what was asked. Thank you. We start fresh now."'],
+  },
+  bed: {
+    willing: ['{Name} nods, murmurs "Goodnight, {Title}," and goes up quietly, the stair creaking in the dark.', '"Thank you, {Title}." {Name} squeezes your hand, goes up to bed, and does not look back.'],
+    sullen: ['{Name} goes up without a word, and closes the door of the room a little harder than needed. After a minute the house is quiet.', '{Name} gives you one long look, and then goes to bed. There is no sound from upstairs.'],
+    cheeky: ['"Night, then." {Name} salutes from the stairs, and goes up, and only winces a little on the top step.', '{Name} makes a face at the stairs, and then makes a better one at you, and goes to bed.'],
+    flustered: ['{Name} stammers goodnight, gets halfway to the door, comes back to say sorry once more, and then finally goes up to bed.', '{Name} hurries up the stairs, and for a moment on the landing you hear {Obj} let out a breath.'],
+    plain: ['{Name} says goodnight and goes up to bed.', '{Name} gathers {Poss} things, nods to you, and goes quietly up the stairs.'],
+  },
+};
+
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

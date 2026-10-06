@@ -477,6 +477,111 @@ function createSession(scene, opts, env = {}) {
     return api;
 }
 
+
+// ── Afterwards: short staged scenes (see ui.js playAftercare) ─────
+// Two bodies in the room, set for one of the aftercare scenes, with the clothing the correction ended on. kind: 'corner' (subject alone in a corner, hands on head),
+// 'lines' (subject, fully dressed, writing at the table), 'held' (the two embracing, mid-room), 'warm' (subject standing, the player seated, eye to eye).
+// Returns a session-like object (tick, dispose) plus `view`, where the camera goes.
+function createTableau(scene, kind, opts, env = {}) {
+  const marks = env.marks || {}, L = opts.layers || {}, Y = new V3(0, 1, 0);
+  const mk = spec => S.buildCharacter(S.clone(spec), { voxel: 0.011, key: spec.name });
+  const g = mk(opts.giver), s = mk(opts.subject), both = [g, s], extras = [];
+  for (const c of both) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
+  const sv = marks[opts.subjectId]; if (sv) { s.marks = sv.marks; s.stripes = sv.stripes; S.copyMarks(s, s); }
+  prepareSubject(s);
+  const dressed = kind === 'lines';
+  S.setLowered(s, 'bottom', !dressed && !!L.bottoms); S.setLowered(s, 'briefs', !dressed && !!L.bottoms && !!L.briefs);
+  if (s.skirt) { const m = dressed ? 'down' : skirtMode(L.skirt); S.setSkirtOff(s, m === 'off'); if (m !== 'off') S.setSkirtGathered(s, m === 'up'); }
+  const yawQ = a => new T.Quaternion().setFromAxisAngle(Y, a), face = (dx, dz) => Math.atan2(dx, dz);
+  const place = (ch, a, x, z) => { ch.group.quaternion.copy(yawQ(a)); ch.group.position.set(x, 0, z); ch.group.updateMatrixWorld(true); };
+  const standing = (ch, a, x, z) => { S.setPose(ch, 'Relaxed', true); for (const b of S.BONES) ch.bones[b].quaternion.copy(ch.pose[b]); S.standAt(ch, yawQ(a), new V3(x, ch.spec.J.pelvis[1], z)); };
+  // a chair for a seated body (built to its size as the lap's is), set in the body's own frame and moved with it
+  const seated = (ch, a, x, z) => {
+    const probe = S.seatGiver(ch), top = probe.hipY - probe.rThigh * 0.99; probe.bench.parent && probe.bench.parent.remove(probe.bench); Room.disposeGroup(probe.bench);
+    ch.group.updateMatrixWorld(true);
+    const pel = ch.bones.pelvis.getWorldPosition(new V3()), knee = ch.bones.shinL.getWorldPosition(new V3()), ring = S.loftRing(ch.spec.prims[0], ch.spec.Y.belly), lw = 0.042;
+    const backZ = pel.z - ring[2] - 0.008, D = (knee.z + 0.01) - backZ + (0.03 + lw / 2), W = Math.max(0.44, 2 * (Math.abs(ch.bones.thighL.getWorldPosition(new V3()).x - pel.x) + 0.12));
+    const chair = Room.buildChair(top, W, D); chair.position.set(pel.x, 0, backZ - 0.03 - lw / 2 + D / 2);
+    const furn = new T.Group(); furn.add(chair); furn.position.set(x, 0, z); furn.rotation.y = a; scene.add(furn); extras.push(furn);
+    furn.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    ch.group.quaternion.copy(yawQ(a)); ch.group.position.set(x, ch.group.position.y, z);   // (it was built at the origin facing +Z: turned about there, then moved)
+    ch.group.updateMatrixWorld(true);
+    return { furn, top, pel };
+  };
+  let view = { pos: new V3(0, 1.4, 3), tgt: new V3(0, 1, 0), fov: 38 }, hold = () => {}, gaze = null;
+  if (kind === 'corner') {
+    g.group.visible = false; g.helper.visible = false;
+    const c = -Room.HALF + 0.62; standing(s, face(-1, -1), c, c); s.handsOnHead = true;
+    view = { pos: new V3(c + 1.9, 1.45, c + 1.9), tgt: new V3(c - 0.1, 1.1, c - 0.1), fov: 40 };
+  } else if (kind === 'lines') {
+    g.group.visible = false; g.helper.visible = false;
+    const st = seated(s, 0, 0, -0.1);
+    const table = Room.buildTable(0.74, -0.5, 0.5, 0.7); table.position.set(0, 0, 0.58); st.furn.add(table);
+    table.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    const paper = new T.Mesh(new T.PlaneGeometry(0.21, 0.297), new T.MeshStandardMaterial({ color: 0xf2ead6, roughness: 0.95 }));
+    paper.rotation.x = -Math.PI / 2; paper.position.set(0.02, 0.742, 0.44); st.furn.add(paper);
+    const pen = new T.Mesh(new T.CylinderGeometry(0.004, 0.004, 0.15, 6), new T.MeshStandardMaterial({ color: 0x20160e })); st.furn.add(pen);
+    S.setPose(s, 'Relaxed', false);
+    hold = (t) => {
+      s.group.updateMatrixWorld(true);
+      const nib = st.furn.localToWorld(new V3(0.02 + 0.045 * Math.sin(t * 1.9) + 0.015 * Math.sin(t * 7), 0.746, 0.46 + 0.03 * Math.sin(t * 0.45) + 0.012 * Math.sin(t * 9)));
+      const shR = s.bones.upperArmR.getWorldPosition(new V3()), shL = s.bones.upperArmL.getWorldPosition(new V3());
+      const dir = new V3(0, 0, 1).applyAxisAngle(Y, a0());
+      S.armIK(s, 'R', nib, shR.clone().add(new V3(0.35, -0.1, -0.3).applyAxisAngle(Y, a0())), new V3(0, 1, 0), dir.clone().add(new V3(0.5, 0, 0).applyAxisAngle(Y, a0())));
+      S.armIK(s, 'L', st.furn.localToWorld(new V3(-0.1, 0.746, 0.40)), shL.clone().add(new V3(-0.3, -0.1, -0.3).applyAxisAngle(Y, a0())), new V3(0, 1, 0), dir);
+      s.bones.neck.rotateX(0.55); s.bones.head.rotateX(0.35);   // head bent over the page
+      pen.position.copy(st.furn.worldToLocal(s.bones.handR.getWorldPosition(new V3()).add(new V3(0, -0.02, 0.0)))); pen.rotation.x = 0.8;
+    };
+    view = { pos: st.furn.localToWorld(new V3(1.5, 1.45, 1.55)), tgt: st.furn.localToWorld(new V3(0, 0.95, 0.3)), fov: 40 };
+  } else if (kind === 'held') {
+    const k = (g.spec.H + s.spec.H) / 2 / 1.7, gap = 0.31 * k;
+    standing(g, Math.PI / 2, -gap / 2, 0); standing(s, -Math.PI / 2, gap / 2, 0);
+    hold = () => {
+      for (const [a, b] of [[g, s], [s, g]]) {
+        a.group.updateMatrixWorld(true); b.group.updateMatrixWorld(true);
+        const back = new V3(a === g ? 1 : -1, 0, 0), out = b.bones.spine2.getWorldPosition(new V3()).addScaledVector(back, 0.1 * k);   // the partner's back
+        for (const [side, dy, dz] of [['R', 0.02, 0.07], ['L', -0.05, -0.06]]) {
+          const sh = a.bones['upperArm' + side].getWorldPosition(new V3());
+          const target = out.clone().add(new V3(0, dy, a === g ? (side === 'R' ? dz : dz) : -dz));
+          S.armIK(a, side, target, sh.clone().add(new V3(0, -0.1, side === 'R' ? 0.4 : -0.4)), back.clone(), new V3(0, 1, 0));
+        }
+      }
+      s.bones.neck.rotateY(-0.9 * (s.group.quaternion.y > 0 ? 1 : 1)); s.bones.neck.rotateX(0.15); g.bones.neck.rotateX(0.2);   // the subject's head laid against the player's shoulder
+    };
+    view = { pos: new V3(0.5, 1.35, 2.5), tgt: new V3(0, 1.15, 0), fov: 36 };
+  } else {   // 'warm'
+    const st = seated(g, 0, 0, -0.25);
+    standing(s, Math.PI, 0, 0.85);
+    hold = () => {
+      g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
+      S.lookAt(g, s.bones.head.getWorldPosition(new V3()), 0.9); S.lookAt(s, g.bones.head.getWorldPosition(new V3()), 0.9);
+    };
+    view = { pos: new V3(2.3, 1.3, 0.4), tgt: new V3(0, 1.05, 0.3), fov: 38 };
+  }
+  function a0() { return 0; }
+  // let the skirt (if any) settle once the pose is in
+  for (const c of both) c.group.updateMatrixWorld(true);
+  for (const c of both) if (c.skirt && c.group.visible) { try { S.settleSkirt(c, both.filter(o => o !== c), []); } catch (e) { /* the skirt is cosmetic here */ } }
+  return {
+    view, subject: s, giver: g,
+    tick(dt, t) {
+      for (const c of both) if (c.group.visible) S.animateCharacter(c, dt, t);
+      hold(t); 
+      for (const c of both) if (c.group.visible) { c.group.updateMatrixWorld(true); S.bustSpring(c, dt); }
+      const on = both.filter(c => c.group.visible);
+      for (const c of on) S.bustContact(c, on);
+      S.updateContacts(on);
+      const colliders = on.flatMap(S.bodyColliders);
+      for (const c of on) { S.hairStep(c, dt, colliders); S.faceStep && 0; S.skirtStep(c, dt, on, []); S.bunchStep(c); S.fadeMarks(c, 0); }
+    },
+    dispose() {
+      marks[opts.subjectId] = { marks: s.marks, stripes: s.stripes };
+      for (const c of both) { scene.remove(c.group, c.helper); S.disposeCharacter(c); }
+      for (const f of extras) { scene.remove(f); f.traverse(o => { if (o.isMesh) o.geometry.dispose(); }); }
+    },
+  };
+}
+
 // ── The stage ───────────────────────────────────────────────────
 function createStage(viewEl, { onGLProblem } = {}) {
   const renderer = new T.WebGLRenderer({ antialias: true });
@@ -546,12 +651,22 @@ function createStage(viewEl, { onGLProblem } = {}) {
     if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
     return api;
   }
+  // An aftercare scene (see createTableau) in place of the correction; the camera is taken to its view.
+  function tableau(kind, opts) {
+    if (session) session.dispose();
+    const t = createTableau(scene, kind, opts, { marks });
+    session = t;
+    const far = camera.aspect < 1 ? 1.6 : 1;   // (a tall, narrow view stands further back to keep both in frame)
+    cam.mode = 'free'; cam.go = { pos: t.view.tgt.clone().addScaledVector(t.view.pos.clone().sub(t.view.tgt), far), tgt: t.view.tgt, fov: t.view.fov }; cam.snap = true;
+    if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
+    return t;
+  }
   function end() { if (session) session.dispose(); session = null; if (!onFrame) running = false; }
   // The editor draws its own things in the room: a per-frame callback keeps the loop going with or without a session.
   function loop(fn) { onFrame = fn; if (fn && !running) { running = true; last = performance.now(); requestAnimationFrame(frame); } if (!fn && !session) running = false; }
   function clearMarks() { for (const k of Object.keys(marks)) delete marks[k]; }
-  return { begin, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
+  return { begin, tableau, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

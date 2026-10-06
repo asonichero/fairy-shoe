@@ -260,3 +260,11 @@ body.live #app > .hud { pointer-events: none; }
 .veil p.wait { opacity: .55; font-size: 15px; margin-top: 22px; }
 .veil button.primary { margin-top: 22px; min-width: 180px; }
 @keyframes lnIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Afterwards: on a phone the result is a pop-up over the room, as tall as it needs to be */
+@media (max-width: 800px) {
+  .resultwrap.side { position: fixed; inset: 0; width: 100%; height: auto; top: 0; background: rgba(8,6,10,.7); align-items: center; padding: 12px; overflow: auto; z-index: 30; }
+  .resultwrap.side .result { max-height: calc(100vh - 24px); overflow: auto; }
+}
+.hudcard.scenebar { left: 50%; right: auto; transform: translateX(-50%); bottom: 24px; text-align: center; min-width: 220px; }
+.hudcard.scenebar .hint { margin-bottom: 8px; }

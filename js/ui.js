@@ -38,10 +38,10 @@ function saveSettings() { store(SAVE_KEY + '.prefs', { title: app.title, keeper:
 function setScreen(node) { const a = $('#app'); a.replaceChildren(node); window.scrollTo(0, 0); }
 function showStage(on) { $('#stage').classList.toggle('on', on); if (on && app.stage) app.stage.resize(); }
 // A line of speech: shown, then faded after a reasonable time to read it (a couple of seconds plus about a third of a second a word).
-function say(id, text) {
+function say(id, text, label) {
   const s = $('#speech'); clearTimeout(app.speechT); s.classList.remove('fade');
   if (!text) { s.hidden = true; return; }
-  s.replaceChildren(h('b', {}, CH[id].name), fmt(text)); s.hidden = false;
+  s.replaceChildren(h('b', {}, label || CH[id].name), fmt(text)); s.hidden = false;
   const ms = 2800 + String(text).split(/\s+/).length * 330;
   app.speechT = setTimeout(() => { s.classList.add('fade'); app.speechT = setTimeout(() => { s.hidden = true; s.classList.remove('fade'); }, 900); }, ms);
 }
@@ -531,9 +531,11 @@ async function applyChanges(ses, want) {
 }
 function finishLive(ses, card) {
   const g = app.g, id = card.id;
+  const dress = { ...ses.layers };
   const done = ses.finish();
   const snap = R.applyCorrection(g, id, done);
   snap.changes = (ses.talkChanges || []).concat(snap.changes);
+  snap.layers = dress;   // (the state of dress the correction ended on, for the aftercare scenes)
   document.removeEventListener('keydown', onKey);
   save();
   // keep the room and the bodies on screen behind the result
@@ -553,6 +555,34 @@ function exitsBlock(exits) {
   return exits.map(n => h('div', { class: 'exit' + (n.type === 'word' ? ' word' : '') },
     n.type === 'word' ? CH[n.id].name + ' used the word. ' + fmt(C.SAYINGS.word[0]) + ' It stopped at once, and they are gone from the house.' : CH[n.id].name + ' has moved on. ' + fmt(CH[n.id].lines.leave)));
 }
+// On from the result: to the next resident's fate, the evening or the night.
+async function proceed(snap, wrap) { wrap.remove(); save(); await playScenes(snap.exits); teardownLive(); showStage(false); say(null, null); renderEvening(); }
+// One of the aftercare scenes: the effect is applied, the room is set for it, the words are said, and then back to the result with the rest.
+async function playAftercare(kind, snap, wrap, draw) {
+  const g = app.g, id = snap.id, S_ = g.chars[id].stats;
+  const r = R.applyAftercare(g, id, kind); if (!r) return;
+  (snap.done || (snap.done = {}))[kind] = true; (snap.lines = snap.lines || []).push(r.line); snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save();
+  wrap.hidden = true; say(null, null);
+  await busy('Setting the scene…', async () => {
+    await delay(50);
+    app.stage.tableau(kind, { giver: B.keeper(app.keeper), subject: B.spec(id), subjectId: id, layers: { ...(snap.layers || {}) } });
+  });
+  const mood = R.fetchMood(S_), pool = C.AFTER_SCENES[kind][mood] || C.AFTER_SCENES[kind].plain, raw = pool[Math.floor(app.rng() * pool.length)];
+  const text = tell(raw, id), you = kind === 'held' || kind === 'warm';
+  await delay(900);
+  const bar = h('div', { class: 'hud' }, h('div', { class: 'hudcard scenebar' }, h('div', { class: 'hint' }, you ? 'You speak.' : kind === 'corner' ? 'A few quiet minutes.' : 'Pen to paper.'), h('button', { class: 'primary', onclick: () => { bar.remove(); say(null, null); wrap.hidden = false; draw(); } }, 'Continue')));
+  $('#app').append(bar);
+  const wait = 1000 + String(text).split(/\s+/).length * 330;
+  if (you) say(id, text.replace(/^\s*/, ''), 'You'); else say(id, text);
+  const hide = $('#speech'); clearTimeout(app.speechT); app.speechT = setTimeout(() => hide.classList.add('fade'), wait + 4000);
+}
+// Sent to Bed: the room fades to a few lines about how they go, and then on, as Next does.
+async function sendToBed(snap, wrap) {
+  const id = snap.id, mood = R.fetchMood(app.g.chars[id].stats), pool = C.AFTER_SCENES.bed[mood] || C.AFTER_SCENES.bed.plain;
+  wrap.hidden = true; say(null, null);
+  const v = $('#veil'); v.replaceChildren(h('p', { class: 'ln', style: 'animation-delay:.3s' }, fmt(tell(pool[Math.floor(app.rng() * pool.length)], id))), h('button', { class: 'primary', style: 'opacity:0;animation:lnIn .9s 1.6s forwards', onclick: async () => { v.classList.remove('on'); await delay(450); v.hidden = true; v.replaceChildren(); proceed(snap, wrap); } }, 'Next'));
+  v.hidden = false; requestAnimationFrame(() => v.classList.add('on'));
+}
 function showResult(snap, { stage }) {
   const g = app.g, id = snap.id, d = CH[id];
   const wrap = h('div', { class: 'resultwrap' + (stage ? ' side' : '') });
@@ -568,10 +598,11 @@ function showResult(snap, { stage }) {
             : ['You brought them to ', h('b', {}, snap.reachedName), '; they needed ', h('b', {}, snap.expectedName), '.']),
         h('div', {}, snap.text + '.')] : null,
       (snap.lines || []).map(l => h('p', { class: 'say' }, l)), snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
-      canAfter ? [h('h4', {}, 'Afterwards'), h('div', { class: 'choices' }, Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
-        h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => { const r = R.applyAftercare(g, id, k); if (!r) return; snap.done[k] = true; (snap.lines = snap.lines || []).push(r.line); snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save(); draw(); } },
-          h('b', {}, a.name, h('span', { class: 'costtag' }, '● '.repeat(a.cost).trim())), h('span', {}, a.blurb))))] : null,
-      h('div', { class: 'row', style: 'margin-top:14px' }, candle(), h('span', { class: 'grow' }), h('button', { class: 'primary', onclick: async () => { wrap.remove(); save(); await playScenes(snap.exits); teardownLive(); showStage(false); say(null, null); renderEvening(); } }, 'Next'))].flat(Infinity).filter(Boolean));
+      canAfter ? [h('h4', {}, 'Afterwards'), h('div', { class: 'choices' }, [...Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
+        h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => playAftercare(k, snap, wrap, draw) },
+          h('b', {}, a.name, h('span', { class: 'costtag' }, '● '.repeat(a.cost).trim())), h('span', {}, a.blurb))),
+        h('button', { class: 'choice paper', onclick: () => sendToBed(snap, wrap) }, h('b', {}, 'Sent to Bed', h('span', { class: 'costtag' }, 'free')), h('span', {}, 'No more tonight. They go up, and that is that.'))])] : null,
+      !canAfter || Object.keys(snap.done || {}).length ? h('div', { class: 'row', style: 'margin-top:14px' }, candle(), h('span', { class: 'grow' }), h('button', { class: 'primary', onclick: () => proceed(snap, wrap) }, 'Next')) : h('div', { class: 'row', style: 'margin-top:14px' }, candle())].flat(Infinity).filter(Boolean));
   };
   draw(); wrap.append(body);
   if (!stage) { const s = h('div', { class: 'screen' }, header(candle()), wrap); setScreen(s); } else $('#app').append(wrap);
