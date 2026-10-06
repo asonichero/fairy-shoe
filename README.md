@@ -1,4 +1,4 @@
-# The Fairy Shoe
+# Birchwood House
 
 A halfway house for fairytale characters whose stories ended without a moral, or who never lived the one we know them
 for, and who find themselves, at eighteen or past it, unable to fit the strict adult world. You run the house. They
@@ -9,9 +9,14 @@ the Birchwood House spec, with one big change: **there are no cards**. Each even
 beginning, end and content are entirely the player's.
 
 **Everyone in the house is an adult (18+) who came in of their own accord, knowing what the house is for.** The
-runaway rule of the spec is the *word*: a safe word that can be used at any moment. When it is used the scene stops,
-the resident leaves the house, their stats reset to their starting spread and they go back in the pool of people who
-might arrive again. Nothing in the game overrides it.
+runaway rule of the spec is the *safe word*, "Red", which can be called at any moment. Every call stops the scene at
+once and costs them for real (Valued −2, Satisfaction −1, Composure −1, Resentment +1); on the second or third call
+(two if their Resentment is already 6 or more) they leave the house for good. Nothing in the game overrides it.
+
+The game ends when everyone has either moved on or left. Nobody who has done either comes back in: the house takes in
+whoever has not yet been through it (three at a time), and shrinks as the pool runs out. With fewer than three
+residents the morning ends once every resident is placed (not every slot), a shared chore cannot be done alone (it
+fails), and with one resident no shared chores are dealt. The final score is how many moved on.
 
 ## Run it
 
@@ -33,8 +38,8 @@ Any static server works; there is no build step. Each page shows a small `build 
 3. **Evening.** Each resident, in turn, shows their Behaviour Card (the day's chore, and any event). You choose:
    - **Sit them down**: a live correction, or
    - **Offer a word**: a reprieve (stern, kind, written reflection) that replaces the correction.
-4. **The night.** Anyone at Resentment 7 with Valued ≤ 2 uses the word. The house is refilled to three (unseen
-   characters first; once everyone has been through, those who moved on come back as fresh arrivals), and it's morning.
+4. **The night.** Anyone at Resentment 7 with Valued ≤ 2 calls the safe word. The house is refilled to three from
+   those who have not yet been through it, and it's morning (or the game is over, if no one is left).
 
 ## The live correction
 
@@ -63,7 +68,7 @@ they needed that evening:
 Trouble shifts the band up (a half-done or failed chore +1; an event +0 to +2; both stack, capped at +2). The "trap"
 events (someone hiding that they are not fine) need a gentle answer, not a hand. Match quality drives the stats exactly
 as in the spec (well-matched / undershoot / overshoot). Too harsh counts as a far overshoot, and if the resident's trust
-is already thin (Valued ≤ 3 or Resentment ≥ 5) they use the word on the spot.
+is already thin (Valued ≤ 3 or Resentment ≥ 5) they call the safe word on the spot (and the correction stops).
 
 **Guidance** (on by default, toggle in the header) shades the band the resident needs on the meter.
 
@@ -83,10 +88,10 @@ A skirt is simulated cloth (`SKIRT` and `skirtStep` in `starlight-engine.js`), a
 
 ### Goodbyes
 
-Moving on and using the word are scenes, not cards: the resident stands in the cottage room, a few beats of narration and talk play over it, and you get one choice that colours the parting. They play wherever it happens (after a result card, during the day, or overnight), before anyone new is introduced.
+Moving on and leaving by the safe word are scenes, not cards: the resident stands in the cottage room, a few beats of narration and talk play over it, and you get one choice that colours the parting. They play wherever it happens (after a result card, during the day, or overnight), before anyone new is introduced.
 
 - **Moving on**: each resident has their own opening, three answers to what you say (proud of them / what will they do first / just open the door), and a last image. Their closing line is the one from the Collection.
-- **The word**: the narration differs for a resident brought too far and one who has quietly reached the end of their patience. The options (thank them, ask if they need anything, step back and open the door) never try to talk anyone out of it, and the resident's replies follow how they were feeling (willing, sullen, cheeky, flustered, plain). It always ends with nothing held against them.
+- **The safe word (leaving)**: the narration differs for a resident brought too far and one who has quietly reached the end of their patience. The options (thank them, ask if they need anything, step back and open the door) never try to talk anyone out of it, and the resident's replies follow how they were feeling (willing, sullen, cheeky, flustered, plain). It always ends with nothing held against them.
 
 All of it is data in `js/content.js` (`SCENES`), assembled by `farewellScene` in `js/rules.js`.
 
@@ -119,7 +124,7 @@ Jack wears the collar and fastening on a short sleeve (`sleeves: 0.45`), no cuff
 
 ## Character editor
 
-`editor.html` (linked from the title screen) is the Starlight character viewer, with the Fairy Shoe's cast in place of the stock bodies and no environment: just the figures on a plain floor. It has everything the viewer has:
+`editor.html` (linked from the title screen) is the Starlight character viewer, with Birchwood House's cast in place of the stock bodies and no environment: just the figures on a plain floor. It has everything the viewer has:
 
 - **Characters**: the six residents and the player's two looks (Mother Hubbard, in jeans and a plum tank, and The Huntsman, in a white shirt and brown breeches, both in their forties), one at a time or in a line-up.
 - **Clothing**: looks, per-layer ticks and colours, skin tone. **Pose**: the pose library, hands on head, spread.

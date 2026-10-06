@@ -1,4 +1,4 @@
-// The Fairy Shoe — content: the cast, the chores, the event templates and the lines people say.
+// Birchwood House — content: the cast, the chores, the event templates and the lines people say.
 // Pure data, no DOM and no three.js, so the rules (and their tests) can run in Node.
 //
 // Everyone in the house is an adult (18+) who came in of their own accord, knowing what the house is
@@ -44,7 +44,7 @@ const CHARACTERS = {
   goldilocks: {
     id: 'goldilocks', name: 'Goldilocks', age: 24, pronouns: ['she', 'her', 'her', 'herself'],
     tagline: 'Nobody ever came home.',
-    story: 'The bears never came back early. Goldilocks ate the porridge, tried the chairs, broke one, slept in the smallest bed, and woke to find the house just as she had left it — nothing changed, nobody cross, no one to say it had mattered. She has been trying other people\'s houses ever since and finding fault with each of them. She came to the Fairy Shoe to see whether anywhere had a rule she could not talk her way around, and she knows what it costs to find out.',
+    story: 'The bears never came back early. Goldilocks ate the porridge, tried the chairs, broke one, slept in the smallest bed, and woke to find the house just as she had left it — nothing changed, nobody cross, no one to say it had mattered. She has been trying other people\'s houses ever since and finding fault with each of them. She came to Birchwood House to see whether anywhere had a rule she could not talk her way around, and she knows what it costs to find out.',
     base: { wil: 4, att: 3, res: 2, sat: 4, val: 2, com: 1 },
     grad: [['wil', '<=', 3], ['att', '>=', 4], ['val', '>=', 4]],
     pain: { tolerance: 0.5, resilience: 0.5 },
@@ -60,7 +60,7 @@ const CHARACTERS = {
   rapunzel: {
     id: 'rapunzel', name: 'Rapunzel', age: 26, pronouns: ['she', 'her', 'her', 'herself'],
     tagline: 'The prince never came.',
-    story: 'No prince ever climbed the tower, so Rapunzel cut her own hair and left it, and then she kept leaving: from one kind stranger to the next, into one unsafe room after another, because nobody had ever taught her how a person looks after herself. She looks nearly finished and is nothing of the kind. She came to the Fairy Shoe having decided, for once, to ask for something.',
+    story: 'No prince ever climbed the tower, so Rapunzel cut her own hair and left it, and then she kept leaving: from one kind stranger to the next, into one unsafe room after another, because nobody had ever taught her how a person looks after herself. She looks nearly finished and is nothing of the kind. She came to Birchwood House having decided, for once, to ask for something.',
     base: { wil: 2, att: 5, res: 4, sat: 2, val: 1, com: 3 },
     grad: [['val', '>=', 5]],
     pain: { tolerance: 0.35, resilience: 0.35 },
@@ -169,6 +169,12 @@ const CHORE_LINES = {
     '{Name} was given {Chore} to see to and, by evening, had very little to show for it but a long story about why.',
   ],
 };
+// A shared chore with nobody to share it: it cannot be done.
+const ALONE_LINES = [
+  '{Name} went to do {Chore} and found it was a job for two. {Subj} stood about with it for a while, and nothing got done.',
+  '{Chore} {is} no use to one pair of hands. {Name} tried it anyway, and by evening had little to show for it.',
+  '{Name} looked at {Chore}, looked round for someone to help, and found no one. It was left as it was.',
+];
 const PAIR_LINES = {
   well: ['{Name} and {Partner} did {Chore} together as if they had done it all their lives.', '{Name} and {Partner} found a rhythm over {Chore} and kept it all afternoon.'],
   completed: ['{Name} and {Partner} saw {Chore} through between them, with only a little muttering.', '{Name} and {Partner} did {Chore} side by side, and said hardly a word, which in this house is a kind of peace.'],
@@ -285,7 +291,7 @@ const SAYINGS = {
   under:   ['"Is that all, {Title}?"', '"Oh. Is that — are we done?"', '"I\'d braced for more, {Title}."'],
   over:    ['"That was… more than I needed, {Title}."', '"I\'d have listened with less, {Title}."', '"It\'s over. Please can it be over."'],
   harsh:   ['"Stop — please, {Title}. Please."'],
-  word:    ['"{Title}. The word. I\'m using the word."'],
+  word:    ['"{Title}. Red. I\'m calling it."'],
   nothing: ['"…Oh. All right, {Title}."'],
 };
 
@@ -372,13 +378,13 @@ const SCENES = {
       end: '{Name} walks out with {Poss} head up, not waiting for anyone to say that it is all right.',
     },
   },
-  // The word. Whatever you say, it is honoured; the options only colour the farewell.
+  // The safe word ("Red"), used for the last time. Whatever you say, it is honoured; the options only colour the farewell.
   word: {
     why: {
       harsh: '{Name} has stopped, and is standing up out of position. {Subj} is trembling a little, and perfectly clear.',
       worn: 'In the grey of the morning {Name} is standing at the foot of the stairs, with {Poss} bundle already packed. It is not a decision made in a hurry.',
     },
-    r: '"{Title}. The word. I\'m using the word."',
+    r: '"{Title}. Red. I\'m calling it."',
     n: 'It stops, entirely, the way it was always going to.',
     ask: [
       { label: 'Thank them for telling you', you: '"Thank you for telling me. Of course. It\'s done."', r: { willing: '"Thank you for stopping. I mean it."', sullen: '"…Thank you. I wasn\'t sure you would."', cheeky: '"Good. I wasn\'t sure how I\'d say it twice."', flustered: '"Thank you — thank you. I\'m sorry, I\'m not — thank you."', plain: '"Thank you. That\'s all I needed."' } },
@@ -400,7 +406,7 @@ const SCENES = {
 // ── Morning narration ───────────────────────────────────────────
 // A few sentences at the top of the morning: the weather in the house, one resident caught in the act of being themselves, and what wants doing.
 const MORNING = {
-  first: ['The door of the Fairy Shoe is open, the fire has been lit, and the kettle is making the small anxious noises of a kettle that has never yet been asked to do anything. Today, at last, the house has people in it.'],
+  first: ['The door of Birchwood House is open, the fire has been lit, and the kettle is making the small anxious noises of a kettle that has never yet been asked to do anything. Today, at last, the house has people in it.'],
   weather: [
     'Mist lies in the lane and the hens complain about it from under the hedge. The kitchen smells of woodsmoke and yesterday\'s bread.',
     'The sun gets in through the shutters in long gold bars, and every one of them has dust dancing in it. It is going to be a warm, sticky sort of day.',
@@ -584,6 +590,6 @@ const AFTER_NARR = {
   warm: ['You sit back in the chair and wait until {Name} lifts {Poss} eyes to yours. Then, gently:', 'You hold {Name}\'s gaze, and let a little of the sternness go out of your face. You say, kindly:', 'You look at {Name} for a moment, and your expression softens. You say:'],
 };
 
-root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR };
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR, ALONE_LINES };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -1,8 +1,8 @@
-// The Fairy Shoe — rules. Pure functions over a plain-JSON game state (so it saves and tests cleanly).
+// Birchwood House — rules. Pure functions over a plain-JSON game state (so it saves and tests cleanly).
 //
 // Day: Morning (generate the chore list, assign residents) → resolution (chores, graduations, events, graduations,
 // Behaviour Cards) → Evening (each resident in turn: a live correction, or a reprieve; then aftercare) → day boundary
-// (the word, backfill) → Morning.
+// (the safe word, backfill) → Morning.
 //
 // The correction itself is live (see scene.js); this module only scores what the player actually did: the highest
 // distress they brought the resident to, whether it tipped into too harsh, against what that resident needed that evening.
@@ -29,7 +29,7 @@ function weighted(rng, items) {   // items: [[value, weight], ...]
 
 // ── State ───────────────────────────────────────────────────────
 const cloneStats = s => ({ ...s });
-function freshChar(id) { return { stats: cloneStats(CHARACTERS[id].base), carry: {}, visits: 0, moveOns: 0 }; }
+function freshChar(id) { return { stats: cloneStats(CHARACTERS[id].base), carry: {}, visits: 0, moveOns: 0, safeWords: 0 }; }
 const pairKey = (a, b) => a < b ? a + '|' + b : b + '|' + a;
 const getRapport = (g, a, b) => g.rapport[pairKey(a, b)] != null ? g.rapport[pairKey(a, b)] : 4;
 const addRapport = (g, a, b, d) => { g.rapport[pairKey(a, b)] = clamp(getRapport(g, a, b) + d, 1, 7); };
@@ -39,7 +39,7 @@ function newGame(rng, opts = {}) {
   const g = {
     v: 1, day: 0, title: opts.title || 'Ma\'am', phase: 'new', rapport: {},
     chars: Object.fromEntries(ORDER.map(id => [id, freshChar(id)])),
-    roster: [], unseen: ORDER.slice(), collection: [],
+    roster: [], unseen: ORDER.slice(), collection: [], gone: [],
     chores: [], cards: [], queue: [], cursor: 0, candle: EVENING_CANDLE, notices: [], leftToday: [], history: [],
   };
   backfill(g, rng, true);
@@ -82,10 +82,14 @@ function changeStat(g, id, stat, delta, src, rec) {
 // ── Graduation and the word ─────────────────────────────────────
 const cmp = (v, op, t) => op === '>=' ? v >= t : v <= t;
 const meetsGraduation = (id, s) => CHARACTERS[id].grad.every(([k, op, t]) => cmp(s[k], op, t));
-// Resentment at the ceiling and Valued on the floor, together: they use the word.
+// Resentment at the ceiling and Valued on the floor, together: they call the safe word.
 const wordCalled = s => s.res >= 7 && s.val <= 2;
+// The safe word is "Red". Every use stops the correction and costs them for real; it takes this many to leave the house for good (fewer when they are already past patience).
+const SAFE_WORD = 'Red';
+const safeWordsToLeave = s => s.res >= 6 ? 2 : 3;
 
 function leave(g, id) { g.roster = g.roster.filter(r => r !== id); g.cards = g.cards.filter(c => c.id !== id); g.queue = g.queue.filter(q => q !== id); if (g.cursor > g.queue.length) g.cursor = g.queue.length; g.leftToday.push(id); }
+// Moved on or left: either way they are out of the pool for good; the house takes in whoever has not yet been through it.
 function moveOn(g, id) {
   leave(g, id);
   g.chars[id].moveOns++;
@@ -93,28 +97,31 @@ function moveOn(g, id) {
   const n = { type: 'moveon', id, text: CHARACTERS[id].name + ' has moved on.' };
   g.notices.push(n); return n;
 }
+// The safe word is called: what they carry takes a real hit, and on the second or third time they pack up and go (and do not come back).
 function useWord(g, id, why) {
-  const mood = fetchMood(stats(g, id));   // how they were, for the goodbye (their stats are reset below)
-  leave(g, id);
-  g.chars[id] = { ...freshChar(id), visits: g.chars[id].visits, moveOns: g.chars[id].moveOns };
-  if (!g.unseen.includes(id)) g.unseen.push(id);   // back in the pool, fully new; no fanfare, no memory
-  for (const o of ORDER) delete g.rapport[pairKey(id, o)];
-  const n = { type: 'word', id, why, mood, text: CHARACTERS[id].name + ' used the word and left.' };
+  const mood = fetchMood(stats(g, id));   // how they were, for the goodbye
+  const c = g.chars[id]; c.safeWords = (c.safeWords || 0) + 1;
+  const need = safeWordsToLeave(c.stats), rec = [];
+  changeStat(g, id, 'val', -2, 'safeword', rec); changeStat(g, id, 'sat', -1, 'safeword', rec); changeStat(g, id, 'com', -1, 'safeword', rec); changeStat(g, id, 'res', 1, 'safeword', rec);
+  if (c.safeWords >= need) {
+    leave(g, id);
+    if (!g.gone.includes(id)) g.gone.push(id);
+    const n = { type: 'word', id, why, mood, count: c.safeWords, text: CHARACTERS[id].name + ' called the safe word and left.' };
+    g.notices.push(n); return n;
+  }
+  const n = { type: 'safeword', id, why, mood, count: c.safeWords, need, changes: rec, text: CHARACTERS[id].name + ' called the safe word.' };
   g.notices.push(n); return n;
 }
 // After any change: whoever has met their threshold moves on at once (not telegraphed).
 function sweepMoveOns(g) { const out = []; for (const id of g.roster.slice()) if (meetsGraduation(id, stats(g, id))) out.push(moveOn(g, id)); return out; }
 
-// Refill to the house size. Unseen first; once every one has been through the house, graduates come back as fresh arrivals.
-// Someone who left today isn't drawn straight back unless there is no one else.
+// Refill to the house size from those who have not yet been through the house. Nobody comes back once they have moved on or left, so the house shrinks as the pool runs out.
 function backfill(g, rng, silent) {
   const arrived = [];
   while (g.roster.length < HOUSE_SIZE) {
-    const away = g.leftToday;
-    const pool = [g.unseen, g.collection.filter(id => !g.unseen.includes(id))].map(p => p.filter(id => !g.roster.includes(id))).find(p => p.length);
-    if (!pool) break;
-    const fresh = pool.filter(id => !away.includes(id));
-    const id = pick(rng, fresh.length ? fresh : pool);
+    const pool = g.unseen.filter(id => !g.roster.includes(id));
+    if (!pool.length) break;
+    const id = pick(rng, pool);
     g.unseen = g.unseen.filter(u => u !== id);
     g.chars[id] = { ...freshChar(id), visits: g.chars[id].visits + 1, moveOns: g.chars[id].moveOns };
     for (const o of ORDER) delete g.rapport[pairKey(id, o)];
@@ -123,11 +130,15 @@ function backfill(g, rng, silent) {
   }
   return arrived;
 }
+// The game is over when everyone has either moved on or left: the score is how many moved on.
+const isOver = g => g.roster.length === 0 && g.unseen.filter(id => !g.roster.includes(id)).length === 0;
+const score = g => g.collection.length;
 
 // ── Morning: the chore list ─────────────────────────────────────
 // A fresh list each morning with exactly one slot per resident; a paired chore takes two.
 function generateChores(g, rng) {
-  const slots = g.roster.length, list = [];
+  // One slot per resident; with fewer than three in the house the list keeps three slots' worth (the day ends when every resident is placed, not every slot), and with one resident nothing is shared.
+  const n0 = g.roster.length, slots = n0 === 0 ? 0 : Math.max(n0, 3) - (n0 === 1 ? 1 : 0), list = [];
   let left = slots;
   const early = g.day <= 2;
   const solo = CHORES.filter(c => !c.paired), paired = CHORES.filter(c => c.paired);
@@ -137,7 +148,7 @@ function generateChores(g, rng) {
     const c = weighted(rng, options); used.add(c.id); return c;
   };
   while (left > 0) {
-    const wantPair = left >= 2 && rng() < 0.4 && paired.some(c => !used.has(c.id));
+    const wantPair = n0 >= 2 && left >= 2 && rng() < 0.4 && paired.some(c => !used.has(c.id));
     const def = draw(wantPair ? paired : solo);
     const n = def.paired ? 2 : 1;
     list.push({ id: def.id, def, slots: Array(n).fill(null) });
@@ -158,7 +169,7 @@ function assign(g, choreIdx, slotIdx, id) {
   ch.slots[slotIdx] = id; return true;
 }
 function unassign(g, id) { for (const ch of g.chores) ch.slots = ch.slots.map(s => s === id ? null : s); }
-const allAssigned = g => g.chores.length > 0 && g.chores.every(ch => ch.slots.every(Boolean));
+const allAssigned = g => g.roster.length > 0 && g.roster.every(id => g.chores.some(ch => ch.slots.includes(id)));   // (every resident placed; some chores may stand empty with fewer than three in the house)
 const choreOf = (g, id) => g.chores.find(ch => ch.slots.includes(id));
 
 // ── Chore resolution ────────────────────────────────────────────
@@ -168,7 +179,7 @@ function choreBand(diff, eff) {
   return eff >= w ? 'well' : eff >= c ? 'completed' : eff >= p ? 'partial' : 'failed';
 }
 function choreEffective(g, ch) {
-  const effs = ch.slots.map(id => effectiveAttention(stats(g, id)));
+  const effs = ch.slots.filter(Boolean).map(id => effectiveAttention(stats(g, id)));
   let v = Math.min(...effs.map(e => e.value)), r = null;
   if (ch.slots.length === 2) { r = getRapport(g, ch.slots[0], ch.slots[1]); v = clamp(v + (r >= 6 ? 1 : r <= 2 ? -1 : 0), 1, 7); }
   return { eff: v, rapport: r };
@@ -181,9 +192,11 @@ function applyChoreBand(g, id, band, diff, rec) {
 function resolveChores(g) {
   const out = {};
   for (const ch of g.chores) {
+    const who = ch.slots.filter(Boolean); if (!who.length) continue;   // (nobody on it today)
+    if (ch.def.paired && who.length < 2) { ch.band = 'failed'; ch.eff = 0; ch.alone = true; for (const id of who) { applyChoreBand(g, id, 'failed', ch.def.diff); out[id] = { chore: ch, band: 'failed' }; } continue; }   // a shared chore cannot be done alone
     const { eff } = choreEffective(g, ch), band = choreBand(ch.def.diff, eff);
     ch.band = band; ch.eff = eff;
-    for (const id of ch.slots) { applyChoreBand(g, id, band, ch.def.diff); out[id] = { chore: ch, band }; }
+    for (const id of who) { applyChoreBand(g, id, band, ch.def.diff); out[id] = { chore: ch, band }; }
   }
   return out;
 }
@@ -252,8 +265,8 @@ function rollEvents(g, rng) {
 
 // ── Behaviour Cards ─────────────────────────────────────────────
 function choreLine(g, id, entry, rng) {
-  const def = CHARACTERS[id], ch = entry.chore, partnerId = ch.slots.find(s => s !== id);
-  const pool = ch.slots.length === 2 ? C.PAIR_LINES[entry.band] : C.CHORE_LINES[entry.band];
+  const def = CHARACTERS[id], ch = entry.chore, partnerId = ch.slots.find(s => s && s !== id);
+  const pool = ch.alone ? C.ALONE_LINES : ch.slots.length === 2 ? C.PAIR_LINES[entry.band] : C.CHORE_LINES[entry.band];
   const t = pick(rng, pool);
   const pl = !!ch.def.plural, agree = { '{was}': pl ? 'were' : 'was', '{is}': pl ? 'are' : 'is', '{It}': pl ? 'They' : 'It', '{it}': pl ? 'them' : 'it' };
   const out = fillTemplate(t.replace(/\{(was|is|It|it)\}/g, m => agree[m]).replace('{Chore}', ch.def.phrase).replace('{Partner}', partnerId ? CHARACTERS[partnerId].name : ''), { name: def.name, pron: def.pronouns, title: g.title });
@@ -331,11 +344,12 @@ function applyCorrection(g, id, done) {
   const q = matchQuality(reached, expected, done.tooHarsh);
   const rec = [];
   applyMatch(g, id, q, rec);
-  // Too harsh, with the trust already worn thin: they use the word, then and there.
+  // Too harsh, with the trust already worn thin: they call the safe word, then and there (and the correction stops).
   const word = !!done.tooHarsh && (g.chars[id].stats.val <= 3 || g.chars[id].stats.res >= 5);
   if (card) card.done = true;
   const snap = { id, kind: 'correction', expected, reached, expectedName: BANDS[expected], reachedName: reached > 4 ? 'Too harsh' : BANDS[reached], quality: q, text: MATCH_TEXT[q], smacks: done.smacks || 0, tooHarsh: !!done.tooHarsh, word, changes: rec, exits: [] };
   if (word) snap.exits.push(useWord(g, id, 'harsh')); else snap.exits.push(...sweepMoveOns(g));
+  snap.safeWord = word;
   return snap;
 }
 
@@ -425,7 +439,7 @@ const FETCH_REPLIES = {
     plain: ['"All right." {Name} fetches it and holds it out.'],
   },
   tell: {
-    willing: ['"Yes, {Title}." {Name} is back before the word has gone cold.'],
+    willing: ['"Yes, {Title}." {Name} is back before the order has gone cold.'],
     sullen: ['"Fine." {Name} goes, and the door is closed a little harder than it needs to be.'],
     cheeky: ['"Is that an order?" {Name} goes, in no hurry, and is back with a look that says the answer is yes.'],
     flustered: ['{Name} nods too many times and goes. It is plainly easier, somehow, to be told.'],
@@ -487,12 +501,12 @@ function endEvening(g, rng) {
   // The word is spoken at the day boundary, before the next chore list is dealt.
   for (const id of g.roster.slice()) if (wordCalled(stats(g, id))) useWord(g, id, 'worn');
   backfill(g, rng);
-  g.phase = 'boundary';
+  g.phase = isOver(g) ? 'over' : 'boundary';
   return g.notices.slice();
 }
 
 const api = { mulberry32, pick, shuffle, weighted, clamp, HOUSE_SIZE, EVENING_CANDLE, BANDS, BAND_CUTS, MATCH_TEXT,
-  newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, sweepMoveOns, moveOn, useWord, backfill,
+  newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, SAFE_WORD, safeWordsToLeave, isOver, score, sweepMoveOns, moveOn, useWord, backfill,
   generateChores, startMorning, assign, unassign, allAssigned, choreOf, choreBand, choreEffective, applyChoreBand, resolveChores, resolveDay,
   occurrence, categoryWeights, fillTemplate, makeEvent, applyEvent, rollEvents, situationalModifier, buildCards,
   wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, choreLineFor: choreLine, morningNarration, farewellScene, fetchMood, reopenLine, toneFor, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,

@@ -1,4 +1,4 @@
-// The Fairy Shoe — bodies. Each resident (and the player's own hands) is a Starlight preset, built from one of the engine's
+// Birchwood House — bodies. Each resident (and the player's own hands) is a Starlight preset, built from one of the engine's
 // stock bodies with the measurements, colouring and clothes of the person. All adult builds.
 (function (root) {
 'use strict';

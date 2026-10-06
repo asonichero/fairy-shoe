@@ -1,4 +1,4 @@
-// The Fairy Shoe — the room, and the wooden furniture in it.
+// Birchwood House — the room, and the wooden furniture in it.
 // A bare room in a medieval cottage: stone and lime-wash walls, a boarded floor, a beamed ceiling, one window, a hearth and
 // a door. The furniture is plain cottage joinery: a plank-seated chair (the one the player sits in, and the one a resident
 // can bend over) and a trestle-style table (what a resident bends over at full height). Everything is built from boxes and

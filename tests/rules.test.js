@@ -121,14 +121,15 @@ test('a well-matched correction settles the resident; with Valued low it does no
   assert.deepEqual([g.chars.red.stats.wil, g.chars.red.stats.res, g.chars.red.stats.val], [3, 3, 4]);
 });
 
-test('overshoot costs resentment; far overshoot costs trust; too harsh with thin trust is the word', () => {
+test('overshoot costs resentment; far overshoot costs trust; too harsh with thin trust calls the safe word', () => {
   const g = house(['jack', 'goldilocks', 'snow']); withCard(g, 'goldilocks', {});
   const r = R.applyCorrection(g, 'goldilocks', { peak: 1.3 });
   assert.equal(r.quality, 'over2'); assert.equal(g.chars.goldilocks.stats.res, 4); assert.equal(g.chars.goldilocks.stats.val, 1);
   const g2 = house(['jack', 'goldilocks', 'snow']); withCard(g2, 'goldilocks', {});
   const r2 = R.applyCorrection(g2, 'goldilocks', { peak: 1.6, tooHarsh: true });
-  assert.ok(r2.word); assert.ok(!g2.roster.includes('goldilocks')); assert.ok(g2.unseen.includes('goldilocks'));
-  assert.deepEqual(g2.chars.goldilocks.stats, C.CHARACTERS.goldilocks.base);
+  // the first call stops it and costs them, but they stay: it takes two or three to leave
+  assert.ok(r2.word); assert.ok(g2.roster.includes('goldilocks')); assert.equal(g2.chars.goldilocks.safeWords, 1);
+  assert.ok(g2.chars.goldilocks.stats.val < C.CHARACTERS.goldilocks.base.val || g2.chars.goldilocks.stats.val === 1);
 });
 
 test('too harsh with trust intact is a heavy overshoot but not the word', () => {
@@ -175,34 +176,51 @@ test('moving on is found on any stat change, removes the resident, and is perman
   assert.equal(out.length, 1); assert.ok(!g.roster.includes('goldilocks')); assert.deepEqual(g.collection, ['goldilocks']);
 });
 
-test('backfill: unseen first, then graduates return as fresh arrivals; the collection stays unique', () => {
+test('backfill draws only from those not yet through the house; nobody comes back once moved on or left', () => {
   const g = house(['red', 'jack', 'snow']);
   g.unseen = ['goldilocks'];
-  R.moveOn(g, 'red'); g.leftToday = [];
+  R.moveOn(g, 'red');
   R.backfill(g, rng(1)); assert.deepEqual(g.roster.slice().sort(), ['goldilocks', 'jack', 'snow']);
-  // everything has been through: the unseen pool is empty, graduates cycle back
-  g.unseen = []; g.chars.red.stats.wil = 1;
-  R.moveOn(g, 'jack'); g.leftToday = [];
-  const arrived = R.backfill(g, rng(2));
-  assert.equal(g.roster.length, 3); assert.ok(arrived.length === 1);
-  assert.deepEqual(g.chars[arrived[0]].stats, C.CHARACTERS[arrived[0]].base);
+  // the pool is empty: the house simply shrinks
+  R.moveOn(g, 'jack'); R.backfill(g, rng(2));
+  assert.equal(g.roster.length, 2); assert.ok(!g.roster.includes('red') && !g.roster.includes('jack'));
   assert.equal(new Set(g.collection).size, g.collection.length);
 });
 
-test('someone who just left is not drawn straight back', () => {
-  for (let s = 1; s < 40; s++) {
-    const g = house(['red', 'jack', 'snow'], s); g.unseen = ['goldilocks', 'hans'];
-    R.useWord(g, 'red', 'worn');   // red goes back to the pool, alongside the other two
-    R.backfill(g, rng(s)); assert.ok(!g.roster.includes('red'));
-  }
+test('the safe word: costs them each time, leaves for good at the second or third call, and the game ends when everyone has moved on or left', () => {
+  const g = house(['red', 'jack']); g.unseen = [];
+  const before = { ...g.chars.red.stats };
+  const n1 = R.useWord(g, 'red', 'harsh');
+  assert.equal(n1.type, 'safeword'); assert.ok(g.roster.includes('red'));
+  assert.ok(g.chars.red.stats.val < before.val || before.val === 1); assert.ok(g.chars.red.stats.res > before.res || before.res === 7);
+  const need = R.safeWordsToLeave(g.chars.red.stats);
+  assert.ok(need === 2 || need === 3);
+  let n = n1; for (let i = 1; i < need; i++) n = R.useWord(g, 'red', 'harsh');
+  assert.equal(n.type, 'word'); assert.ok(!g.roster.includes('red')); assert.ok(g.gone.includes('red'));
+  R.backfill(g, rng(3)); assert.ok(!g.roster.includes('red'));
+  assert.ok(!R.isOver(g));
+  R.moveOn(g, 'jack'); assert.ok(R.isOver(g)); assert.equal(R.score(g), 1);
 });
 
-test('the word at the day boundary: Resentment 7 and Valued 2, together', () => {
+test('fewer than three residents: a shared chore never appears for one, and a shared chore done alone fails', () => {
+  for (let s = 1; s < 60; s++) {
+    const g = house(['red'], s); g.unseen = [];
+    const list = R.generateChores(g, rng(s)); assert.ok(list.length >= 1 && list.every(c => !c.def.paired));
+  }
+  const g2 = house(['red', 'jack'], 5); g2.unseen = [];
+  g2.chores = [{ id: 'x', def: C.CHORES.find(c => c.paired), slots: [null, null] }, { id: 'y', def: C.CHORES.find(c => !c.paired), slots: [null] }, { id: 'z', def: C.CHORES.find(c => !c.paired && c.id !== 'y'), slots: [null] }];
+  R.assign(g2, 0, 0, 'red'); assert.ok(!R.allAssigned(g2));
+  R.assign(g2, 1, 0, 'jack'); assert.ok(R.allAssigned(g2));   // every resident placed; the shared chore stands half-empty
+  const out = R.resolveChores(g2); assert.equal(out.red.band, 'failed'); assert.ok(g2.chores[0].alone);
+});
+
+test('the safe word at the day boundary: Resentment 7 and Valued 2, together, costs them and counts; leaving takes more than one call', () => {
   const g = house(['red', 'jack', 'snow']); g.unseen = ['goldilocks', 'hans', 'rapunzel'];
   g.chars.red.stats.res = 7; g.chars.red.stats.val = 3; g.chars.jack.stats.res = 7; g.chars.jack.stats.val = 2; withCard(g, 'red', { done: true });
   R.endEvening(g, rng(5));
-  assert.ok(g.roster.includes('red')); assert.ok(!g.roster.includes('jack')); assert.equal(g.roster.length, 3);
-  assert.deepEqual(g.chars.jack.stats, C.CHARACTERS.jack.base); assert.ok(g.unseen.includes('jack'));
+  assert.ok(g.roster.includes('red')); assert.ok(g.roster.includes('jack')); assert.equal(g.chars.jack.safeWords, 1);
+  g.chars.jack.stats.res = 7; g.chars.jack.stats.val = 2; R.endEvening(g, rng(6));   // called again: they have had enough
+  assert.ok(!g.roster.includes('jack')); assert.ok(g.gone.includes('jack')); assert.ok(!g.unseen.includes('jack'));
 });
 
 test('reprieves and aftercare spend the evening candle and cannot be bought past it', () => {
@@ -227,26 +245,29 @@ test('Rapunzel only moves on through Valued', () => {
   s.val = 5; assert.ok(R.meetsGraduation('rapunzel', s));
 });
 
-test('a whole simulated run never strands the house, and every day resolves', () => {
+test('a whole simulated run ends, every day resolves, and the score is how many moved on', () => {
   for (let seed = 1; seed <= 40; seed++) {
     const r = rng(seed), g = R.newGame(r);
-    for (let day = 0; day < 60; day++) {
-      R.startMorning(g, r); assert.equal(g.roster.length, 3, 'seed ' + seed + ' day ' + day);
-      let k = 0; const order = R.shuffle(r, g.roster);
-      g.chores.forEach((c, i) => c.slots.forEach((_, j) => R.assign(g, i, j, order[k++])));
-      assert.ok(R.allAssigned(g));
+    let day = 0;
+    for (; day < 200 && !R.isOver(g); day++) {
+      R.startMorning(g, r); assert.ok(g.roster.length >= 1 && g.roster.length <= 3, 'seed ' + seed + ' day ' + day);
+      // every resident placed on some free slot (some chores may stand empty with fewer than three)
+      for (const id of R.shuffle(r, g.roster)) { for (let i = 0; i < g.chores.length; i++) { const j = g.chores[i].slots.indexOf(null); if (j >= 0) { R.assign(g, i, j, id); break; } } }
+      assert.ok(R.allAssigned(g), 'seed ' + seed + ' day ' + day);
       R.resolveDay(g, r);
       for (const card of R.pendingCards(g).slice()) {
         if (!g.roster.includes(card.id)) continue;
         const roll = r();
         if (roll < 0.15) R.applyReprieve(g, card.id, ['stern', 'kind', 'reflection'][Math.floor(r() * 3)]);
-        else R.applyCorrection(g, card.id, { peak: r() * 1.7, tooHarsh: r() < 0.03 });
+        else R.applyCorrection(g, card.id, { peak: r() * 1.7, tooHarsh: r() < 0.1 });
         if (g.roster.includes(card.id) && r() < 0.5) R.applyAftercare(g, card.id, ['corner', 'lines', 'held', 'warm'][Math.floor(r() * 4)]);
       }
       R.endEvening(g, r);
       for (const id of g.roster) for (const k2 of C.STATS) assert.ok(g.chars[id].stats[k2] >= 1 && g.chars[id].stats[k2] <= 7);
+      assert.equal(new Set(g.collection).size, g.collection.length);
     }
-    assert.equal(new Set(g.collection).size, g.collection.length);
+    assert.ok(R.isOver(g), 'seed ' + seed + ' did not finish');
+    assert.equal(R.score(g), g.collection.length); assert.equal(g.collection.length + g.gone.length, C.ORDER.length);
   }
 });
 
@@ -266,10 +287,10 @@ test('farewell scenes: every resident, both kinds, every mood, filled and with a
   }
 });
 
-test('the word notice carries how they were, captured before the reset', () => {
+test('the safe word notice carries how they were', () => {
   const g = house(['jack', 'red', 'snow']); g.chars.jack.stats.res = 7; g.chars.jack.stats.val = 2;
   const n = R.useWord(g, 'jack', 'worn');
-  assert.equal(n.mood, 'sullen'); assert.deepEqual(g.chars.jack.stats, C.CHARACTERS.jack.base);
+  assert.equal(n.mood, 'sullen');
 });
 
 test('behaviour report lines: every chore, band and template reads grammatically', () => {

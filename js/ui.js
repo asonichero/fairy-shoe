@@ -1,10 +1,11 @@
-// The Fairy Shoe — interface and game flow.
+// Birchwood House — interface and game flow.
 (function () {
 'use strict';
 const R = window.FairyShoeRules, C = window.FairyShoeContent, B = window.FairyShoeBodies, SC = window.FairyShoeScene;
 const CH = C.CHARACTERS;
 const SAVE_KEY = 'fairyshoe.v1';
 const DEFAULT_TITLE = 'Ma\'am';
+const KEEPER_TITLE = { a: 'Ma\'am', b: 'Sir' };   // (what each of the two is called to begin with)
 const TITLE_CHIPS = ['Ma\'am', 'Sir', 'Matron', 'Keeper', 'Miss', 'Mister'];
 const COLOURS = { red: '#b02828', goldilocks: '#b8922f', rapunzel: '#7e6bb0', jack: '#4a7d38', hans: '#7d7c6c', snow: '#2f4d9c' };
 
@@ -56,7 +57,7 @@ function closeModal() { const o = $('#overlay'); o.hidden = true; o.replaceChild
 function header(extra) {
   const g = app.g;
   return h('div', { class: 'bar' },
-    h('h1', {}, 'The Fairy Shoe'), h('span', { class: 'day' }, g.day ? 'Day ' + g.day : ''),
+    h('h1', {}, 'Birchwood House'), h('span', { class: 'day' }, g.day ? 'Day ' + g.day : ''),
     h('span', { class: 'grow' }), extra || null,
     h('button', { class: 'quiet', onclick: showCollection }, 'Collection (' + g.collection.length + '/' + C.ORDER.length + ')'),
     h('button', { class: 'quiet', onclick: showRules }, 'How it works'),
@@ -76,16 +77,16 @@ function showIntro() {
   const saved = recall(SAVE_KEY);
   const input = h('input', { type: 'text', maxlength: 24, value: app.title, 'aria-label': 'What the residents call you', oninput: e => { app.title = e.target.value.trim().slice(0, 24) || DEFAULT_TITLE; } });
   const chips = h('div', { class: 'chips' }, TITLE_CHIPS.map(t => h('button', { onclick: () => { input.value = t; app.title = t; } }, t)));
-  const keepers = h('div', { class: 'keepers' }), paint = () => keepers.replaceChildren(...Object.entries(B.KEEPERS).map(([k, v]) => h('button', { class: app.keeper === k ? 'on' : '', onclick: () => { app.keeper = k; paint(); } }, v.label)));
+  const keepers = h('div', { class: 'keepers' }), paint = () => keepers.replaceChildren(...Object.entries(B.KEEPERS).map(([k, v]) => h('button', { class: app.keeper === k ? 'on' : '', onclick: () => { app.keeper = k; app.title = KEEPER_TITLE[k] || DEFAULT_TITLE; input.value = app.title; paint(); } }, v.label)));
   paint();
   setScreen(h('div', { class: 'screen wash' }, h('div', { class: 'intro' },
-    h('h1', {}, 'The Fairy Shoe'),
+    h('h1', {}, 'Birchwood House'),
     h('p', { class: 'lede' }, 'A halfway house, and you run it. The people who find their way to your door are the ones the stories left behind: characters whose tales ended without a moral, or who never lived the one we know them for. Now they are grown, and the strict adult world has no room for them. They come here to be set straight, and you are the one who does it, by hand, in your own time.'),
     h('div', { class: 'panel consent' }, h('h3', {}, 'The house rules, before anything else'),
       h('p', {}, h('b', {}, 'Everyone here is an adult. '), 'Every resident is over eighteen, arrived of their own accord, and understood what the house is and what happens in it before they came in.'),
-      h('p', {}, h('b', {}, 'The word. '), 'Anyone can use the word at any moment. When they do, it stops, they leave, and the house starts over with someone new. The game never overrules it, and neither should you.')),
+      h('p', {}, h('b', {}, 'The safe word is “Red”. '), 'Anyone can call it at any moment. When they do, it stops at once and it costs them: Valued, Satisfaction and Composure fall and Resentment rises. Two or three calls and they leave for good. The game never overrules it, and neither should you.')),
     h('div', { class: 'panel' }, h('h3', {}, 'What should they call you?'),
-      h('p', {}, 'You are never named in the house. The residents will say whatever you choose here.'), input, chips),
+      input, chips),
     h('div', { class: 'panel' }, h('h3', {}, 'Your hands'), h('p', {}, 'Who you appear as in the room.'), keepers),
     h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => { saveSettings(); startNew(); } }, 'Open the door'),
@@ -135,22 +136,37 @@ function continueGame(saved) {
   app.g.title = app.title; app.selected = null;
   // Back to wherever the game was left: the chore list, the evening's corrections, or the night between (which is finished off, as it would have been).
   const g = app.g;
-  if (g.phase === 'evening') renderEvening();
+  if (g.phase === 'over' || R.isOver(g)) showEnd();
+  else if (g.phase === 'evening') renderEvening();
   else if (g.phase === 'boundary') { const n = g.notices || []; if (n.length) showNotices('Overnight', n, nextDay, 'Morning'); else nextDay(); }
   else renderMorning();
 }
+// Everyone has moved on or left: the score is how many moved on.
+function showEnd() {
+  teardownLive(); closeModal(); showStage(false); say(null, null);
+  const g = app.g, moved = g.collection.map(id => CH[id]), gone = (g.gone || []).map(id => CH[id]);
+  save();
+  setScreen(h('div', { class: 'screen' }, header(),
+    h('div', { class: 'morning' }, h('div', { class: 'narration' }, h('p', {}, 'The house is quiet. Nobody is left to take in, and nobody left to see off.')),
+      h('div', { class: 'col' }, h('h2', {}, 'Birchwood House'), h('p', { class: 'verdict' }, g.collection.length + (g.collection.length === 1 ? ' resident moved on.' : ' residents moved on.')),
+        moved.length ? h('div', {}, h('h4', {}, 'Moved on'), moved.map(d => h('p', {}, h('b', {}, d.name), ' — ', h('i', {}, d.tagline)))) : null,
+        gone.length ? h('div', {}, h('h4', {}, 'Left, by the safe word'), gone.map(d => h('p', {}, d.name))) : null,
+        h('div', { class: 'row', style: 'margin-top:14px' }, h('button', { class: 'primary', onclick: startNew }, 'Begin again'))))));
+}
 function nextDay() {
+  if (R.isOver(app.g)) return showEnd();
   if (app.stage) app.stage.clearMarks();
   R.startMorning(app.g, app.rng); app.g.title = app.title; app.selected = null; app.expanded = {};
   save(); renderMorning();
 }
 
-// ── Notices (arrivals, moving on, the word) ─────────────────────
+// ── Notices (arrivals, moving on, the safe word) ─────────────────────
 function noticeCard(n) {
   const d = CH[n.id];
   if (n.type === 'arrive') return h('div', { class: 'notice' }, h('h3', {}, d.name + ', ' + d.age), h('p', {}, h('i', {}, d.tagline)), h('p', {}, d.story), h('p', { class: 'say' }, fmt(d.lines.arrive)));
   if (n.type === 'moveon') return h('div', { class: 'notice' }, h('h3', {}, d.name + ' has moved on'), h('p', { class: 'say' }, fmt(d.lines.leave)), h('p', {}, 'They are in your Collection now, for good. The house will take in someone new.'));
-  return h('div', { class: 'notice word' }, h('h3', {}, d.name + ' used the word'), h('p', { class: 'say' }, fmt(C.SAYINGS.word[0])), h('p', {}, 'It stopped, as it should. ' + d.name + ' has packed up and gone, with nothing held against them, and starts again, fresh, if the house is ever theirs again.'));
+  if (n.type === 'safeword') return h('div', { class: 'notice word' }, h('h3', {}, d.name + ' called the safe word'), h('p', { class: 'say' }, fmt(C.SAYINGS.word[0])), h('p', {}, 'It stopped, as it should. ' + (n.need - n.count === 1 ? 'Once more, and ' + d.name + ' will leave for good.' : n.count + ' of ' + n.need + ' calls so far.')), chipsFor(n.changes || []));
+  return h('div', { class: 'notice word' }, h('h3', {}, d.name + ' called the safe word, and has left'), h('p', { class: 'say' }, fmt(C.SAYINGS.word[0])), h('p', {}, 'It stopped, as it should. ' + d.name + ' has packed up and gone, with nothing held against ' + d.pronouns[1] + ', and will not be back.'));
 }
 // Arrivals are cards; moving on and the word are scenes. Anyone leaving is seen off first, then whoever has come in is shown.
 function showNotices(title, notices, then, label) {
@@ -162,7 +178,7 @@ function showNotices(title, notices, then, label) {
   };
   if (scenes.length) playScenes(scenes).then(showRest); else showRest();
 }
-async function playScenes(list) { for (const n of list) if (!n.played) await playScene(n); }
+async function playScenes(list) { for (const n of list) if (!n.played && (n.type === 'moveon' || n.type === 'word')) await playScene(n); }
 
 // A goodbye: the resident standing in the room, a few beats of narration and talk, and a choice for you. (Lines in content.js SCENES.)
 async function playScene(notice) {
@@ -253,7 +269,7 @@ function renderMorning() {
   setScreen(h('div', { class: 'screen' }, header(),
     h('div', { class: 'morning' },
       h('div', { class: 'narration' }, g.narration.map(t => h('p', {}, t))),
-      h('div', { class: 'col' }, h('h2', {}, 'Today\'s chores'), h('div', { class: 'hint' }, 'Tap a resident below, then a chore, or drag one across. The day starts once everyone has something to do; tap a placed name to take it back.'), h('div', { class: 'chorelist' }, chores),
+      h('div', { class: 'col' }, h('h2', {}, 'Today\'s chores'), h('div', { class: 'hint' }, 'Tap a resident below, then a chore, or drag one across. The day starts once every resident has something to do; tap a placed name to take it back.'), h('div', { class: 'chorelist' }, chores),
         ready ? h('div', { class: 'starting' }, 'The day begins…') : null),
       h('div', { class: 'col' }, h('h2', {}, 'The house'), h('div', { class: 'hint' }, 'The “story” tab opens a resident\'s file. At chores is how well their state lets them work today.'), h('div', { class: 'residents' }, residents)))));
   if (ready) { const day = g.day; app.advance = setTimeout(() => { if (app.g === g && g.day === day && g.phase === 'assign' && R.allAssigned(g)) beginDay(); }, 1100); }
@@ -347,7 +363,7 @@ function renderSetup(card) {
       h('h4', {}, 'Implement'), h('button', { class: 'wide', onclick: () => chooseImplement(set.implement, set.position, v => { set.implement = v; paint(); }) }, IMPL[set.implement].label + '  ▸'),
       h('div', { class: 'sub' }, IMPL[set.implement].blurb),
       h('h4', {}, 'What they wear'), h('div', { class: 'tabs' }, layerBtn('bottoms', !!sample.bottom), layerBtn('briefs', !!sample.briefs)),
-      h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. If ' + d.name + ' calls it, or is brought too far, it stops.'),
+      h('div', { class: 'word' }, h('b', {}, 'The safe word (“Red”) '), 'is always honoured. If ' + d.name + ' calls it, or is brought too far, it stops.'),
       h('button', { class: 'primary big', onclick: () => startLive(card, set) }, 'Bring them in'),
       h('button', { class: 'quiet big', onclick: () => { dock.remove(); } }, 'Back'));
   };
@@ -555,8 +571,8 @@ function chipsFor(changes) {
   }));
 }
 function exitsBlock(exits) {
-  return exits.map(n => h('div', { class: 'exit' + (n.type === 'word' ? ' word' : '') },
-    n.type === 'word' ? CH[n.id].name + ' used the word. ' + fmt(C.SAYINGS.word[0]) + ' It stopped at once, and they are gone from the house.' : CH[n.id].name + ' has moved on. ' + fmt(CH[n.id].lines.leave)));
+  return exits.map(n => h('div', { class: 'exit' + (n.type === 'word' || n.type === 'safeword' ? ' word' : '') },
+    n.type === 'safeword' ? CH[n.id].name + ' called the safe word. ' + fmt(C.SAYINGS.word[0]) + ' It stopped at once (' + n.count + ' of ' + n.need + ').' : n.type === 'word' ? CH[n.id].name + ' called the safe word. ' + fmt(C.SAYINGS.word[0]) + ' It stopped at once, and they are gone from the house.' : CH[n.id].name + ' has moved on. ' + fmt(CH[n.id].lines.leave)));
 }
 // On from the result: to the next resident's fate, the evening or the night.
 async function proceed(snap, wrap) { wrap.remove(); save(); await playScenes(snap.exits); teardownLive(); showStage(false); say(null, null); renderEvening(); }
@@ -637,14 +653,14 @@ function showRules() {
     h('h3', {}, 'The day'),
     h('p', {}, 'Each morning there is a fresh list of chores, one place for each resident. Send people where their state lets them do well; the work quietly feeds back into how they are. Then each evening you see every resident in turn: what they did, and what happened.'),
     h('h3', {}, 'Six measures'),
-    h('ul', {}, h('li', {}, 'Wilfulness and Resentment are the trouble. Satisfaction, Valued and Composure are what holds a person steady. Attention is how well they work.'), h('li', {}, 'Low Valued makes a correction read as punishment. Resentment at the top with Valued at the bottom is when someone uses the word.')),
+    h('ul', {}, h('li', {}, 'Wilfulness and Resentment are the trouble. Satisfaction, Valued and Composure are what holds a person steady. Attention is how well they work.'), h('li', {}, 'Low Valued makes a correction read as punishment. Resentment at the top with Valued at the bottom is when someone calls the safe word.')),
     h('h3', {}, 'The correction is yours'),
     h('p', {}, 'You choose the position, what they wear and the implement to begin with, then everything is live: smack, run a few, wait, stop. Change position or implement whenever you like (a new implement has to be fetched, which means a word with them), take layers off or put them back, move the pace and strength up or down, and look from behind, over your shoulder or from the floor. The meter shows how far you have brought them; the white tick is their edge of resistance. A resident needs a different amount depending on their Wilfulness and on what happened that day: more for a bold or troublesome one, more again after a bad day or a bad event. Too little does not land; too much costs trust. A few kinds of trouble are better met with a kind word than a hand.'),
-    h('p', {}, 'The highest distress you bring them to counts, not where they end up. Stop at the right moment. Beyond too harsh, nothing more is struck, and a resident whose trust is thin will use the word.'),
+    h('p', {}, 'The highest distress you bring them to counts, not where they end up. Stop at the right moment. Beyond too harsh, nothing more is struck, and a resident whose trust is thin will call the safe word.'),
     h('h3', {}, 'Candle'),
     h('p', {}, 'Corrections cost nothing, but aftercare (corner time, lines, held after, warm words) and reprieves (a stern, kind or written word) are paid from the evening\'s candle, and there is never enough for everything.'),
-    h('h3', {}, 'Moving on, and the word'),
-    h('p', {}, 'When someone has settled enough, they move on, and you will not be told it is coming. Anyone may use the word at any time; it ends things at once, and they start again from the beginning when and if the house takes them in. Everyone here is an adult who chose to come.')),
+    h('h3', {}, 'Moving on, and the safe word'),
+    h('p', {}, 'When someone has settled enough, they move on, and you will not be told it is coming. Anyone may call the safe word, “Red”, at any time; it ends things at once and costs them, and on the second or third call they leave for good. Nobody who has moved on or left comes back: the house takes in whoever has not yet been through it, and when everyone has moved on or left, the game ends. Your score is how many moved on. Everyone here is an adult who chose to come.')),
     h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: closeModal }, 'Close')));
 }
 

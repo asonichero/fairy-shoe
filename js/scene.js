@@ -1,4 +1,4 @@
-// The Fairy Shoe — the live correction. A wrapper over the engine's discipline scene: it builds the room, the furniture and the
+// Birchwood House — the live correction. A wrapper over the engine's discipline scene: it builds the room, the furniture and the
 // two bodies, lets the player smack, run and stop whenever they like, change position, implement, layers, pace and strength in
 // the middle of it, and reports how far the resident has been brought (the pain model's distress), which is all the rules read.
 (function (root) {
@@ -677,8 +677,7 @@ function createTableau(scene, kind, opts, env = {}) {
     const paper = new T.Mesh(new T.PlaneGeometry(0.21, 0.297), new T.MeshStandardMaterial({ color: 0xf2ead6, roughness: 0.95 }));
     paper.rotation.x = -Math.PI / 2; paper.position.set(0.02, 0.742, 0.44); st.furn.add(paper);
     const pen = new T.Mesh(new T.CylinderGeometry(0.004, 0.004, 0.15, 6), new T.MeshStandardMaterial({ color: 0x20160e })); st.furn.add(pen);
-    S.setPose(s, 'Relaxed', false);
-    hold = (t) => {
+    hold = (t) => {   // (the seated pose is the one seatGiver left: thighs level, shins down)
       s.group.updateMatrixWorld(true);
       const nib = st.furn.localToWorld(new V3(0.02 + 0.045 * Math.sin(t * 1.9) + 0.015 * Math.sin(t * 7), 0.746, 0.46 + 0.03 * Math.sin(t * 0.45) + 0.012 * Math.sin(t * 9)));
       const shR = s.bones.upperArmR.getWorldPosition(new V3()), shL = s.bones.upperArmL.getWorldPosition(new V3());
@@ -689,7 +688,7 @@ function createTableau(scene, kind, opts, env = {}) {
       pen.position.copy(st.furn.worldToLocal(s.bones.handR.getWorldPosition(new V3()).add(new V3(0, -0.02, 0.0)))); pen.rotation.x = 0.8;
     };
     gaze = () => eyesAt(s, st.furn.localToWorld(new V3(0.02, 0.746, 0.46)), 1);
-    view = { pos: st.furn.localToWorld(new V3(1.5, 1.45, 1.55)), tgt: st.furn.localToWorld(new V3(0, 0.95, 0.3)), fov: 40 };
+    view = { pos: st.furn.localToWorld(new V3(0.9, 2.15, -0.95)), tgt: st.furn.localToWorld(new V3(0, 0.85, 0.45)), fov: 50 };   // over the subject's shoulder, down at the page
   } else if (kind === 'heldalt') {   // the player seated, the subject sideways on their lap, arms round each other: it sits by the seat's own height, so it takes any pair of sizes
     const st = seated(g, 0, 0, 0), kg = g.spec.H / 1.7, ks = s.spec.H / 1.7;
     S.setPose(s, 'Sit', true); for (const b of S.BONES) s.bones[b].quaternion.copy(s.pose[b]);
@@ -746,7 +745,7 @@ function createTableau(scene, kind, opts, env = {}) {
       S.lookAt(g, at(s, 'upperArmR').add(new V3(0, 0.03 * ks, -0.12 * ks)), 0.9);
     };
     gaze = () => { eyesAt(g, at0(s, 'upperArmR'), 0.6); s.gazeFx = null; };
-    view = { pos: new V3(0.4, 1.3, 2.5), tgt: new V3(0, 1.05, 0), fov: 36 };
+    view = { pos: new V3(1.5, 1.3, 2.3), tgt: new V3(0, 1.1, 0.02), fov: 36 };   // front three-quarter, from the side the subject stands to, so both faces and the hands on the backs are in view
   } else {   // 'warm'
     const st = seated(g, 0, 0, -0.25);
     standing(s, Math.PI, 0, 0.85);
@@ -755,7 +754,7 @@ function createTableau(scene, kind, opts, env = {}) {
       S.lookAt(g, s.bones.head.getWorldPosition(new V3()), 0.9); S.lookAt(s, g.bones.head.getWorldPosition(new V3()), 0.9);
     };
     gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3())); eyesAt(s, g.bones.head.getWorldPosition(new V3())); };
-    view = { pos: new V3(2.3, 1.3, 0.4), tgt: new V3(0, 1.05, 0.3), fov: 38 };
+    view = { pos: new V3(4.0, 1.35, 0.3), tgt: new V3(0, 1.0, 0.3), fov: 42 };   // square on from the side, both profiles
   }
   function a0() { return 0; }
   // let the skirt (if any) settle once the pose is in
