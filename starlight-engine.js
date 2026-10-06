@@ -2471,13 +2471,15 @@ const STRIKE_K = 2;   // strike height: steps (~1.4 cm each) up from the glute/t
 const DEFAULT_TIMING = { speed: 1, lift: 0.52, strike: 0.09, raisedHold: 0.2, contactHold: 0.35 };
 
 const GIVER_BASE = { thighL: [-90, 0, -5], thighR: [-90, 0, 5], shinL: [90, 0, 0], shinR: [90, 0, 0], footL: [0, 0, 0], footR: [0, 0, 0] };
+// Across the lap the disciplinarian sits upright against the chair's straight back (supported at the lower back and thighs): the back is vertical at rest and only
+// leans a little, from the hip, to reach the contact sites.
 const GIVER_BEAT = {
-  relaxed: { spine1: [8, 0, 0], neck: [10, 0, 0] },
-  raised:  { spine1: [2, 0, 0], spine2: [-3, 8, 0], neck: [12, 0, 0] },
-  contact: { spine1: [5, 0, 0], spine2: [2, -4, 0], neck: [14, 0, 0] },
+  relaxed: { spine1: [0, 0, 0], neck: [6, 0, 0] },
+  raised:  { spine1: [0, 0, 0], spine2: [-3, 8, 0], neck: [10, 0, 0] },
+  contact: { spine1: [3, 0, 0], spine2: [2, -4, 0], neck: [12, 0, 0] },
 };
 // Seated with the hands resting on the thighs, for scenes before the subject is in place.
-const GIVER_SEATED = { upperArmL: [-30, 0, -35], upperArmR: [-30, 0, 35], forearmL: [-40, 0, 0], forearmR: [-40, 0, 0], spine1: [4, 0, 0] };
+const GIVER_SEATED = { upperArmL: [-30, 0, -35], upperArmR: [-30, 0, 35], forearmL: [-40, 0, 0], forearmR: [-40, 0, 0], spine1: [0, 0, 0] };
 // Subject pose is in their own frame: +X bends forward, which is toward the floor here.
 const SUBJECT_BASE = {
   thighL: [-52, 0, -3], thighR: [-52, 0, 3], shinL: [10, 0, 0], shinR: [10, 0, 0],
@@ -2829,7 +2831,7 @@ function seatGiver(g, armsPose = GIVER_SEATED) {
       for (const b of ['upperArm', 'forearm', 'hand']) { g.target[b + side] = g.bones[b + side].quaternion.clone(); g.pose[b + side] = g.target[b + side].clone(); }
     }
   }
-  return { hipY, rThigh, bench: buildBench(hipY - rThigh * 0.85) };
+  return { hipY, rThigh, bench: buildBench(hipY - rThigh * 0.99) };   // (the seat is the underside of the thighs)
 }
 
 // Two-bone IK: aims upperArm→forearm→palm at `target`, elbow bent toward `pole`.
@@ -2976,6 +2978,77 @@ const easeIn = x => x * x * x, easeOut = x => 1 - (1 - x) ** 3, easeInOut = x =>
 // Where the subject's pelvis rests: this far from hip to knee along the right thigh,
 // and this fraction of its front depth above the thigh's top (below 1 settles in).
 const LAP_ALONG = 0.78, LAP_SETTLE = 0.9;
+// ── Across the lap, built from anchors ───────────────────────────
+// Everything about the subject's pose here follows from where she starts (the hip anchored on the giver's right thigh, angled a little forward to present the
+// contact sites) and what she meets: the torso bends forward until it touches the giver's left thigh; the hips and knees bend until the toes meet the floor.
+// The joint angles that result are her base pose; the reaction to a stroke is a change from them (see lapReact), and the hands go to the floor each frame as before.
+const LAP_BACK_X = -0.06;      // her hips sit this far back along the lap (m, for a 1.7 m subject): clear of the giver's torso, room for a skirt between the thighs
+const LAP_TOUCH = 0.003;       // the torso counts as touching the thigh this close
+function twoBoneTo(ch, [a, b, c], target) {
+  const A = ch.bones[a], B = ch.bones[b], C = ch.bones[c], pa = A.getWorldPosition(new THREE.Vector3()), pb = B.getWorldPosition(new THREE.Vector3()), pc = C.getWorldPosition(new THREE.Vector3());
+  const L1 = pa.distanceTo(pb), L2 = pb.distanceTo(pc), d = target.clone().sub(pa), dist = clamp(d.length(), Math.abs(L1 - L2) + 1e-4, (L1 + L2) * 0.9999); d.normalize();
+  const bend = pb.clone().sub(pa); bend.addScaledVector(d, -bend.dot(d)); if (bend.lengthSq() < 1e-10) bend.set(0, 1, 0).cross(d); bend.normalize();
+  const cosA = clamp((L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist), -1, 1), E = pa.clone().addScaledVector(d, L1 * cosA).addScaledVector(bend, L1 * Math.sqrt(1 - cosA * cosA));
+  rotateBoneWorld(A, new THREE.Quaternion().setFromUnitVectors(pb.clone().sub(pa).normalize(), E.sub(pa).normalize()));
+  const pb2 = B.getWorldPosition(new THREE.Vector3()), pc2 = C.getWorldPosition(new THREE.Vector3()), Tg = pa.clone().addScaledVector(d, dist);
+  rotateBoneWorld(B, new THREE.Quaternion().setFromUnitVectors(pc2.sub(pb2).normalize(), Tg.sub(pb2).normalize()));
+}
+function lapDominantVerts(ch, pick) {   // a sample of the skin vertices whose strongest bone passes `pick`
+  const g = ch.mesh.geometry, si = g.attributes.skinIndex.array, sw = g.attributes.skinWeight.array, out = [];
+  for (let v = 0; v < si.length / 4; v += 3) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (sw[4 * v + m] > bw) { bw = sw[4 * v + m]; bb = si[4 * v + m]; } if (pick(BONES[bb])) out.push(v); }
+  return out;
+}
+function solveLap(scn, g, s) {
+  const sc = s.spec.H / 1.7, v = new THREE.Vector3();
+  const skin = i => { v.fromBufferAttribute(s.mesh.geometry.attributes.position, i); s.mesh.boneTransform(i, v); return v.applyMatrix4(s.mesh.matrixWorld); };
+  const setBones = o => { for (const b in o) s.bones[b].quaternion.copy(degQ(o[b])); s.group.updateMatrixWorld(true); };
+  const base = SUBJECT_BASE;
+  // 1. The torso bends forward from the anchored hip until it rests on the giver's left thigh.
+  const prox = posedProxies(g), nEll = g.proxies.ells.length, thighL = prox[nEll + g.proxies.cones.findIndex(q => q.bone === 'thighL')];   // the giver's left thigh, as the contact proxies have it
+  const torso = lapDominantVerts(s, n => n === 'spine2' || n === 'spine1').filter(i => { const p = new THREE.Vector3().fromBufferAttribute(s.mesh.geometry.attributes.position, i), J = s.spec.J.pelvis; return p.y > J[1] + 0.17 * s.spec.H; });   // (the ribs and chest, which the bend moves; not the hips, which are anchored)
+  // Her torso rests on the thigh: the bend at which the nearest point of her ribs and belly just touches it (sunk in at 0° → straightened until clear; short of it → bent forward until it arrives).
+  const gap = bend => { setBones({ spine1: [base.spine1[0] + 0.55 * bend, 0, 0], spine2: [base.spine2[0] + 0.45 * bend, 0, 0] }); let m = Infinity; if (thighL) for (const i of torso) { const d = primDist(skin(i).toArray(), thighL); if (d < m) m = d; } return m; };
+  // Her weight is on the thighs: lifted until no part of her skin is more than a hair inside either of the giver's thighs (the contact shader takes up the rest).
+  const thighs = ['thighL', 'thighR'].map(n => prox[nEll + g.proxies.cones.findIndex(q => q.bone === n)]).filter(Boolean), all = lapDominantVerts(s, n => /^(pelvis|spine|thigh)/.test(n));
+  const sink = () => { let m = Infinity; for (const i of all) { const p = skin(i).toArray(); for (const P of thighs) { const d = primDist(p, P); if (d < m) m = d; } } return m; };
+  let bend = 0;
+  for (let round = 0; round < 3; round++) {
+    if (gap(0) < 0) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
+    gap(bend); const m = sink(); if (m > -0.004) break;
+    s.group.position.y += -m - 0.002; s.group.updateMatrixWorld(true);
+  }
+  if (false) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
+  const pose = { spine1: [base.spine1[0] + 0.55 * bend, 0, 0], spine2: [base.spine2[0] + 0.45 * bend, 0, 0] };
+  setBones(pose);
+  // 2. The hips and knees bend until the toes touch the floor: each leg reaches an ankle height at which the lowest point of the foot, plantar-flexed, is on the floor.
+  const feetVerts = { L: lapDominantVerts(s, n => n === 'footL'), R: lapDominantVerts(s, n => n === 'footR') };
+  for (const side of ['L', 'R']) {
+    const hip = s.bones['thigh' + side].getWorldPosition(new THREE.Vector3()), kn = s.bones['shin' + side].getWorldPosition(new THREE.Vector3()), an0 = s.bones['foot' + side].getWorldPosition(new THREE.Vector3());
+    const Ltot = hip.distanceTo(kn) + kn.distanceTo(an0), dir = new THREE.Vector3(an0.x - hip.x, 0, an0.z - hip.z); if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0); dir.normalize();
+    let ankleY = 0.07 * sc, best = null;
+    for (let it = 0; it < 10; it++) {
+      const horiz = Math.sqrt(Math.max(1e-4, (0.92 * Ltot) ** 2 - (hip.y - ankleY) ** 2));
+      twoBoneTo(s, ['thigh' + side, 'shin' + side, 'foot' + side], new THREE.Vector3(hip.x + dir.x * horiz, ankleY, hip.z + dir.z * horiz));
+      // the toes down: pitch the foot about its own x until its lowest point is lowest (whichever way is plantar flexion)
+      let pick = null;
+      for (const sg of [1, -1]) { s.bones['foot' + side].quaternion.copy(degQ([sg * 55, 0, 0])); s.group.updateMatrixWorld(true); let lo = Infinity; for (const i of feetVerts[side]) lo = Math.min(lo, skin(i).y); if (!pick || lo < pick.lo) pick = { sg, lo }; }
+      s.bones['foot' + side].quaternion.copy(degQ([pick.sg * 55, 0, 0])); s.group.updateMatrixWorld(true);
+      ankleY -= pick.lo - 0.0005;   // lift or lower the ankle by what the toe is off the floor
+      best = pick;
+    }
+  }
+  // 3. Bake: the poses are these joint angles; the reaction is a change from them.
+  const rest = new THREE.Quaternion(), baseQ = {}, deltas = {};
+  for (const b of BONES) baseQ[b] = s.bones[b].quaternion.clone();
+  const oldBase = SUBJ_BASE_Q, reactL = SUBJ_REACT_Q.L, reactR = SUBJ_REACT_Q.R;
+  const react = { L: {}, R: {}, B: {} };
+  for (const k of ['L', 'R']) for (const b of BONES) { const D = oldBase[b].clone().invert().multiply(SUBJ_REACT_Q[k][b]); react[k][b] = baseQ[b].clone().multiply(D); }
+  for (const b of BONES) react.B[b] = react.L[b].clone().slerp(react.R[b], 0.5);
+  scn.baseQ = baseQ; scn.reactQ = react;
+  s.target = baseQ; s.pose = {}; for (const b of BONES) s.pose[b] = baseQ[b].clone();
+  scn.lapSolved = { bend, torsoTouch: !!thighL, thighCone: thighL ? { a: thighL.a, b: thighL.b, r1: thighL.r1, r2: thighL.r2 } : null };
+}
+
 // opts.lower (default true): lower the subject's bottoms to the knees for the correction.
 function createDisciplineScene(parent, g, s, opts = {}) {
   const scn = { mode: 'beat', impacts: 0, timing: { ...DEFAULT_TIMING }, plant: {}, reactSide: 'L', palmAim: 0.65,
@@ -3062,11 +3135,13 @@ function createDisciplineScene(parent, g, s, opts = {}) {
   const hipRing = loftRing(s.spec.prims[0], s.spec.Y.hip);
   const onThigh = g.bones.thighR.getWorldPosition(new THREE.Vector3()).lerp(g.bones.shinR.getWorldPosition(new THREE.Vector3()), LAP_ALONG);
   const rHere = lerp(seat.rThigh, g.spec.m.knee / 100 / (2 * Math.PI), LAP_ALONG);
-  const pelvisAt = new THREE.Vector3(onThigh.x, onThigh.y + rHere + hipRing[1] * LAP_SETTLE, onThigh.z);
+  const pelvisAt = new THREE.Vector3(onThigh.x + LAP_BACK_X * (s.spec.H / 1.7), onThigh.y + rHere + hipRing[1] * LAP_SETTLE, onThigh.z);
   const pelvisLocal = new THREE.Vector3(...s.spec.J.pelvis).applyQuaternion(s.group.quaternion);
   s.group.position.copy(pelvisAt).sub(pelvisLocal);
   for (const b of BONES) s.bones[b].quaternion.copy(s.pose[b]);
   s.group.updateMatrixWorld(true);
+  g.group.updateMatrixWorld(true);
+  solveLap(scn, g, s);
   }
   scn.anchors = sceneAnchors(s);
   if (scn.atSpread) {

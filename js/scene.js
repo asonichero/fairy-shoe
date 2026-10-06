@@ -100,16 +100,20 @@ function chairSeatTop(g) {
   Room.disposeGroup(probe.bench); return top;
 }
 function furnishScene(parent, scn, s, position, seatTop, giver) {
-  const old = scn.bench; s.__giver = giver || null; let made = null, plant = null;
+  const old = scn.bench; let made = null, plant = null;
   if (old) {
     const b = new T.Box3().setFromObject(old); parent.remove(old); Room.disposeGroup(old);
-    if (position === 'lap') { scn.seatTop = b.max.y; made = Room.buildChair(b.max.y, b.max.x - b.min.x, b.max.z - b.min.z); made.position.set((b.min.x + b.max.x) / 2, 0, (b.min.z + b.max.z) / 2);
-      // Seated firmly: the chair is slid under the disciplinarian until the backrest meets the small of the back and the seat runs under the thighs (a straight-backed chair is
-      // for the lower back and thighs to be supported, so they are not straining to take the subject's weight or to reach).
-      { const gp = s.__giver; if (gp) { gp.group.updateMatrixWorld(true); const sp = gp.bones.spine1.getWorldPosition(new T.Vector3()), P0 = gp.spec.prims[0], ring = S.loftRing ? S.loftRing(P0, gp.spec.Y.belly) : null;
-          const backDepth = ring ? ring[2] : 0.1;   // how far the body's back is behind its centre, at the small of the back
-          made.updateMatrixWorld(true); let postFront = -Infinity; made.traverse(m => { if (m.isMesh) { const bb = new T.Box3().setFromObject(m); if (bb.max.y > b.max.y + 0.2 && bb.max.x - bb.min.x < 0.08) postFront = Math.max(postFront, bb.max.z); } });
-          if (isFinite(postFront)) made.position.z += (sp.z - backDepth - 0.008) - postFront; } } }
+    if (position === 'lap') {
+      // A straight-backed chair for a seated disciplinarian: the seat runs from the small of the back to the knee joint (deep enough to carry the thighs out to it,
+      // so they do not hang over an edge at the hip), its top is the underside of the thighs, and the backrest meets the lower back.
+      scn.seatTop = b.max.y;
+      const gp = giver; gp.group.updateMatrixWorld(true);
+      const pel = gp.bones.pelvis.getWorldPosition(new T.Vector3()), knee = gp.bones.shinL.getWorldPosition(new T.Vector3());
+      const ring = S.loftRing(gp.spec.prims[0], gp.spec.Y.belly), backZ = pel.z - ring[2] - 0.008, lw = 0.042;
+      const D = (knee.z + 0.01) - backZ + (0.03 + lw / 2), W = Math.max(0.44, 2 * (Math.abs(gp.bones.thighL.getWorldPosition(new T.Vector3()).x - pel.x) + 0.12));
+      made = Room.buildChair(b.max.y, W, D);
+      made.position.set(pel.x, 0, backZ - 0.03 - lw / 2 + D / 2);   // (the rear posts' front faces are on the line of the back; the seat runs forward from there)
+    }
     else made = Room.buildTable(b.max.y, b.min.x, b.max.x, b.max.z - b.min.z);
   } else if (position === 'chair') {
     made = new T.Group(); const chair = Room.buildChair(seatTop); chair.rotation.y = -Math.PI / 2; made.add(chair);
@@ -138,7 +142,6 @@ function holdChairHands(s, plant) {
 
 // ── Setting up a discipline scene (the game and the editor both call these, so what is seen in one is what is in the other) ──
 // The subject's skirt in a discipline scene: the gathered back is driven by the body, the front and sides are cloth (see Starlight.setSkirtHybrid).
-const LAP_BACK = -0.06;   // metres, for a 1.7 m subject: how far back along the lap she is set
 function prepareSubject(s) { if (s.skirt) S.setSkirtHybrid(s, true); }
 // Furniture in place, the seat under a seated disciplinarian, and the pose edits from js/poses.js. Returns `plant` (where the hands go on the chair).
 function furnishDiscipline(parent, scn, g, s, position, seatTop) {
@@ -150,9 +153,7 @@ function furnishDiscipline(parent, scn, g, s, position, seatTop) {
     // same flat (see skinPoints), not the glutes the shader has pressed away.
     const up = 0.009 * g.spec.H / 1.7;   // the pair sit a little higher: the thighs rest on the seat and not in it
     for (const c of [g, s]) { c.group.position.y += up; c.group.updateMatrixWorld(true); }
-    // Across the lap the subject is slid 6 cm back along the lap (x): her body is clear of the disciplinarian's torso and the front of her skirt has room
-    // to hang between her thighs and the disciplinarian's. (Measured: her body inside theirs 13.6 mm deep → none.)
-    s.group.position.x += LAP_BACK * (s.spec.H / 1.7); s.group.updateMatrixWorld(true);
+
     const flat = scn.seatTop + (g.skirt ? 0.016 : 0.0015), pel = g.bones.pelvis.getWorldPosition(new T.Vector3());
     g.pressFloor = flat;
     S.setPress(g, new T.Vector3(pel.x, flat, pel.z), new T.Vector3(0, -1, 0), 0.24 * g.spec.H / 1.7, 1, '', null, 0, 0.09);
