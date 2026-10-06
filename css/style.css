@@ -266,5 +266,7 @@ body.live #app > .hud { pointer-events: none; }
   .resultwrap.side { position: fixed; inset: 0; width: 100%; height: auto; top: 0; background: rgba(8,6,10,.7); align-items: center; padding: 12px; overflow: auto; z-index: 30; }
   .resultwrap.side .result { max-height: calc(100vh - 24px); overflow: auto; }
 }
-.hudcard.scenebar { left: 50%; right: auto; transform: translateX(-50%); bottom: 24px; text-align: center; min-width: 220px; }
-.hudcard.scenebar .hint { margin-bottom: 8px; }
+.hudcard.scenebar { left: 50%; right: auto; transform: translateX(-50%); bottom: 24px; width: min(560px, calc(100vw - 20px)); max-height: 60vh; overflow: auto; text-align: left; }
+.hudcard.scenebar p { font-family: var(--serif); font-size: 16px; line-height: 1.5; margin: 0 0 10px; color: #e5dccb; }
+.hudcard.scenebar p.say { font-style: italic; color: #f0d9a0; }
+.hudcard.scenebar button { width: 100%; }

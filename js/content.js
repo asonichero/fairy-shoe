@@ -578,6 +578,12 @@ const AFTER_SCENES = {
   },
 };
 
-root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES };
+// The narration that goes with what the player says in Held After and Warm Words (the words themselves are AFTER_SCENES.held / .warm).
+const AFTER_NARR = {
+  held: ['You wrap your arms round {Name} and draw {Obj} in, and {Subj} folds against you as the shaking eases. You speak low, close to {Poss} ear.', 'You hold {Name} for a long while, one hand slowly stroking {Poss} back, until {Poss} breathing comes level. Then you say quietly:', 'You take {Name} in against you and stay there, saying nothing at first. When {Subj} has stopped trembling, you murmur:'],
+  warm: ['You sit back in the chair and wait until {Name} lifts {Poss} eyes to yours. Then, gently:', 'You hold {Name}\'s gaze, and let a little of the sternness go out of your face. You say, kindly:', 'You look at {Name} for a moment, and your expression softens. You say:'],
+};
+
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

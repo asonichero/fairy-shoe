@@ -94,7 +94,7 @@ async function liveControls(p) {
         for (const name of ['Corner Time', 'Lines', 'Held After', 'Warm Words']) {
           const b = p.locator('.result .choice:has-text("' + name + '")'); if (!(await b.count()) || await b.first().isDisabled()) continue;
           await b.first().click(); await p.waitForSelector('.scenebar button', { timeout: 90000 }); await p.waitForTimeout(1500);
-          if (!(await p.locator('#speech:not([hidden])').count())) throw new Error(name + ': the scene should have words');
+          if (!(await p.locator('.scenebar p').count())) throw new Error(name + ': the scene should have words in its card');
           await shot(p, 'after-' + name.replace(/ /g, '-'));
           await p.click('.scenebar button'); await p.waitForSelector('.result');
         }

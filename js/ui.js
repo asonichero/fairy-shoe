@@ -572,12 +572,13 @@ async function playAftercare(kind, snap, wrap, draw) {
   });
   const mood = R.fetchMood(S_), pool = C.AFTER_SCENES[kind][mood] || C.AFTER_SCENES[kind].plain, raw = pool[Math.floor(app.rng() * pool.length)];
   const text = tell(raw, id), you = kind === 'held' || kind === 'warm';
+  const narr = you ? tell(C.AFTER_NARR[kind][Math.floor(app.rng() * C.AFTER_NARR[kind].length)], id) : null;
   await delay(900);
-  const bar = h('div', { class: 'hud' }, h('div', { class: 'hudcard scenebar' }, h('div', { class: 'hint' }, you ? 'You speak.' : kind === 'corner' ? 'A few quiet minutes.' : 'Pen to paper.'), h('button', { class: 'primary', onclick: () => { bar.remove(); say(null, null); wrap.hidden = false; draw(); } }, 'Continue')));
+  // what is said or done is written in the card with the Continue button, not in a bubble: narration first, then the words themselves where there are any
+  const bar = h('div', { class: 'hud' }, h('div', { class: 'hudcard scenebar' },
+    narr ? h('p', { class: 'narr' }, fmt(narr)) : null, h('p', { class: you ? 'say you' : 'narr' }, fmt(text)),
+    h('button', { class: 'primary', onclick: () => { bar.remove(); wrap.hidden = false; draw(); } }, 'Continue')));
   $('#app').append(bar);
-  const wait = 1000 + String(text).split(/\s+/).length * 330;
-  if (you) say(id, text.replace(/^\s*/, ''), 'You'); else say(id, text);
-  const hide = $('#speech'); clearTimeout(app.speechT); app.speechT = setTimeout(() => hide.classList.add('fade'), wait + 4000);
 }
 // Sent to Bed: the room fades to a few lines about how they go, and then on, as Next does.
 async function sendToBed(snap, wrap) {
