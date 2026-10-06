@@ -163,14 +163,14 @@ function hipTarget(s, side) {
   const pel = s.bones.pelvis.getWorldPosition(new T.Vector3()), k = s.spec.H / 1.7, out = side === 'L' ? -1 : 1;
   const key = s.bones.pelvis.matrixWorld.elements.map(v => Math.round(v * 500)).join(',') + side, hit = hipCache.get(s);
   if (hit && hit[side] && hit[side].key === key) return hit[side].val;
-  const centre = new T.Vector3(pel.x, pel.y + 0.04 * k, pel.z + out * 0.1 * k), pts = S.posedSkinNear(s, centre, 0.16 * k);
+  const centre = new T.Vector3(pel.x + 0.04 * k, pel.y + 0.09 * k, pel.z + out * 0.1 * k), pts = S.posedSkinNear(s, centre, 0.16 * k);
   let best = null, bz = -Infinity;
   for (let i = 0; i < pts.length; i += 6) {
-    if (Math.abs(pts[i] - pel.x) > 0.06 * k || pts[i + 1] < pel.y - 0.02 * k || pts[i + 1] > pel.y + 0.1 * k) continue;
+    if (Math.abs(pts[i] - (pel.x + 0.04 * k)) > 0.06 * k || pts[i + 1] < pel.y + 0.04 * k || pts[i + 1] > pel.y + 0.14 * k) continue;   // (the upper hip, toward the belly)
     const z = out * pts[i + 2]; if (z > bz) { bz = z; best = i; }
   }
   let at, n;
-  if (best === null) { at = new T.Vector3(pel.x, pel.y + 0.035 * k, pel.z + out * 0.16 * k); n = new T.Vector3(0, 0, out); }
+  if (best === null) { at = new T.Vector3(pel.x + 0.04 * k, pel.y + 0.09 * k, pel.z + out * 0.16 * k); n = new T.Vector3(0, 0, out); }
   else { n = new T.Vector3(pts[best + 3], pts[best + 4], pts[best + 5]).normalize(); if (n.z * out < 0.2) n.set(0, 0, out); at = new T.Vector3(pts[best], pts[best + 1], pts[best + 2]).addScaledVector(n, 0.012 * k); }
   const val = { at, n }; const rec = hit || {}; rec[side] = { key, val }; hipCache.set(s, rec);
   return val;
@@ -220,7 +220,7 @@ function setupHips(parent, scn, g, s) {
   g.group.quaternion.setFromAxisAngle(new T.Vector3(0, 1, 0), Math.PI / 2);
   g.group.updateMatrixWorld(true);
   const now = g.bones.pelvis.getWorldPosition(new T.Vector3());
-  g.group.position.add(new V3(pel.x - 0.4 * (g.spec.H / 1.7) - now.x, 0, pel.z - now.z));
+  g.group.position.add(new V3(pel.x - 0.3 * (g.spec.H / 1.7) - now.x, 0, pel.z - now.z));
   g.group.updateMatrixWorld(true);
   return { hips: true, g };
 }
