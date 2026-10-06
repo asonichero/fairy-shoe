@@ -600,7 +600,7 @@ async function proceed(snap, wrap) { wrap.remove(); save(); await playScenes(sna
 async function playAftercare(kind, snap, wrap, draw) {
   const g = app.g, id = snap.id, S_ = g.chars[id].stats;
   const r = R.applyAftercare(g, id, kind); if (!r) return;
-  (snap.done || (snap.done = {}))[kind] = true; (snap.lines = snap.lines || []).push(r.line); snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save();
+  (snap.done || (snap.done = {}))[kind] = true; snap.aftercare = r.name;   // (just a mention on the card: it has been seen) snap.changes = snap.changes.concat(r.changes); snap.exits = snap.exits.concat(r.exits); save();
   wrap.hidden = true; say(null, null);
   await busy('Setting the scene…', async () => {
     await delay(50);
@@ -637,7 +637,7 @@ function showResult(snap, { stage }) {
           snap.tooHarsh ? ['You took them past what they could bear; they needed ', h('b', {}, snap.expectedName), '.']
             : ['You brought them to ', h('b', {}, snap.reachedName), '; they needed ', h('b', {}, snap.expectedName), '.']),
         h('div', {}, snap.text + '.')] : null,
-      (snap.lines || []).map(l => h('p', { class: 'say' }, l)), snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
+      (snap.lines || []).map(l => h('p', { class: 'say' }, l)), snap.aftercare ? h('p', { class: 'small', style: 'color:#6a5d52;margin:8px 0' }, 'Afterwards: ' + snap.aftercare + '.') : null, snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
       canAfter && !Object.keys(snap.done || {}).length ? [h('h4', {}, 'How does the evening end?'), h('p', { class: 'sub' }, 'One way, for this correction. What you choose is what ' + d.name + ' carries into the night.'), h('div', { class: 'choices' }, [...Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
         h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => playAftercare(k, snap, wrap, draw) },
           h('b', {}, a.name, costIcons(a.cost)), h('span', {}, a.blurb))),
