@@ -754,7 +754,7 @@ function createTableau(scene, kind, opts, env = {}) {
       S.lookAt(g, s.bones.head.getWorldPosition(new V3()), 0.9); S.lookAt(s, g.bones.head.getWorldPosition(new V3()), 0.9);
     };
     gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3())); eyesAt(s, g.bones.head.getWorldPosition(new V3())); };
-    view = { pos: new V3(4.0, 1.35, 0.3), tgt: new V3(0, 1.0, 0.3), fov: 42 };   // square on from the side, both profiles
+    view = { pos: new V3(-1.7, 1.5, 3.6), tgt: new V3(0, 1.0, 0.2), fov: 42 };   // from just behind the subject's shoulder, looking across them to the player in the chair   // square on from the side, both profiles
   }
   function a0() { return 0; }
   // let the skirt (if any) settle once the pose is in

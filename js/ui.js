@@ -196,7 +196,9 @@ async function playScene(notice) {
     showStage(true);
     ch = S.buildCharacter(S.clone(B.spec(id)), { voxel: 0.011, key: id });
     stage.scene.add(ch.group); ch.helper.visible = false; S.resetCharacter(ch, notice.type === 'word' ? 'Downcast' : 'Watch');
-    stage.camera.position.set(0.5, 1.25, 3.4); stage.controls.target.set(0, 0.85, 0); stage.controls.enabled = true; stage.camera.fov = 35; stage.camera.updateProjectionMatrix();
+    // they stand in front of the door, on their way out, with it in view behind them
+    ch.group.position.set(1.45, 0, -2.45); ch.group.updateMatrixWorld(true);
+    stage.camera.position.set(0.3, 1.4, 1.2); stage.controls.target.set(1.45, 1.1, -2.6); stage.controls.enabled = true; stage.camera.fov = 40; stage.camera.updateProjectionMatrix();
     stage.loop((dt, t) => { S.animateCharacter(ch, dt, t); ch.group.updateMatrixWorld(true); S.hairStep(ch, dt, S.bodyColliders(ch)); S.faceStep(ch, dt); S.skirtStep(ch, dt, [ch], []); });
   });
   const beats = R.farewellScene(notice.type === 'word' ? 'word' : 'moveon', id, { why: notice.why, mood: notice.mood, title: app.title });
@@ -588,11 +590,12 @@ function chipsFor(changes) {
   }));
 }
 function exitsBlock(exits) {
-  return exits.map(n => h('div', { class: 'exit' + (n.type === 'word' || n.type === 'safeword' ? ' word' : '') },
+  // (moving on is not announced here: it is kept for the end of the evening, once every behaviour report has been dealt with)
+  return exits.filter(n => n.type !== 'moveon').map(n => h('div', { class: 'exit' + (n.type === 'word' || n.type === 'safeword' ? ' word' : '') },
     n.type === 'safeword' ? CH[n.id].name + ' called the safe word. ' + fmt(C.SAYINGS.word[0]) + ' It stopped at once (' + n.count + ' of ' + n.need + ').' : n.type === 'word' ? CH[n.id].name + ' called the safe word. ' + fmt(C.SAYINGS.word[0]) + ' It stopped at once, and they are gone from the house.' : CH[n.id].name + ' has moved on. ' + fmt(CH[n.id].lines.leave)));
 }
 // On from the result: to the next resident's fate, the evening or the night.
-async function proceed(snap, wrap) { wrap.remove(); save(); await playScenes(snap.exits); teardownLive(); showStage(false); say(null, null); renderEvening(); }
+async function proceed(snap, wrap) { wrap.remove(); save(); await playScenes(snap.exits.filter(n => n.type === 'word')); teardownLive(); showStage(false); say(null, null); renderEvening(); }
 // One of the aftercare scenes: the effect is applied, the room is set for it, the words are said, and then back to the result with the rest.
 async function playAftercare(kind, snap, wrap, draw) {
   const g = app.g, id = snap.id, S_ = g.chars[id].stats;
@@ -648,8 +651,11 @@ function showResult(snap, { stage }) {
 }
 
 // ── The end of the night ────────────────────────────────────────
-function endNight() {
-  const g = app.g, notices = R.endEvening(g, app.rng);
+async function endNight() {
+  const g = app.g;
+  // whoever has moved on in the course of the evening is seen off now, once every behaviour report has been dealt with
+  await playScenes(R.flushMoveOns(g));
+  const notices = R.endEvening(g, app.rng).filter(n => !(n.type === 'moveon' && n.played));
   if (notices.length) showNotices('Overnight', notices, nextDay, 'Morning');
   else nextDay();
 }
@@ -681,7 +687,7 @@ function showRules() {
     h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: closeModal }, 'Close')));
 }
 
-window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro };
+window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro, playScene };
 function boot() {
   const tag = document.createElement('div'); tag.textContent = 'build ' + (window.FS_BUILD || '?'); tag.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:9;font:10px monospace;color:#8a8a96;opacity:.6;pointer-events:none';
   document.body.appendChild(tag);   // so it is plain which version of the game this is
