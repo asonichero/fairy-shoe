@@ -32,7 +32,7 @@ const BODIES = {
       bra: wear(m.wardrobe.bra, { color: 0xF4B8E4 }), briefs: wear(m.wardrobe.briefs, { color: 0xF4B8E4 }),
       bottom: wear(m.wardrobe.bottom, { name: 'Under-shorts', color: 0xe6dccb, legLen: 0.4 }),
       skirt: { kind: 'skirt', name: 'Blue dress, skirt', color: 0x7fa3d6, above: 0.01, length: 0.24, flare: 0.03 },
-      top: { kind: 'top', name: 'Blue dress, bodice', color: 0x7fa3d6, from: 'hip', sleeves: 0.45 }, shoes: wear(m.wardrobe.shoes, { name: 'Buckled shoes', color: 0x7fa3d6 }) });
+      top: { kind: 'top', name: 'Blue dress, bodice', color: 0x7fa3d6, from: 'hip', sleeves: 0.45, belt: { color: 0xf4f1ea, buckle: 0xe9e4d6, width: 0.008, at: 'waist', buckleScale: 0.5 } }, shoes: wear(m.wardrobe.shoes, { name: 'Buckled shoes', color: 0x7fa3d6 }) });
     m.looks = everyday(['bra', 'briefs', 'bottom', 'skirt', 'top', 'shoes']); m.look = 'Everyday';
     return m;
   },

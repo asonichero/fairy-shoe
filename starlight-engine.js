@@ -35,7 +35,7 @@ const PRESETS = {
     name: 'Aya', expressive: 1.1, build: 'female', tolerance: 0.75, resilience: 0.6, height: 172, legs: 1.02, shoulders: 38,
     bust: 86, underbust: 72, waist: 63, hip: 100.5,
     neck: 31, arm: 25, forearm: 22, wrist: 14.5,
-    thigh: 52, knee: 34, calf: 33, ankle: 20.5, cup: 3, glutes: 1.32, head: 1.0,
+    thigh: 52, knee: 34, calf: 33, ankle: 20.5, cup: 3, glutes: 1.32, endowment: 1, head: 1.0,
     eye: 1.1, eyeHeight: -0.1, brow: 0.35, bridge: 0.81, hump: 0.2, tipTilt: -1, noseWidth: 0.92, lips: 0.81, mouth: 1.01, youth: 0.25, cheeks: 0.82,
     // Watchful composure: alert, level, still. Lids a touch lifted (eyes ahead of the
     // room), brows level, mouth corners exactly level; few eye movements, and she holds
@@ -62,7 +62,7 @@ const PRESETS = {
     name: 'Rin', expressive: 1.0, build: 'female', tolerance: 0.5, resilience: 0.55, height: 163, legs: 1.05, shoulders: 37,
     bust: 75.5, underbust: 68, waist: 62.5, hip: 87.5,
     neck: 26, arm: 23, forearm: 19, wrist: 13.5,
-    thigh: 38, knee: 28, calf: 26, ankle: 19.5, cup: 2, glutes: 1.4, head: 1.04,
+    thigh: 38, knee: 28, calf: 26, ankle: 19.5, cup: 2, glutes: 1.4, endowment: 1, head: 1.04,
     eye: 1.15, brow: 0.65, nose: 1.38, hump: 0.2, tipTilt: 1, lips: 0.6, mouth: 0.8, mouthHeight: -0.35, youth: 0.7, cheeks: 0.7, jaw: 0.87, chin: 1.06,
     // Quiet preoccupation: the faintest concentration furrow, gaze a little lowered and
     // inward, eyes that move more than the rest of her face (frequent, wide, not
@@ -88,7 +88,7 @@ const PRESETS = {
     name: 'Kiko', expressive: 1.1, build: 'female', tolerance: 0.35, resilience: 0.45, height: 158, legs: 1.04, shoulders: 35,
     bust: 86, underbust: 60, waist: 64.5, hip: 93.5,
     neck: 26, arm: 30, forearm: 21, wrist: 14,
-    thigh: 49.5, knee: 32.5, calf: 27.5, ankle: 20, cup: 4, glutes: 1.4, head: 1.1,
+    thigh: 49.5, knee: 32.5, calf: 27.5, ankle: 20, cup: 4, glutes: 1.4, endowment: 1, head: 1.1,
     eye: 1.3, eyeGap: 1.1, eyeHeight: -1, brow: 0.7, hump: -1, tipTilt: -1, noseWidth: 1.15, mouthHeight: -0.4, youth: 0.6, jaw: 0.87, chin: 1.05,
     // Asymmetric readiness: one corner of the mouth cocked higher (a quip in reserve),
     // eyes open and bright, brows lifted a little and one higher; quick eye movements
@@ -115,7 +115,7 @@ const PRESETS = {
     name: 'Kenji', expressive: 0.6, build: 'male', tolerance: 0.65, resilience: 0.7, height: 181.5, legs: 1.02, shoulders: 45,
     bust: 96, underbust: 90, waist: 80, hip: 94,
     neck: 38, arm: 32.5, forearm: 27, wrist: 17,
-    thigh: 54, knee: 38, calf: 37, ankle: 23, glutes: 1.4, head: 1.0,
+    thigh: 54, knee: 38, calf: 37, ankle: 23, glutes: 1.4, endowment: 1, head: 1.0,
     eye: 1.14, eyeGap: 1.01, brow: 0.1, nose: 1.18, bridge: 1.5, hump: 0.35, lips: 0.85, mouth: 1.15,
     // Steady absorption: listening to something you can't hear. Gaze resting slightly
     // off to one side and up; a habitual tension round the eyes (lower lids raised,
@@ -136,7 +136,7 @@ const PRESETS = {
     name: 'Haru', expressive: 1.2, build: 'male', tolerance: 0.45, resilience: 0.5, height: 160.5, legs: 1.06, shoulders: 38,
     bust: 82, underbust: 76, waist: 67, hip: 85,
     neck: 31, arm: 24.5, forearm: 22, wrist: 15,
-    thigh: 45, knee: 32, calf: 31, ankle: 20, glutes: 1.1, head: 1.04,
+    thigh: 45, knee: 32, calf: 31, ankle: 20, glutes: 1.1, endowment: 1, head: 1.04,
     eye: 1.32, eyeGap: 1.04, brow: 0.3, nose: 1.0, lips: 0.9, mouth: 0.95, youth: 0.35, jaw: 1.0, chin: 0.98,
     // Unsure but graceful: wide, bright eyes with the brows lifted and drawn a little together, gaze resting slightly
     // down and to one side, eyes that wander and don't hold contact for long; the mouth a touch down at the corners.
@@ -174,6 +174,7 @@ const SLIDERS = [
   ['waist', 'Waist', 50, 100, 0.5, 'cm'],
   ['hip', 'Hip', 70, 120, 0.5, 'cm'],
   ['glutes', 'Glute shape', 0.6, 1.4, 0.01, '×'],
+  ['endowment', 'Endowment (male builds)', 0.4, 1.6, 0.01, '×'],
   ['thigh', 'Thigh', 38, 70, 0.5, 'cm'],
   ['knee', 'Knee', 28, 45, 0.5, 'cm'],
   ['calf', 'Calf', 26, 45, 0.5, 'cm'],
@@ -507,9 +508,10 @@ function buildSpec(m) {
   // (a mannequin's form, not anatomy); clothing treats it as torso (tag 'groin').
   if (!female) {
     const fr = loftRing(prims[0], Y.crotch + 0.012 * H), front = fr[1] + fr[3];
-    // About 4 cm proud of the pelvis at its fullest (0.022 × height), rounder low down.
-    const r = [0.022 * H, 0.028 * H, 0.019 * H];
-    P(ellipsoid(V(0, Y.crotch + 0.003 * H, front + r[2] * 0.15), r, V(0, 1, 0.35)), 'pelvis', 'torso', 0.018 * H, 0, { tag: 'groin' });
+    // Long and flat: from just below the belly line down to a little below the crotch, only about 2.5 cm proud of the pelvis at its fullest; `endowment` scales it.
+    const e = m.endowment == null ? 1 : m.endowment, lowest = Y.crotch + 0.003 * H - 0.028 * H, highest = Y.belly - 0.012 * H;
+    const r = [0.02 * H * e, (highest - lowest) / 2, 0.0125 * H * e];
+    P(ellipsoid(V(0, (highest + lowest) / 2, front + r[2] * 0.1), r, V(0, 1, 0.1)), 'pelvis', 'torso', 0.02 * H, 0, { tag: 'groin' });
   }
   const hipRing = loftRing(prims[0], Y.hip);
   const g = m.glutes;
@@ -915,7 +917,7 @@ function topCoverage(spec, L, tag, torso, p, t, coneLen) {
   const from = { underbust: Y.under - 0.012 * H, belly: Y.belly - 0.01 *H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
   const neck = L.neck || (spec.m.build === 'male' ? 'crew' : 'scoop');
   const neckline = neck === 'crew' || neck === 'v'
-    ? Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
+    ? (L.collar ? Y.neckBase + 0.03 * H : Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]))   // (a collared shirt is painted right up to the neck: the collar band lies over the edge, so no skin shows at the shoulders or the nape) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
     : Y.armpit + 0.022 * H + 0.018 * H * smooth01(0.02, -0.02, p[2]);
   if (torso || tag === 'thigh') return Math.min(p[1] - from, neckline - p[1]);   // long tops reach the upper thigh
   if (tag === 'deltoid') return L.sleeves > 0 ? 0.05 : NONE;
@@ -6559,7 +6561,7 @@ function removeBelt(ch) {
 function buildBelt(ch, L) {
   removeBelt(ch);
   const spec = ch.spec, H = spec.H, Y = spec.Y, B = typeof L.belt === 'object' ? L.belt : { color: L.belt };
-  const half = (B.width || 0.017) * H / 1.78, y = Y[B.at || (L.kind === 'bottom' ? 'belly' : 'waist')], ring = loftRing(spec.prims[0], y);
+  const half = (B.width || 0.017) * H / 1.78, y0 = Y[B.at || (L.kind === 'bottom' ? 'belly' : 'waist')], y = L.kind === 'bottom' && !B.at ? y0 - half : y0, ring = loftRing(spec.prims[0], y);   // (a belt on bottoms starts half its width below the belly line, so the shirt's hem never shows under it)
   const W = loftWeights(spec, y), names = BONES, boneIdx = W.map(([b]) => names.indexOf(b));
   const mk = (pos, idx, color, metal) => {
     const g = new THREE.BufferGeometry(), n = pos.length / 3, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
