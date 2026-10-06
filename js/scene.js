@@ -190,12 +190,14 @@ function setupAstride(parent, scn, g, s) {
   // The spine stays as it is: the hips tip back (the pelvis turned about the hip joints) until the back meets the chair's, the thighs turned forward by the same
   // amount so they stay level on the seat, and the shins and feet brought back to the floor.
   const orig = scn.giverQ; let legs = null;
+  const edit = who => Object.assign({}, ...(Poses.astride || []).filter(e => e.who === who).map(e => Object.fromEntries(Object.entries(e.bones).filter(([b]) => g.bones[b]).map(([b, v]) => [b, S.degQ(v)]))));
+  const gEdit = edit('giver'), sEdit = edit('subject');   // (the same at every beat)
   const apply = () => { g.target = scn.giverQ(scn.beat); for (const b of BONES) { g.pose[b] = g.target[b].clone(); g.bones[b].quaternion.copy(g.pose[b]); } g.group.updateMatrixWorld(true); };
   const setTilt = deg => {
     scn.giverQ = beat => {
       const b = orig(beat), q = S.degQ([-deg, 0, 0]), qi = S.degQ([deg, 0, 0]);
       const out = { ...b, pelvis: b.pelvis.clone().multiply(q), thighL: b.thighL.clone().multiply(qi), thighR: b.thighR.clone().multiply(qi) };
-      return legs ? { ...out, ...legs } : out;
+      return { ...out, ...(legs || {}), ...gEdit };
     };
     scn.giverQ.edited = true; apply();
   };
@@ -226,6 +228,8 @@ function setupAstride(parent, scn, g, s) {
     s.group.updateMatrixWorld(true);
     void hip;
   }
+  for (const [b, q] of Object.entries(sEdit)) if (s.bones[b]) s.bones[b].quaternion.copy(q);   // (js/poses.js edits)
+  s.group.updateMatrixWorld(true);
   // the pose as it now stands is the subject's base; they take nothing from a smack here
   const base = {}; for (const b of BONES) base[b] = s.bones[b].quaternion.clone();
   scn.baseQ = base; scn.reactQ = { L: base, R: base, B: base }; scn.buckQ = scn.reactQ;
