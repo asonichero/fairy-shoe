@@ -83,7 +83,8 @@ function showIntro() {
     h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => { saveSettings(); startNew(); } }, 'Open the door'),
       saved ? h('button', { onclick: () => { saveSettings(); continueGame(saved); } }, 'Continue (Day ' + saved.g.day + ')') : null,
-      h('a', { class: 'linkbtn', href: 'editor.html', target: '_blank', rel: 'noopener' }, 'Character editor')))));
+      h('a', { class: 'linkbtn', href: 'editor.html', target: '_blank', rel: 'noopener' }, 'Character editor'),
+      h('button', { class: 'quiet', title: 'For testing: a fresh game, straight to the correction with the highest expected severity', onclick: jumpToSevere }, 'Test: most severe correction')))));
 }
 function leaveToMenu() { teardownLive(); save(); showIntro(); }
 
@@ -98,6 +99,26 @@ function startNew() {
   app.rng = seed(); app.g = R.newGame(app.rng, { title: app.title });
   const first = app.g.roster.map(id => ({ type: 'arrive', id }));
   showNotices('The first morning', first, () => { nextDay(); if (!recall('fairyshoe.seenrules')) { store('fairyshoe.seenrules', 1); showRules(); } }, 'Begin');
+}
+// Testing: a fresh game, played forward to an evening, to the correction with the highest expected severity (tries a number of random days for a Severe one),
+// and straight into its set-up. Not saved.
+function jumpToSevere() {
+  let best = null;
+  for (let tries = 0; tries < 60; tries++) {
+    const rng = seed(), g = R.newGame(rng, { title: app.title });
+    R.startMorning(g, rng); g.title = app.title;
+    const left = g.roster.slice();
+    for (let ci = 0; ci < g.chores.length && left.length; ci++) for (let si = 0; si < g.chores[ci].slots.length && left.length; si++) R.assign(g, ci, si, left.shift());
+    if (!R.allAssigned(g)) continue;
+    R.resolveDay(g, rng);
+    for (const c of g.cards) { const e = R.expectedBand(g.chars[c.id].stats, c), score = e * 10 + (c.mod || 0); if (!best || score > best.score) best = { score, e, g, rng, card: c }; }
+    if (best && best.e >= 4) break;
+  }
+  if (!best) return;
+  app.rng = best.rng; app.g = best.g; app.selected = null; app.expanded = {};
+  renderEvening();
+  say(null, null);
+  renderSetup(best.card);
 }
 function continueGame(saved) {
   app.rng = seed(); app.g = saved.g; app.title = saved.title; app.keeper = saved.keeper || 'a'; app.settings = { ...app.settings, ...(saved.settings || {}) };
