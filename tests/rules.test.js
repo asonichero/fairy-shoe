@@ -301,3 +301,11 @@ test('reprieves and aftercare come with a sentence of their own', () => {
   const r = R.applyReprieve(g, 'red', 'kind'); assert.ok(r.text && !/\{\w+\}/.test(r.text) && /Red/.test(r.text));
   const a = R.applyAftercare(g, 'red', 'warm'); assert.ok(a.line && /Red/.test(a.line));
 });
+
+test('every line the scene-change interlude can show fills completely (no stray {Placeholders})', () => {
+  const ctx = { name: 'Red', pron: ['she', 'her', 'her', 'herself'], title: 'Keeper', Impl: 'paddle' };
+  const strings = [];
+  const walk = v => { if (typeof v === 'string') strings.push(v); else if (v && typeof v === 'object') Object.values(v).forEach(walk); };
+  walk(C.CHANGE); walk(C.REOPEN); walk(C.MOVES);
+  for (const t of strings) assert.doesNotMatch(R.fillTemplate(t, ctx), /\{\w+\}/, t);
+});

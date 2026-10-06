@@ -210,7 +210,7 @@ function categoryWeights(g, id, hasSecond) {
 }
 function fillTemplate(text, ctx) {
   const P = ctx.pron, second = ctx.second || '';
-  const map = { Name: ctx.name, Second: second, Title: ctx.title || '', Subj: P[0], Obj: P[1], Poss: P[2], Refl: P[3] };
+  const map = { Name: ctx.name, Second: second, Title: ctx.title || '', Subj: P[0], Obj: P[1], Poss: P[2], Refl: P[3], Impl: ctx.Impl };
   let out = '';
   const re = /\{(\w+)\}/g; let last = 0, m;
   while ((m = re.exec(text))) {
