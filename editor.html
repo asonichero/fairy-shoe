@@ -107,7 +107,7 @@
   <div class="row" style="margin-top:8px"><label><span>Palm angle at contact (skin → glute centre)</span><span id="v-aim">65%</span></label><input id="s-aim" type="range" min="0" max="100" step="5" value="65"></div>
 
   <h3>Aftercare scene</h3>
-  <div class="sub" style="margin:0 0 6px">The four scenes shown after a correction, with the Disciplinarian and Subject chosen above and the clothes as set for the Subject. Pose edits for them go in js/poses.js under corner, lines, held and warm; the Discipline scene is closed while one is open.</div>
+  <div class="sub" style="margin:0 0 6px">The four scenes shown after a correction, with the Disciplinarian and Subject chosen above and the clothes as set for the Subject. Use Edit pose (below) to reshape the base pose: the scene is held still, with the writing at one place and, for Corner time, the subject standing in the open. The pose report's entries go in js/poses.js under corner, lines, held and warm. The Discipline scene is closed while one is open.</div>
   <div class="tabs" id="af-kinds"></div>
 
   <h3>Pose editor</h3>
@@ -167,7 +167,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261007-0240";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261007-0310";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -250,6 +250,7 @@ let chars = {};
 // Discipline scene settings (applied to the engine's scene state when it's built).
 const sc = { sound: true, position: 'lap', implement: 'hand', on: false, giver: 'keeper-a', subject: ORDER[0], beat: 'relaxed', loop: false, side: 'L', timing: { ...S.DEFAULT_TIMING }, palmAim: 0.65, skirt: 'up' };
 let scn = null;   // the engine's scene state while shown (sess.scn)
+let tab = null, tabKind = null;   // an aftercare scene shown in place of the discipline scene (see showTab)
 let sess = null;  // the game's own session (FairyShoeScene.createSession) running the discipline scene: the same code as in the game
 // Pose editor state (see POSE EDITOR); while `on`, the scene is frozen and edited by hand.
 const PE = { on: false };
@@ -787,13 +788,14 @@ controls.addEventListener('start', () => { camGo = null; document.querySelectorA
 function refreshImplements() { document.querySelectorAll('#sc-implements button').forEach(b => b.classList.toggle('on', b.dataset.impl === sc.implement)); }
 refreshImplements(); refreshPositions();
 // The aftercare scenes (the game's own: see scene.js createTableau), shown in place of the discipline scene.
-let tab = null, tabKind = null;
-function clearTab() { if (tab) { tab.dispose(); tab = null; } tabKind = null; document.querySelectorAll('#af-kinds button').forEach(b => b.classList.remove('on')); placeChars(); }
+function clearTab() { if (PE.on) PE.stop(); if (tab) { tab.dispose(); tab = null; scn = null; } tabKind = null; document.querySelectorAll('#af-kinds button').forEach(b => b.classList.remove('on')); placeChars(); }
 function showTab(kind) {
   if (sc.on) document.getElementById('sc-on').click();
   clearTab();
-  tab = EDITOR.tableau(scene, kind, { giver: current[sc.giver], subject: current[sc.subject], subjectId: sc.subject,
+  tab = EDITOR.tableau(scene, kind, { giver: current[sc.giver], subject: current[sc.subject], subjectId: sc.subject, editor: true,
     layers: { bottoms: !!lowered[sc.subject], briefs: !!briefsDown[sc.subject], skirt: sc.skirt } }, { marks: {} });
+  // The pose editor works on it as it does on the discipline scene: the base pose only (the scene is held still, with the writing at one place).
+  scn = { g: tab.giver, s: tab.subject, tool: null, tab: true, side: 'L', update: dt => { tab.tick(dt, 0); for (const c of [tab.giver, tab.subject]) for (const b of BONES) { c.pose[b].copy(c.bones[b].quaternion); c.target[b] = c.pose[b]; } }, setBeat() {}, setLoop() {}, chairPlant: null };
   tabKind = kind; camera.position.copy(tab.view.pos); controls.target.copy(tab.view.tgt); camera.fov = tab.view.fov; camera.updateProjectionMatrix(); controls.update();
   document.querySelectorAll('#af-kinds button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
   placeChars();
@@ -865,8 +867,9 @@ function basis(x, z) {
 }
 
 const peWide = () => !!(scn && scn.tool && scn.tool.wide);
-const peKey = () => [sc.position, sc.giver, sc.subject, sc.implement, sc.beat, sc.beat === 'contact' && !peWide() ? sc.side : ''].join('|');
+const peKey = () => tab ? ['tab', tabKind, sc.giver, sc.subject].join('|') : [sc.position, sc.giver, sc.subject, sc.implement, sc.beat, sc.beat === 'contact' && !peWide() ? sc.side : ''].join('|');
 function peLabel() {
+  if (tab) return 'Relaxed · ' + EDITOR.tableaux.find(t => t[0] === tabKind)[1];   // (the base pose: the giver's relaxed, the subject's base)
   const side = sc.beat !== 'contact' ? '' : peWide() ? ' (both sides)' : sc.side === 'L' ? ' (left)' : ' (right)';
   const impl = document.querySelector(`#sc-implements button[data-impl="${sc.implement}"]`).textContent;
   return `${BEATS.find(b => b[0] === sc.beat)[1]}${side} · ${impl}`;
@@ -1170,7 +1173,7 @@ function peRefresh(rebuild) {
 
 // ── Lifecycle
 PE.start = () => {
-  if (!sc.on) document.getElementById('sc-on').click();   // shows the scene
+  if (!sc.on && !tab) document.getElementById('sc-on').click();   // shows the scene
   if (!scn) return;
   if (sc.loop) { sc.loop = false; scn.setLoop(false); refreshSceneUI(); }
   scn.side = sc.side; scn.setBeat(sc.beat);   // (a smack leaves it driven)
@@ -1186,7 +1189,7 @@ PE.settle = () => {
   if (scn.chairPlant) EDITOR.hold(scn.s, scn.chairPlant);
   PE.base = { ...snapState({ table: true, clear: true }), scn };
   PE.key = peKey(); PE.label = peLabel();
-  PE.ctx = { position: sc.position, giver: sc.giver, subject: sc.subject, implement: sc.implement, beat: sc.beat, side: sc.side, palmAim: sc.palmAim };
+  PE.ctx = { position: tab ? tabKind : sc.position, giver: sc.giver, subject: sc.subject, implement: sc.implement, beat: sc.beat, side: sc.side, palmAim: sc.palmAim };
   PE.press = grabPress();
   const saved = PE.saved[PE.key];
   if (saved) applyState(saved.edit);
@@ -1285,7 +1288,7 @@ function animate() {
     ch.group.position.y += (-(ch.stanceDrop || 0) - ch.group.position.y) * (1 - Math.exp(-dt * 7));
     if (view.spin) ch.group.rotation.y += dt * 0.5;
   }
-  if (tab) tab.tick(dt, t);
+  if (tab && !PE.on) tab.tick(dt, t);
   if (sess) { sess.frozen = PE.on; sess.tick(dt, t); }   // the game's own per-frame step for the scene (held still while the pose editor is on)
   if (PE.on) { PE.frame(); if (sess) sess.applyPins(); }   // (the pose editor's own bones first, then the pinned feet are put back)
   // Marks fade slowly (the scene's bodies fade in the session).

@@ -608,10 +608,17 @@ function createTableau(scene, kind, opts, env = {}) {
     ch.gazeFx = { x: clamp(v.x * S.FACE.EYE_GAIN, -1, 1), y: clamp(v.y * S.FACE.EYE_GAIN, -1, 1), w };
   };
   const edits = Poses[kind] || [];
+  // Pose edits (js/poses.js): the base pose, set on top of the scene's own and set again after its arms and heads have been placed, so an edited bone is the edited bone.
+  const applyEdits = () => { for (const e of edits) { const c = e.who === 'giver' ? g : s; if (!(e.beat === 'base' || (e.who === 'giver' && e.beat === 'relaxed')) || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); } };
   if (kind === 'corner') {
     g.group.visible = false; g.helper.visible = false;
-    const c = -Room.HALF + 0.62; standing(s, face(-1, -1), c, c); s.handsOnHead = true;
-    view = { pos: new V3(c + 1.9, 1.45, c + 1.9), tgt: new V3(c - 0.1, 1.1, c - 0.1), fov: 40 };
+    s.handsOnHead = true;
+    if (opts.editor) {   // (in the editor the subject stands in the open, where the pose can be seen and reached)
+      standing(s, 0, 0, 0); view = { pos: new V3(1.7, 1.4, 2.3), tgt: new V3(0, 1.0, 0), fov: 38 };
+    } else {
+      const c = -Room.HALF + 0.62; standing(s, face(-1, -1), c, c);
+      view = { pos: new V3(c + 1.9, 1.45, c + 1.9), tgt: new V3(c - 0.1, 1.1, c - 0.1), fov: 40 };
+    }
   } else if (kind === 'lines') {
     g.group.visible = false; g.helper.visible = false;
     const st = seated(s, 0, 0, -0.1);
@@ -668,8 +675,8 @@ function createTableau(scene, kind, opts, env = {}) {
     view, subject: s, giver: g,
     tick(dt, t) {
       for (const c of both) if (c.group.visible) S.animateCharacter(c, dt, t);
-      for (const e of edits) { const c = e.who === 'giver' ? g : s; if (e.beat !== 'base' || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); }
-      hold(t); gaze();
+      applyEdits();
+      hold(t); applyEdits(); gaze();
       for (const c of both) if (c.group.visible) { c.group.updateMatrixWorld(true); S.bustSpring(c, dt); }
       const on = both.filter(c => c.group.visible);
       for (const c of on) S.bustContact(c, on);
