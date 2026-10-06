@@ -305,8 +305,9 @@ function createSession(scene, opts, env = {}) {
       if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench], 1.5, false); }   // the player's own skirt (a dress) drapes over the seat or the stance
       if (oldP && scn.pain) {
         for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
-        scn.pain.update(cfg.elapsed || 0, false);   // the time it took
+        if (!st.frozen) scn.pain.update(cfg.elapsed || 0, false);   // the time it took
       }
+      if (scn.pain) { const real = scn.pain.update; scn.pain.update = (dt, onSkin) => { if (!st.frozen) real(dt, onSkin); }; }   // (composure held still while frozen)
       scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
       if (env.afterMake) env.afterMake(g, s);
@@ -328,6 +329,9 @@ function createSession(scene, opts, env = {}) {
       setImplement(n) { if (st.position === 'spread' && !S.IMPLEMENTS[n].dual) return false; st.implement = n; scn.setImplement(n); scn.setBeat('relaxed'); return true; },
       // Builds the room and bodies again (a new position, or a new implement that has been fetched), keeping the pain and the marks.
       rebuild(cfg) { make(cfg); },
+      // Composure held still (nothing fades, nothing builds) from here until the first smack or run begins again.
+      freeze() { st.frozen = true; },
+      get frozenComposure() { return !!st.frozen; },
       setBeat(b) { scn.setBeat(b); },
       get pace() { return PACE[st.paceIdx]; }, get strengthMult() { return STRENGTH[st.strengthIdx]; }, get runLength() { return RUN[st.runIdx]; },
       stepPace(d) { st.paceIdx = clamp(st.paceIdx + d, 0, PACE.length - 1); const D = derive(); scn.timing = { ...scn.timing, speed: D.speed }; scn.severity = D.face; },
@@ -335,8 +339,8 @@ function createSession(scene, opts, env = {}) {
       stepRun(d) { st.runIdx = clamp(st.runIdx + d, 0, RUN.length - 1); },
       canStrike() { return !st.ended && !scn.busy() && !(scn.pain && scn.pain.tooHarsh); },
       // One whole smack: lift, hold, strike, and the hand stays on the skin until the next.
-      smack() { if (!api.canStrike()) return false; st.mode = 'single'; Sound.init(); const D = derive(); scn.cycle(D.strength, undefined, undefined, D.hold); st.since = 0; return true; },
-      run(n) { if (st.ended) return; Sound.init(); st.mode = 'run'; st.toRun = n == null ? RUN[st.runIdx] : n; st.since = derive().dwell; },
+      smack() { if (!api.canStrike()) return false; st.frozen = false; st.mode = 'single'; Sound.init(); const D = derive(); scn.cycle(D.strength, undefined, undefined, D.hold); st.since = 0; return true; },
+      run(n) { if (st.ended) return; st.frozen = false; Sound.init(); st.mode = 'run'; st.toRun = n == null ? RUN[st.runIdx] : n; st.since = derive().dwell; },
       stop() { st.mode = 'idle'; st.toRun = 0; },
       get running() { return st.mode === 'run'; },
       distress() { return scn.pain ? scn.pain.distress() : 0; },

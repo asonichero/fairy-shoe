@@ -27,20 +27,25 @@ async function liveControls(p) {
   await p.click(`${card} >> button[aria-label="Fewer smacks in a run"]`);
   const state = () => p.evaluate(() => ({ pos: __fs.app.live.position, impl: __fs.app.live.implement, pace: __fs.app.live.pace, strength: __fs.app.live.strengthMult, run: __fs.app.live.runLength, cam: __fs.app.stage.cameraMode }));
   let s = await state(); if (s.pace !== 1.25 || s.strength !== 1.25 || s.run !== 8 || s.cam !== 'overview') throw new Error('nudges or camera: ' + JSON.stringify(s));
-  // clothes, in the scene pop-up
-  await p.click(scene); await p.click('.overlay button:has-text("Bottoms")'); await p.click('.overlay button:text-is("Close")');
-  if (await p.locator('.hudname').count() !== 1 || await p.locator('.dock').count() !== 0) throw new Error('the HUD should be the name, the buttons and one card');
+  // the scene pop-up: position, implement and clothes are chosen together, then confirmed; nothing moves before that
   await p.click(scene);
+  const d0 = await p.evaluate(() => __fs.app.live.distress());
   await p.click('.overlay .picks2 button:has-text("Over the table")');
-  await p.waitForSelector('#veil', { state: 'hidden', timeout: 90000 });
-  s = await state(); if (s.pos !== 'case') throw new Error('position did not change: ' + JSON.stringify(s));
-  await p.click(scene);
   await p.click('.overlay .picks2 button:has-text("Hairbrush")');
-  await p.waitForSelector('.overlay .pick');                                          // the conversation
-  await p.locator('.overlay .pick').first().click();
-  await p.click('.overlay >> text=Continue');
-  await p.waitForSelector('#veil', { state: 'hidden', timeout: 90000 });
-  s = await state(); if (s.impl !== 'hairbrush' || s.pos !== 'case') throw new Error('implement did not change: ' + JSON.stringify(s));
+  await p.click('.overlay .picks2 button:text-is("Tell Red"), .overlay .picks2 button:has-text("Tell ")');
+  await p.click('.overlay .picks2 button:has-text("Bottoms")');
+  if ((await state()).pos === 'case') throw new Error('nothing should change before the changes are confirmed');
+  await p.click('.overlay button:text-is("Confirm changes")');
+  await p.waitForSelector('#veil button:text-is("Continue")', { timeout: 120000 });
+  const lines = await p.locator('#veil p.ln').count(); if (lines < 4) throw new Error('the interlude should tell everything that changed: ' + lines);
+  await p.click('#veil button:text-is("Continue")');
+  await p.waitForSelector('#veil', { state: 'hidden', timeout: 30000 });
+  s = await state(); if (s.impl !== 'hairbrush' || s.pos !== 'case') throw new Error('the changes did not apply: ' + JSON.stringify(s));
+  const d1 = await p.evaluate(() => __fs.app.live.distress()); if (Math.abs(d1 - d0) > 1e-6) throw new Error('composure should be frozen through the change: ' + d0 + ' -> ' + d1);
+  await p.waitForTimeout(1200); if (Math.abs(await p.evaluate(() => __fs.app.live.distress()) - d0) > 1e-6) throw new Error('composure should stay frozen until a smack');
+  if (!(await p.locator('.speech:not([hidden])').count())) throw new Error('the subject should speak when the scene reopens');
+  // the sound button sits by the camera
+  await p.click('.hudtools button[aria-label="Sound"]'); await p.click('.hudtools button[aria-label="Sound"]');
 }
 
 (async () => {

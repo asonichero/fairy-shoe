@@ -395,9 +395,16 @@ function buildLiveDock(ses, card) {
     camera: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.6-2.4h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg>',
     scene: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.2"/><path d="M8 8v5l-3 5M8 13l3 5M5 10.5h6"/><path d="M15 7h5M15 12h5M15 17h5"/></svg>',
   };
+  ICON.soundOn = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg>';
+  ICON.soundOff = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg>';
   const icon = (svg, title, fn) => { const b = h('button', { class: 'ico', title, 'aria-label': title, onclick: fn }); b.innerHTML = svg; return b; };
   const camNames = SC.CAMERAS.map(c => c[0]), camLabel = Object.fromEntries(SC.CAMERAS);
   const camBtn = icon(ICON.camera, 'Camera angle', () => { const i = camNames.indexOf(app.stage.cameraMode); app.camera = camNames[(i + 1) % camNames.length]; app.stage.setCamera(app.camera); camTip(); sync(); });
+  const soundBtn = icon(app.settings.sound ? ICON.soundOn : ICON.soundOff, 'Sound', () => {
+    app.settings.sound = !app.settings.sound; SC.Sound.set(app.settings.sound); saveSettings(); setSoundLabel();
+    soundBtn.innerHTML = app.settings.sound ? ICON.soundOn : ICON.soundOff; soundBtn.title = 'Sound: ' + (app.settings.sound ? 'on' : 'off');
+  });
+  soundBtn.title = 'Sound: ' + (app.settings.sound ? 'on' : 'off');
   const camTipEl = h('div', { class: 'camtip', hidden: true });
   let camTipT; const camTip = () => { camTipEl.textContent = camLabel[app.camera]; camTipEl.hidden = false; clearTimeout(camTipT); camTipT = setTimeout(() => { camTipEl.hidden = true; }, 1400); };
   const sceneBtn = icon(ICON.scene, 'Position, implement and clothes', () => { ses.stop(); showSceneMenu(ses); });
@@ -415,7 +422,7 @@ function buildLiveDock(ses, card) {
     h('div', { class: 'nudges' }, h('div', { class: 'pairb' }, slower, paceVal, faster), h('div', { class: 'pairb' }, softer, strVal, harder)),
     h('div', { class: 'acts' }, h('div', { class: 'runset', title: 'How many smacks a run gives' }, runMinus, runVal, runPlus), run, smack),
     end);
-  setScreen(h('div', { class: 'hud' }, h('div', { class: 'hudname' }, d.name), h('div', { class: 'hudtools' }, camBtn, sceneBtn), camTipEl, card_));
+  setScreen(h('div', { class: 'hud' }, h('div', { class: 'hudname' }, d.name), h('div', { class: 'hudtools' }, camBtn, soundBtn, sceneBtn), camTipEl, card_));
 
   const sync = () => {
     camBtn.title = 'Camera angle: ' + camLabel[app.stage.cameraMode === 'free' ? app.camera || 'overview' : app.stage.cameraMode];
@@ -443,51 +450,84 @@ function buildLiveDock(ses, card) {
   ses.onChange(ses);
 }
 
-// Position, implement and clothes, in one pop-up.
+// Position, implement and clothes, chosen together in one pop-up; nothing happens until the changes are confirmed.
 function showSceneMenu(ses) {
-  const tabs = (items, cur, fn) => h('div', { class: 'picks2' }, items.map(([v, l, dis, tip]) => h('button', { class: v === cur ? 'on' : '', disabled: dis || v === cur, title: tip || '', onclick: () => fn(v) }, l)));
-  const wide = () => ses.position === 'spread';
-  const pos = tabs(SC.POSITIONS.map(p => [p[0], p[1], p[0] === 'spread' && !dual(ses.implement), p[0] === 'spread' && !dual(ses.implement) ? 'Needs a wide implement' : p[2]]), ses.position, v => { closeModal(); doPosition(v); });
-  const imp = tabs(SC.IMPLEMENTS.map(p => [p[0], p[1], wide() && !dual(p[0]), p[2]]), ses.implement, v => { closeModal(); doImplement(v); });
-  const avail = ses.layerAvailable(), lay = h('div', { class: 'picks2' });
-  const paintLay = () => lay.replaceChildren(...['bottoms', 'briefs'].filter(n => avail[n]).map(n => h('button', { class: !!ses.layers[n] ? 'on' : '', disabled: n === 'briefs' && !ses.layers.bottoms, onclick: () => { ses.setLayer(n, SC.layerNext(n, ses.layers[n])); paintLay(); } }, SC.layerLabel(n, ses.layers[n]))));
-  paintLay();
-  modal(h('h2', {}, 'The scene'), h('h4', {}, 'Position'), pos, h('h4', {}, 'Implement'), imp, avail.bottoms ? h('h4', {}, 'Clothes') : null, avail.bottoms ? lay : null,
-    h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { onclick: closeModal }, 'Close')));
+  ses.freeze();   // composure holds still from here until the first smack or run
+  const id = ses.card.id;
+  const want = { position: ses.position, implement: ses.implement, layers: { bottoms: !!ses.layers.bottoms, briefs: !!ses.layers.briefs }, how: 'ask' };
+  const avail = ses.layerAvailable(), body = h('div', {});
+  const changed = () => want.position !== ses.position || want.implement !== ses.implement || want.layers.bottoms !== !!ses.layers.bottoms || want.layers.briefs !== !!ses.layers.briefs;
+  const fetching = () => want.implement !== ses.implement && want.implement !== 'hand';
+  const tabs = (items, cur, fn) => h('div', { class: 'picks2' }, items.map(([v, l, dis, tip]) => h('button', { class: v === cur ? 'on' : '', disabled: dis, title: tip || '', onclick: () => fn(v) }, l)));
+  const paint = () => {
+    const wideNeeded = want.position === 'spread';
+    const pos = tabs(SC.POSITIONS.map(p => [p[0], p[1], p[0] === 'spread' && !dual(want.implement), p[0] === 'spread' && !dual(want.implement) ? 'Needs a wide implement' : p[2]]), want.position, v => { want.position = v; paint(); });
+    const imp = tabs(SC.IMPLEMENTS.map(p => [p[0], p[1], wideNeeded && !dual(p[0]), p[2]]), want.implement, v => { want.implement = v; paint(); });
+    const how = fetching() ? [h('h4', {}, 'Getting the ' + IMPL[want.implement].label.toLowerCase()),
+      tabs([['ask', 'Ask ' + CH[id].name, false, 'Politely.'], ['tell', 'Tell ' + CH[id].name, false, 'An order.'], ['self', 'Fetch it yourself', false, 'Say nothing, and go.']], want.how, v => { want.how = v; paint(); })] : [];
+    const lay = ['bottoms', 'briefs'].filter(n => avail[n]).map(n => h('button', { class: want.layers[n] ? 'on' : '', disabled: n === 'briefs' && !want.layers.bottoms, onclick: () => { want.layers[n] = !want.layers[n]; if (n === 'bottoms' && !want.layers.bottoms) want.layers.briefs = false; paint(); } }, SC.layerLabel(n, want.layers[n])));
+    body.replaceChildren(h('h4', {}, 'Position'), pos, h('h4', {}, 'Implement'), imp, ...how, avail.bottoms ? h('h4', {}, 'Clothes') : null, avail.bottoms ? h('div', { class: 'picks2' }, lay) : null,
+      h('div', { class: 'row', style: 'margin-top:14px' }, h('button', { class: 'primary', disabled: !changed(), onclick: () => { closeModal(); applyChanges(ses, want); } }, 'Confirm changes'), h('button', { onclick: closeModal }, 'Cancel')));
+  };
+  paint();
+  modal(h('h2', {}, 'The scene'), h('p', { style: 'color:var(--muted);margin-top:0' }, 'Choose everything you want different, then confirm. ' + CH[id].name + ' will be kept exactly as ' + CH[id].pronouns[0] + ' is until you begin again.'), body);
 }
-// Changing position: pick one, a line of narration while the room is set again, then on with it. The pain carries over.
-async function doPosition(pos) {
-  const ses = app.live, id = ses.card.id, d = ses.distress();
-  const leaving = C.MOVES.leaving[d < 0.3 ? 'calm' : d < 0.9 ? 'sore' : 'spent'];
-  say(null, null);
-  await transition([tell(leaving, id), tell(C.MOVES.to[pos], id)], 3400, () => { ses.rebuild({ position: pos, elapsed: 6 }); });
-  ses.syncDock(); say(id, C.SAYINGS.nothing[0]); setTimeout(() => say(null, null), 2500);
-}
-// Changing implement: the hand is simply put down; anything else is sent for, which takes a short exchange.
-async function doImplement(impl) {
-  const ses = app.live, id = ses.card.id;
-  if (impl === 'hand') { ses.setImplement('hand'); ses.syncDock(); say(id, null); return; }
-  fetchTalk(ses, id, impl);
-}
-function fetchTalk(ses, id, impl) {
-  const s = app.g.chars[id].stats, d = CH[id], name = IMPL[impl].label.toLowerCase();
-  const o = $('#overlay'); o.dataset.dismiss = 'no';
-  const body = h('div', {}, h('p', { class: 'narr' }, tell('You let {Name} straighten up. {Subj} waits to hear what you want.', id)));
-  const opts = R.fetchOptions(s, name);
-  const choices = h('div', { class: 'picks' }, opts.map(opt => h('button', { class: 'pick', onclick: () => answer(opt) }, h('b', {}, opt.label), h('span', {}, opt.line))));
-  body.append(choices, h('div', { class: 'row', style: 'margin-top:10px' }, h('button', { class: 'quiet', onclick: closeModal }, 'Never mind')));
-  modal(h('h2', {}, 'Fetching the ' + IMPL[impl].label.toLowerCase()), body);
-  o.dataset.dismiss = 'no';
-  function answer(opt) {
-    const reply = R.fetchReply(opt.id, s, id, app.title, ses.distress());
-    if (!ses.talked) { ses.talked = true; const r = R.applyFetch(app.g, id, opt.id); ses.talkChanges.push(...r.changes); }
-    body.replaceChildren(h('p', { class: 'say you' }, opt.line), h('p', { class: 'narr' }, fmt(reply)),
-      h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: async () => {
-        closeModal(); say(null, null);
-        await transition([tell(C.MOVES.fetched, id, { Impl: name }), tell(C.MOVES.to[ses.position], id)], 3400, () => { ses.rebuild({ implement: impl, elapsed: 8 }); });
-        ses.syncDock();
-      } }, 'Continue')));
+// What changing the scene looks like, as it is read: the implement, then the position, then the clothes. Each entry is a line: { n } narration, { you } what the player says, { r } the subject.
+function planChanges(ses, want) {
+  const id = ses.card.id, st = app.g.chars[id].stats, mood = R.fetchMood(st), tone = R.toneFor(st), d = ses.distress(), K = C.CHANGE;
+  const band = d < 0.3 ? 'calm' : d < 0.7 ? 'sore' : 'spent', lines = [], T = (t, x) => tell(t, id, x);
+  const from = { position: ses.position, implement: ses.implement }, impName = IMPL[want.implement].label.toLowerCase();
+  const implChanged = want.implement !== from.implement, posChanged = want.position !== from.position;
+  const wasLap = from.position === 'lap';
+  let up = false;
+  const helpUp = () => { lines.push({ n: T(K.helpUp[band]) }); up = true; };
+  // 1. the implement
+  if (implChanged) {
+    if (want.implement === 'hand') lines.push({ n: T(K.putDown, { Impl: IMPL[from.implement].label.toLowerCase() }) });
+    else {
+      if (wasLap) helpUp();
+      if (want.how === 'self') {
+        lines.push({ n: T(K.selfFetch, { Impl: impName }) }, { n: R.fetchReply('self', st, id, app.title, d) });
+      } else {
+        const opt = R.fetchOptions(st, impName).find(o => o.id === want.how);
+        lines.push({ you: opt.line }, { n: R.fetchReply(want.how, st, id, app.title, d) });
+      }
+      if (!ses.talked) { ses.talked = true; const r = R.applyFetch(app.g, id, want.how); ses.talkChanges.push(...r.changes); }
+    }
   }
+  const fetched = implChanged && want.implement !== 'hand';
+  // 2. the position
+  if (posChanged) {
+    if (wasLap && !up) { if (d >= 0.6) helpUp(); else lines.push({ you: T(K.standOrder[tone]) }, { n: T(K.obey[mood]) }, { n: T(K.stands) }); up = true; }
+    lines.push({ you: T(K.position[want.position][tone]) }, { n: T(K.obey[mood]) }, { n: T(K.take[want.position]) });
+  } else if (fetched) {
+    lines.push({ n: want.how === 'self' ? T(K.selfBack, { Impl: impName }) : T(wasLap ? K.helpBack : K.backInPlace) });
+    if (want.how === 'self' && wasLap) lines.push({ n: T(K.helpBack) });
+  }
+  // 3. the clothes
+  const had = { bottoms: !!ses.layers.bottoms, briefs: !!ses.layers.briefs }, L = K.clothes; let touched = false;
+  if (want.layers.bottoms !== had.bottoms) { lines.push({ n: T(want.layers.bottoms ? L.bottomsDown : L.bottomsUp) }); touched = true; }
+  if (want.layers.briefs !== had.briefs) { lines.push({ n: T(want.layers.briefs ? L.briefsDown : L.briefsUp) }); touched = true; }
+  if (touched && (want.layers.bottoms || want.layers.briefs)) lines.push({ n: T(L.react[mood]) });
+  return lines;
+}
+async function applyChanges(ses, want) {
+  const id = ses.card.id, lines = planChanges(ses, want);
+  ses.stop(); ses.freeze(); say(null, null);
+  const v = $('#veil');
+  const status = h('p', { class: 'wait' }, 'Setting the scene…');
+  v.replaceChildren(...lines.map((l, i) => h('p', { class: 'ln' + (l.you ? ' you' : ''), style: 'animation-delay:' + (0.25 + i * 0.7) + 's' }, l.you ? fmt(l.you) : fmt(l.n))), status);
+  v.hidden = false; requestAnimationFrame(() => v.classList.add('on'));
+  await delay(700);   // (the text is already coming up while the room is built behind it)
+  ses.st.layers.bottoms = want.layers.bottoms; ses.st.layers.briefs = want.layers.bottoms && want.layers.briefs;
+  ses.rebuild({ position: want.position, implement: want.implement, elapsed: 0 });
+  ses.freeze();
+  ses.syncDock();
+  await delay(Math.max(0, 1400 + lines.length * 700 - 700));   // (long enough to read the last line as it arrives)
+  await new Promise(res => { status.replaceWith(h('button', { class: 'primary', onclick: res }, 'Continue')); });
+  v.classList.remove('on'); await delay(450); v.hidden = true; v.replaceChildren();
+  const line = R.reopenLine(id, app.g.chars[id].stats, ses.distress(), app.title, app.rng, app.lastReopen);
+  app.lastReopen = line.raw; say(id, line.raw);
 }
 function finishLive(ses, card) {
   const g = app.g, id = card.id;

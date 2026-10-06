@@ -397,6 +397,15 @@ function morningNarration(g, rng) {
 // To change implement the player sends the resident for the new one: a short exchange whose options and answers depend on how
 // the resident is (distress now, and their stats). Only the first exchange of a correction moves anything.
 function fetchMood(s) { return s.res >= 5 ? 'sullen' : s.wil >= 6 ? 'cheeky' : s.val >= 4 ? 'willing' : s.com <= 2 ? 'flustered' : 'plain'; }
+// How they are right now, in a line: by their mood and how composed they are. Never the same line twice running.
+function reopenLine(charId, s, distress, title, rng, avoid) {
+  const def = CHARACTERS[charId], band = distress < 0.3 ? 'calm' : distress < 0.7 ? 'warm' : distress < 1 ? 'edge' : 'past';
+  const pool = C.REOPEN[fetchMood(s)][band].filter(l => l !== avoid), list = pool.length ? pool : C.REOPEN[fetchMood(s)][band];
+  const raw = list[Math.floor(rng() * list.length)];
+  return { raw, text: fillTemplate(raw, { name: def.name, pron: def.pronouns, title }) };
+}
+// The tone the player takes in giving orders, by how they are: gentle, firm or stern.
+function toneFor(s) { const m = fetchMood(s); return m === 'willing' || m === 'flustered' ? 'gentle' : m === 'plain' ? 'firm' : 'stern'; }
 function fetchOptions(s, implName) {
   const opts = [
     { id: 'ask', label: 'Ask them to bring it, politely', line: '"Would you fetch the ' + implName + ' for me, please?"' },
@@ -486,7 +495,7 @@ const api = { mulberry32, pick, shuffle, weighted, clamp, HOUSE_SIZE, EVENING_CA
   newGame, effectiveAttention, changeStat, meetsGraduation, wordCalled, sweepMoveOns, moveOn, useWord, backfill,
   generateChores, startMorning, assign, unassign, allAssigned, choreOf, choreBand, choreEffective, applyChoreBand, resolveChores, resolveDay,
   occurrence, categoryWeights, fillTemplate, makeEvent, applyEvent, rollEvents, situationalModifier, buildCards,
-  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, choreLineFor: choreLine, morningNarration, farewellScene, fetchMood, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
+  wilfulnessBand, expectedBand, reachedBand, matchQuality, applyCorrection, applyReprieve, applyAftercare, choreLineFor: choreLine, morningNarration, farewellScene, fetchMood, reopenLine, toneFor, fetchOptions, fetchReply, applyFetch, pendingCards, endEvening,
   getRapport, addRapport };
 root.FairyShoeRules = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -450,6 +450,93 @@ const RESULT_LINES = {
   },
 };
 
-root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS };
+// ── Changing the scene: what the interlude tells, in order (implement, position, clothes). {Name} {Subj} {Obj} {Poss} {Title} {Impl} ─
+// Tone: gentle (for the willing and the flustered), firm, stern (for the cheeky and the sullen) — set by how they are (rules.js fetchMood).
+const CHANGE = {
+  helpUp: {
+    calm: 'You take {Name}\'s hands and help {Obj} up from across your lap.',
+    sore: 'You take {Name}\'s hands and help {Obj} up from your lap; {Subj} comes up slowly, rubbing the sting out with the heel of a hand.',
+    spent: 'You take {Name}\'s arms and lift {Obj} gently up from your lap, and keep a hand on {Poss} elbow until {Subj} is steady.',
+  },
+  helpBack: 'You take {Name}\'s hand and help {Obj} back down across your knees, and settle {Poss} weight with a hand at the small of {Poss} back.',
+  standOrder: { gentle: '"Up you get, {Name}, nice and slowly."', firm: '"Up. On your feet."', stern: '"Up, {Name}. On your feet. Now."' },
+  stands: '{Name} gets up off your lap and straightens {Poss} clothes.',
+  putDown: 'You set the {Impl} aside. Your hand will do.',
+  selfFetch: 'You get up, go and fetch the {Impl} yourself, and say nothing about it.',
+  selfBack: 'You come back with the {Impl}. {Name} has not moved.',
+  backInPlace: '{Name} takes {Poss} place again.',
+  position: {
+    lap: { gentle: '"Come here, {Name}. Across my knee."', firm: '"Over my knee, {Name}."', stern: '"Over my knee. Don\'t make me say it twice."' },
+    case: { gentle: '"Over to the table, {Name}, and lay your hands flat."', firm: '"The table. Bend over it, palms flat."', stern: '"To the table. Bend. Palms flat, and stay there."' },
+    head: { gentle: '"Stand here in the middle of the room, {Name}, and put your hands on your head."', firm: '"Middle of the room. Hands on your head, fingers laced."', stern: '"Middle of the room. Hands on your head. And keep them there."' },
+    chair: { gentle: '"Take hold of the seat of my chair, {Name}, and bend forward."', firm: '"Hold the seat of the chair. Bend."', stern: '"Hands on that chair, and bend. Do not let go."' },
+    spread: { gentle: '"Feet apart a little, {Name}, and bend forward — hands on your thighs."', firm: '"Feet apart. Bend forward, hands on your thighs."', stern: '"Feet apart. Bend. Hands on your thighs, and hold it."' },
+    hips: { gentle: '"Lie forward on the table, {Name}, and take hold of the edge."', firm: '"Chest down on the table. Hold the edge."', stern: '"Down on the table. Hold the edge, and do not let go."' },
+  },
+  obey: {
+    willing: '"Yes, {Title}." {Name} goes at once.',
+    sullen: '{Name} sets {Poss} jaw, and does it, with as little grace as can be managed.',
+    cheeky: '"Bossy," {Name} mutters, but goes.',
+    flustered: '{Name} nods too many times, fumbles, and hurries to obey.',
+    plain: '{Name} nods and goes.',
+  },
+  take: {
+    lap: '{Name} crosses to you and lets you draw {Obj} down across your lap.',
+    case: '{Name} bends at the hips and lays {Poss} palms flat on the boards.',
+    head: '{Name} stands in the middle of the room and laces {Poss} fingers on top of {Poss} head.',
+    chair: '{Name} bends forward and takes hold of the seat of the chair.',
+    spread: '{Name} widens {Poss} stance, bends forward, and settles {Poss} palms on {Poss} thighs.',
+    hips: '{Name} lies forward across the table, chest on the boards, and curls {Poss} fingers over the far edge.',
+  },
+  clothes: {
+    bottomsDown: 'You take hold of the waistband of {Poss} bottoms and draw them down to {Poss} knees.',
+    bottomsUp: 'You draw {Poss} bottoms back up and settle the waistband.',
+    briefsDown: 'You hook your thumbs in {Poss} briefs and draw them down after.',
+    briefsUp: 'You draw {Poss} briefs back up into place.',
+    react: {
+      willing: '{Name} holds still for it and does not look round.',
+      sullen: '{Name} stares straight ahead and says nothing at all.',
+      cheeky: '{Name} opens {Poss} mouth to say something, and, for once, thinks better of it.',
+      flustered: '{Name} goes pink to the ears and screws {Poss} eyes shut.',
+      plain: '{Name} lets you.',
+    },
+  },
+};
+
+// A line from the subject each time the scene reopens: by how they are (mood), and how composed (band of distress).
+const REOPEN = {
+  willing: {
+    calm: ['"I\'m ready, {Title}."', '"Whenever you like, {Title}. I\'m all right."'],
+    warm: ['"I\'m still here, {Title}. I\'m listening."', '"That did sting. But I understand why, {Title}."'],
+    edge: ['"I\'m trying, {Title}. I\'m really trying to hold on."', '"Please — I\'ll be good, {Title}. I\'m close to the end of it."'],
+    past: ['"I can\'t — {Title}, I\'ve nothing left to give."'],
+  },
+  sullen: {
+    calm: ['"Go on, then. Get it over with."', '"I haven\'t said I\'m sorry. Just so we\'re clear."'],
+    warm: ['"Don\'t think that\'s changed my mind."', '{Name} says nothing, but {Poss} breathing is not quite steady.'],
+    edge: ['"Fine. FINE. I heard you."', '"That\'s — enough. That\'s enough, surely."'],
+    past: ['"I\'m done. I\'m done, {Title}, I mean it."'],
+  },
+  cheeky: {
+    calm: ['"Back already? I was just getting comfortable."', '"Go on, then, {Title}. I\'ve had worse."'],
+    warm: ['"Hardly felt it." (The voice is a little too bright.)', '"All right, that one I felt. Don\'t let it go to your head."'],
+    edge: ['"Okay — okay, point taken. Can we maybe not take it any further?"', '"I\'ll behave, I will. Mostly. Truly."'],
+    past: ['"Not funny any more, {Title}. Not funny at all."'],
+  },
+  flustered: {
+    calm: ['"Sorry — sorry, I\'m ready, I think. Am I ready?"', '"I\'m all right, {Title}. I\'m just — all right."'],
+    warm: ['"Is that — am I doing it right, {Title}?"', '"It\'s a lot. It\'s a lot, but I\'m here."'],
+    edge: ['"I can\'t think. I can\'t think at all, {Title}."', '"Please, {Title}, I\'ll do it properly, I promise, I will."'],
+    past: ['"I\'m sorry, I\'m so sorry, I can\'t — "'],
+  },
+  plain: {
+    calm: ['"All right, {Title}. Go on."', '"I\'m ready."'],
+    warm: ['"I\'m sore, {Title}. But I\'m here."', '"I understand. Go on."'],
+    edge: ['"I don\'t know how much more I can take, {Title}."', '"I\'m close, {Title}. Please."'],
+    past: ['"No more, {Title}. Please. No more."'],
+  },
+};
+
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);
