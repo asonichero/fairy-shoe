@@ -164,15 +164,11 @@ function holdAstrideHands(g, s) {
   const kg = g.spec.H / 1.7, ks = s.spec.H / 1.7, Y = new V3(0, 1, 0);
   for (const side of ['L', 'R']) {
     const out = side === 'L' ? 1 : -1;   // the player's left is +X; the subject, facing the other way, has its left at -X
-    // the subject's palms on top of the player's shoulders, fingers on over them
-    const sh = g.bones['upperArm' + side].getWorldPosition(new V3()), top = sh.clone().add(new V3(out * -0.01 * kg, 0.045 * kg, 0));
-    const ssh = s.bones['upperArm' + (side === 'L' ? 'R' : 'L')].getWorldPosition(new V3());
-    // (each subject hand takes the shoulder on its own side of the body: the subject's left is at -X)
-    const mine = side === 'L' ? 'R' : 'L', shM = g.bones['upperArm' + (mine === 'L' ? 'L' : 'R')].getWorldPosition(new V3());
-    const palmT = shM.clone().add(new V3(0, 0.045 * kg, 0));
-    const pole = s.bones['upperArm' + mine].getWorldPosition(new V3()).add(new V3(mine === 'L' ? -0.3 : 0.3, -0.25, 0.15));
+    // each of the subject's hands on top of the player's shoulder on its own side of the body (the subject's left hand reaches the player's right shoulder)
+    const mine = side === 'L' ? 'R' : 'L';   // (the subject's hand that goes to the player's `side` shoulder)
+    const palmT = g.bones['upperArm' + side].getWorldPosition(new V3()).add(new V3(0, 0.045 * kg, 0));
+    const pole = s.bones['upperArm' + mine].getWorldPosition(new V3()).add(new V3(out * 0.3, -0.25, 0.15));
     S.armIK(s, mine, palmT, pole, Y, new V3(0, 0, -1));
-    void top; void ssh;
     // the player's hands on the subject's waist, at each side
     const wp = s.bones.spine1.getWorldPosition(new V3()), half = 0.13 * ks;
     const target = wp.clone().add(new V3(out * (half + 0.012 * kg), 0.0, 0));
@@ -188,13 +184,29 @@ function setupAstride(parent, scn, g, s) {
   // the player: halfway forward on the seat, the spine tipped back until the back meets the chair's
   const f = 0.12 * kg;
   g.group.position.z += f; g.group.updateMatrixWorld(true);
-  const back = scn.bench ? null : null;
-  const origQ = scn.giverQ, lean = new T.Quaternion();
-  let a = 0;
+  const feet0 = {}; for (const side of ['L', 'R']) feet0[side] = g.bones['foot' + side].getWorldPosition(new V3());   // where the feet stand on the floor
   const spineBackZ = () => { g.group.updateMatrixWorld(true); const sp = g.bones.spine2.getWorldPosition(new V3()); const ring = S.loftRing(g.spec.prims[0], g.spec.Y.chest || g.spec.Y.bust); return sp.z - ring[2]; };
-  const target = g.bones.pelvis.getWorldPosition(new V3()).z - f - (S.loftRing(g.spec.prims[0], g.spec.Y.belly)[2]) - 0.008 + 0.0;   // the chair's back, where the lap scene's chair puts it
-  const orig = scn.giverQ, setLean = deg => { scn.giverQ = beat => { const b = orig(beat); const q = S.degQ([-deg * 0.5, 0, 0]); return { ...b, spine1: b.spine1.clone().multiply(q), spine2: b.spine2.clone().multiply(q) }; }; scn.giverQ.edited = true; g.target = scn.giverQ(scn.beat); for (const b of BONES) { g.pose[b] = g.target[b].clone(); g.bones[b].quaternion.copy(g.pose[b]); } g.group.updateMatrixWorld(true); };
-  for (a = 0; a < 40; a += 2) { setLean(a); if (spineBackZ() <= target + 0.012) break; }
+  const target = g.bones.pelvis.getWorldPosition(new V3()).z - f - (S.loftRing(g.spec.prims[0], g.spec.Y.belly)[2]) - 0.008;   // the chair's back, where the lap scene's chair puts it
+  // The spine stays as it is: the hips tip back (the pelvis turned about the hip joints) until the back meets the chair's, the thighs turned forward by the same
+  // amount so they stay level on the seat, and the shins and feet brought back to the floor.
+  const orig = scn.giverQ; let legs = null;
+  const apply = () => { g.target = scn.giverQ(scn.beat); for (const b of BONES) { g.pose[b] = g.target[b].clone(); g.bones[b].quaternion.copy(g.pose[b]); } g.group.updateMatrixWorld(true); };
+  const setTilt = deg => {
+    scn.giverQ = beat => {
+      const b = orig(beat), q = S.degQ([-deg, 0, 0]), qi = S.degQ([deg, 0, 0]);
+      const out = { ...b, pelvis: b.pelvis.clone().multiply(q), thighL: b.thighL.clone().multiply(qi), thighR: b.thighR.clone().multiply(qi) };
+      return legs ? { ...out, ...legs } : out;
+    };
+    scn.giverQ.edited = true; apply();
+  };
+  let tilt = 0;
+  for (tilt = 0; tilt < 45; tilt += 1) { setTilt(tilt); if (spineBackZ() <= target + 0.012) break; }
+  for (const side of ['L', 'R']) {
+    S.twoBoneTo(g, ['thigh' + side, 'shin' + side, 'foot' + side], feet0[side], new V3(0, 1, 0.5));
+    const fo = g.bones['foot' + side]; fo.quaternion.copy(fo.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(g.group.quaternion)); g.group.updateMatrixWorld(true);
+  }
+  legs = {}; for (const side of ['L', 'R']) for (const n of ['thigh', 'shin', 'foot']) legs[n + side] = g.bones[n + side].quaternion.clone();
+  apply();
   // the subject: upright, facing the player, on the thighs a little forward of the player's hips
   S.setPose(s, 'Relaxed', true); for (const b of BONES) { s.pose[b] = s.pose[b] || new T.Quaternion(); s.bones[b].quaternion.copy(s.pose[b]); }
   s.group.quaternion.setFromAxisAngle(Y, Math.PI); s.group.updateMatrixWorld(true);
