@@ -590,6 +590,12 @@ const AFTER_NARR = {
   warm: ['You sit back in the chair and wait until {Name} lifts {Poss} eyes to yours. Then, gently:', 'You hold {Name}\'s gaze, and let a little of the sternness go out of your face. You say, kindly:', 'You look at {Name} for a moment, and your expression softens. You say:'],
 };
 
-root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR, ALONE_LINES };
+// Narration for new arrivals: one, or several together.
+const ARRIVAL_NARR = {
+  one: ['There is a knock at the door of Birchwood House, hesitant, and then again, a little firmer. On the step stands someone with a bundle and a story, waiting to be let in.', 'A new face comes up the path as the light changes, stops at the gate, and straightens {their} shoulders before coming the rest of the way.', 'The kettle has barely boiled when the latch lifts. Someone new is standing in the doorway, holding a bag, looking at the room as if it might say no.'],
+  many: ['The door opens more than once. By the time the kettle has boiled there are new people in the hall, bundles at their feet, looking round at the house and at each other.', 'They come up the path together or one by one, and gather in the hall of Birchwood House with their bags, a little unsure who is meant to speak first.', 'A knock, and then another, and a third. The hall fills with new arrivals, each with a story that ended somewhere short.'],
+};
+
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR, ALONE_LINES, ARRIVAL_NARR };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

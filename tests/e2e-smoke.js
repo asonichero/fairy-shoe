@@ -82,7 +82,7 @@ async function liveControls(p) {
         if (await w.count()) { await w.first().click(); await p.waitForSelector('.result'); if (day === 1 && guard === 1) await shot(p, 'reprieve', { fullPage: true }); await p.click('.result >> text=Next'); continue; }
       }
       await p.locator('.choice').first().click();
-      await p.click('text=Bring them in');
+      await p.click('text=Get started');
       await p.waitForSelector('text=End the correction', { timeout: 90000 });
       if (day === 1 && guard === 2) await liveControls(p);
       if (day === 1 && guard === 2) await p.evaluate(() => { __fs.app.g.candle = 8; });   // (enough for every aftercare scene)

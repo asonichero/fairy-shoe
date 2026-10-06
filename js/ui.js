@@ -39,10 +39,11 @@ function saveSettings() { store(SAVE_KEY + '.prefs', { title: app.title, keeper:
 function setScreen(node) { const a = $('#app'); a.replaceChildren(node); window.scrollTo(0, 0); }
 function showStage(on) { $('#stage').classList.toggle('on', on); if (on && app.stage) app.stage.resize(); }
 // A line of speech: shown, then faded after a reasonable time to read it (a couple of seconds plus about a third of a second a word).
-function say(id, text, label) {
+function say(id, text, label, sticky) {
   const s = $('#speech'); clearTimeout(app.speechT); s.classList.remove('fade');
   if (!text) { s.hidden = true; return; }
   s.replaceChildren(h('b', {}, label || CH[id].name), fmt(text)); s.hidden = false;
+  if (sticky) return;   // (stays until the scene moves on)
   const ms = 2800 + String(text).split(/\s+/).length * 330;
   app.speechT = setTimeout(() => { s.classList.add('fade'); app.speechT = setTimeout(() => { s.hidden = true; s.classList.remove('fade'); }, 900); }, ms);
 }
@@ -67,6 +68,8 @@ function header(extra) {
 }
 function setSoundLabel() { const b = $('#soundbtn'); if (b) b.textContent = 'Sound: ' + (app.settings.sound ? 'on' : 'off'); }
 function refreshGuidance() { if (app.refreshGuidance) app.refreshGuidance(); document.querySelectorAll('.bar button').forEach(b => { if (/^Guidance/.test(b.textContent)) b.textContent = 'Guidance: ' + (app.settings.guidance ? 'on' : 'off'); }); }
+// What something costs, as candles like the meter's
+function costIcons(n) { const e = h('span', { class: 'candle costtag', title: n + (n === 1 ? ' candle' : ' candles') }); for (let i = 0; i < n; i++) e.append(h('i', { class: 'lit' })); return e; }
 function candle() { const g = app.g, e = h('span', { class: 'candle', title: 'Marks to spend on a reprieve or aftercare this evening' }, 'Candle '); for (let i = 0; i < R.EVENING_CANDLE; i++) e.append(h('i', { class: i < g.candle ? 'lit' : '' })); return e; }
 
 // ── Intro ───────────────────────────────────────────────────────
@@ -174,7 +177,9 @@ function showNotices(title, notices, then, label) {
   const showRest = () => {
     if (!rest.length) return then();
     const o = $('#overlay'); o.dataset.dismiss = 'no';
-    modal(h('h2', {}, title), rest.map(noticeCard), h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: () => { closeModal(); then(); } }, label || 'Continue')));
+    const arr = rest.filter(n => n.type === 'arrive'), pool = arr.length > 1 ? C.ARRIVAL_NARR.many : C.ARRIVAL_NARR.one;
+    const narr = arr.length ? h('p', { class: 'narr' }, pool[Math.floor(app.rng() * pool.length)].replace('{their} ', arr.length === 1 ? CH[arr[0].id].pronouns[2] + ' ' : '')) : null;
+    modal(h('h2', {}, title), narr, rest.map(noticeCard), h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: () => { closeModal(); then(); } }, label || 'Continue')));
   };
   if (scenes.length) playScenes(scenes).then(showRest); else showRest();
 }
@@ -295,18 +300,22 @@ function renderEvening() {
   const card = pending[0], id = card.id, d = CH[id];
   const ev = card.event, trouble = card.band === 'partial' || card.band === 'failed';
   const words = h('div', { class: 'words', hidden: true }, Object.entries(C.REPRIEVES).map(([k, r]) => h('button', { class: 'choice paper', disabled: g.candle < r.cost, onclick: () => doReprieve(card, k) },
-    h('b', {}, r.name, h('span', { class: 'costtag' }, '● '.repeat(r.cost).trim())), h('span', {}, r.blurb))));
+    h('b', {}, r.name, costIcons(r.cost)), h('span', {}, r.blurb))));
+  const host = h('div', { class: 'setuphost', id: 'setuphost', hidden: true });
   setScreen(h('div', { class: 'screen' }, header(candle()),
     h('div', { class: 'evening' },
-      h('div', {}, queueBar(id),
-        h('div', { class: 'behave' }, h('span', { class: 'lab' }, 'Behaviour card'), h('h2', {}, d.name + ', ' + d.age), h('div', { class: 'small' }, card.choreName + (card.band === 'well' ? ': done beautifully' : card.band === 'completed' ? ': done' : card.band === 'partial' ? ': half done' : ': not done')),
+      queueBar(id),
+      h('div', { class: 'area-report' },
+        h('div', { class: 'behave' }, h('span', { class: 'lab' }, 'Behaviour report'), h('h2', {}, d.name + ', ' + d.age), h('div', { class: 'small' }, card.choreName + (card.band === 'well' ? ': done beautifully' : card.band === 'completed' ? ': done' : card.band === 'partial' ? ': half done' : ': not done')),
           h('div', { class: 'ln ' + (card.band === 'well' ? 'well' : trouble ? 'trouble' : '') }, h('span', { class: 'lab' }, 'The day\'s work'), card.choreLine),
-          ev ? h('div', { class: 'ln event' }, h('span', { class: 'lab' }, C.CATEGORIES[ev.cat].label), ev.text) : null),
+          ev ? h('div', { class: 'ln event' }, h('span', { class: 'lab' }, C.CATEGORIES[ev.cat].label), ev.text) : null)),
+      h('div', { class: 'area-stats' }, residentCard(id, { rerender: renderEvening })),
+      h('div', { class: 'area-choices' },
         h('div', { class: 'choices' },
-          h('button', { class: 'choice', onclick: () => renderSetup(card) }, h('b', {}, 'Sit ' + d.name + ' down'), h('span', {}, 'A live correction. How it goes, and when it ends, is entirely up to you.')),
+          h('button', { class: 'choice', onclick: () => { if (!host.hidden) { host.hidden = true; host.replaceChildren(); } else renderSetup(card); } }, h('b', {}, 'Hold ' + d.pronouns[1] + ' to account'), h('span', {}, 'A live correction. How it goes, and when it ends, is entirely up to you.')),
+          host,
           h('button', { class: 'choice', onclick: () => { words.hidden = !words.hidden; } }, h('b', {}, 'Offer a word instead'), h('span', {}, 'A reprieve replaces the correction. It costs candle, and the trouble goes unanswered by hand.')),
-          words)),
-      h('div', {}, residentCard(id, { rerender: renderEvening })))));
+          words)))));
 }
 function doReprieve(card, kind) {
   const g = app.g, snap = R.applyReprieve(g, card.id, kind);
@@ -353,21 +362,20 @@ const defaultLayers = () => ({ bottoms: false, briefs: false });   // (bottoms a
 function renderSetup(card) {
   const id = card.id, d = CH[id];
   const set = app.setup && app.setup.id === id ? app.setup : (app.setup = { id, position: 'lap', implement: 'hand', layers: defaultLayers() });
-  const dock = h('div', { class: 'dock' });
+  const dock = h('div', { class: 'dock inline' });
   const sample = B.spec(id).wardrobe;
   const paint = () => {
     const layerBtn = (name, avail) => avail ? h('button', { class: set.layers[name] && set.layers[name] !== 'off' ? 'on' : '', disabled: name === 'briefs' && !set.layers.bottoms, onclick: () => { set.layers[name] = SC.layerNext(name, set.layers[name]); if (name === 'bottoms' && !set.layers.bottoms) set.layers.briefs = false; paint(); } }, SC.layerLabel(name, set.layers[name])) : null;
-    dock.replaceChildren(h('h2', {}, d.name), h('div', { class: 'sub' }, 'Choose where and how to begin. Position, implement and what they wear can all be changed once you are under way.'),
+    dock.replaceChildren(h('div', { class: 'sub' }, 'Choose where and how to begin. Position, implement and what they wear can all be changed once you are under way.'),
       h('h4', {}, 'Position'), h('div', { class: 'tabs' }, SC.POSITIONS.map(([v, l]) => h('button', { class: set.position === v ? 'on' : '', disabled: v === 'spread' && !dual(set.implement), title: POS[v].blurb, onclick: () => { set.position = v; paint(); } }, l))),
       h('div', { class: 'sub' }, POS[set.position].blurb),
       h('h4', {}, 'Implement'), h('button', { class: 'wide', onclick: () => chooseImplement(set.implement, set.position, v => { set.implement = v; paint(); }) }, IMPL[set.implement].label + '  ▸'),
       h('div', { class: 'sub' }, IMPL[set.implement].blurb),
       h('h4', {}, 'What they wear'), h('div', { class: 'tabs' }, layerBtn('bottoms', !!sample.bottom), layerBtn('briefs', !!sample.briefs)),
       h('div', { class: 'word' }, h('b', {}, 'The safe word (“Red”) '), 'is always honoured. If ' + d.name + ' calls it, or is brought too far, it stops.'),
-      h('button', { class: 'primary big', onclick: () => startLive(card, set) }, 'Bring them in'),
-      h('button', { class: 'quiet big', onclick: () => { dock.remove(); } }, 'Back'));
+      h('button', { class: 'primary big', onclick: () => startLive(card, set) }, 'Get started'));
   };
-  paint(); document.querySelectorAll('#app .dock').forEach(x => x.remove()); $('#app').append(dock);
+  paint(); const host = $('#setuphost'); host.replaceChildren(dock); host.hidden = false;
 }
 
 // ── The live correction ─────────────────────────────────────────
@@ -461,7 +469,11 @@ function buildLiveDock(ses, card) {
     smack.disabled = !can || ses.running;
     run.textContent = ses.running ? 'Stop' : 'Run'; run.disabled = !can && !ses.running;
     // Past the point of no return they stop: nothing further is struck.
-    if (ses.st.tooHarsh && !spoke) { spoke = true; info.textContent = d.name + ' has been brought too far. Nothing more will be struck.'; say(id, C.SAYINGS.harsh[0]); end.textContent = 'End it'; }
+    if (ses.st.tooHarsh && !spoke) {
+      spoke = true; const st_ = app.g.chars[id].stats, calls = st_.val <= 3 || st_.res >= 5;
+      info.textContent = calls ? d.name + ' has called the safe word. Nothing more will be struck.' : d.name + ' has been brought too far. Nothing more will be struck.';
+      say(id, calls ? C.SAYINGS.word[0] : C.SAYINGS.harsh[0], null, calls); end.textContent = 'End it';
+    }
   };
   ses.onChange(ses);
 }
@@ -557,6 +569,11 @@ function finishLive(ses, card) {
   snap.layers = dress;   // (the state of dress the correction ended on, for the aftercare scenes)
   document.removeEventListener('keydown', onKey);
   save();
+  if (snap.word) {   // the safe word: no scorecard; whoever leaves is seen off, then the next behaviour report
+    const hud = $('#app .hud'); if (hud) hud.remove(); say(null, null);
+    playScenes(snap.exits).then(() => { teardownLive(); showStage(false); renderEvening(); });
+    return;
+  }
   // keep the room and the bodies on screen behind the result
   say(id, snap.word ? C.SAYINGS.word[0] : snap.quality === 'well' ? C.SAYINGS.well[Math.floor(app.rng() * C.SAYINGS.well.length)] : snap.quality.startsWith('under') ? (snap.smacks ? C.SAYINGS.under[Math.floor(app.rng() * 3)] : C.SAYINGS.nothing[0]) : snap.tooHarsh ? C.SAYINGS.harsh[0] : C.SAYINGS.over[Math.floor(app.rng() * 3)]);
   showResult(snap, { stage: true });
@@ -620,7 +637,7 @@ function showResult(snap, { stage }) {
       (snap.lines || []).map(l => h('p', { class: 'say' }, l)), snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
       canAfter && !Object.keys(snap.done || {}).length ? [h('h4', {}, 'How does the evening end?'), h('p', { class: 'sub' }, 'One way, for this correction. What you choose is what ' + d.name + ' carries into the night.'), h('div', { class: 'choices' }, [...Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
         h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => playAftercare(k, snap, wrap, draw) },
-          h('b', {}, a.name, h('span', { class: 'costtag' }, '● '.repeat(a.cost).trim())), h('span', {}, a.blurb))),
+          h('b', {}, a.name, costIcons(a.cost)), h('span', {}, a.blurb))),
         h('button', { class: 'choice paper', onclick: () => sendToBed(snap, wrap) }, h('b', {}, 'Sent to Bed', h('span', { class: 'costtag' }, 'free')), h('span', {}, 'No more tonight. They go up, and that is that.'))])] : null,
       !canAfter || Object.keys(snap.done || {}).length ? h('div', { class: 'row', style: 'margin-top:14px' }, candle(), h('span', { class: 'grow' }), h('button', { class: 'primary', onclick: () => proceed(snap, wrap) }, 'Next')) : h('div', { class: 'row', style: 'margin-top:14px' }, candle())].flat(Infinity).filter(Boolean));
   };

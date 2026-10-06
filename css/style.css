@@ -60,7 +60,7 @@ body.live #app > * { pointer-events: auto; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
 
 /* morning */
-.morning { display: grid; grid-template-columns: 1fr; gap: 18px; padding: 18px; max-width: 1100px; width: 100%; margin: 0 auto; }
+.morning { display: grid; grid-template-columns: 1fr; gap: 18px; padding: 18px; max-width: 700px; width: 100%; margin: 0 auto; }   /* two resident cards wide: a third drops a line, and the story and hints wrap to the same width */
 @media (max-width: 800px) { .morning { grid-template-columns: 1fr; } }
 .col h2 { font-size: 17px; color: var(--gold); margin-bottom: 4px; }
 .col .hint { color: var(--muted); font-size: 13px; margin-bottom: 10px; }
@@ -95,8 +95,11 @@ body.live #app > * { pointer-events: auto; }
 .starting { text-align: center; color: var(--gold); font-family: var(--serif); font-style: italic; padding: 8px; }
 
 /* evening */
-.evening { max-width: 1000px; margin: 0 auto; padding: 18px; width: 100%; display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; }
-@media (max-width: 800px) { .evening { grid-template-columns: 1fr; } }
+.evening { max-width: 1000px; margin: 0 auto; padding: 18px; width: 100%; display: grid; grid-template-columns: 1.2fr 1fr; grid-template-areas: "queue queue" "report stats" "choices stats"; gap: 20px; align-items: start; }
+.evening > .queue { grid-area: queue; } .area-report { grid-area: report; } .area-stats { grid-area: stats; } .area-choices { grid-area: choices; }
+@media (max-width: 800px) { .evening { grid-template-columns: 1fr; grid-template-areas: "queue" "report" "stats" "choices"; } }
+.dock.inline { position: static; width: auto; background: none; border: 0; padding: 4px 2px 6px; overflow: visible; }
+.setuphost { background: #2a2431; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
 .behave { background: var(--paper); color: var(--paper-ink); border: 2px solid var(--paper-line); border-radius: 14px; padding: 18px 20px; box-shadow: 0 8px 30px rgba(0,0,0,.35); }
 .behave h2 { font-size: 22px; margin-bottom: 2px; }
 .behave .small { color: #6a5d52; font-size: 13px; margin-bottom: 10px; }
@@ -113,7 +116,8 @@ body.live #app > * { pointer-events: auto; }
 .choice.paper span { color: #6a5d52; }
 .choice.paper:hover:not(:disabled) { background: #eadfc4; }
 .words { display: grid; gap: 8px; margin-top: 8px; }
-.costtag { float: right; font-size: 12px; color: #7a5a22; }
+.costtag { float: right; margin-top: 2px; }
+.candle.costtag i { width: 7px; height: 11px; }
 .queue { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
 .queue span { font-size: 12px; padding: 3px 10px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
 .queue span.cur { border-color: var(--gold); color: var(--gold); }
@@ -223,7 +227,8 @@ a.linkbtn:hover { color: var(--ink); background: #2e2837; }
 .narration p:first-child { font-size: 20px; color: #f1e7d2; }
 .chorelist { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; align-items: start; }
 .chorelist .chore { margin-bottom: 0; }
-.residents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+.residents { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+@media (max-width: 700px) { .residents { grid-template-columns: 1fr; } }
 .residents .res { margin-bottom: 0; }
 
 /* ── The live correction's HUD: name, two icon buttons, one floating card ── */
