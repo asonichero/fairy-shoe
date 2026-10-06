@@ -162,7 +162,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261006-1340";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261006-1420";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -726,7 +726,7 @@ document.getElementById('sc-on').onclick = () => {
   placeChars(); refreshSceneUI();
 };
 // Positions: across the lap, bent over the table with palms flat on it, or standing with hands on head.
-[['lap', 'Across the lap'], ['case', 'Over the table'], ['head', 'Hands on head'], ['knees', 'Hands on the chair'], ['spread', 'Bent over, feet spread']].forEach(([id, label]) => {
+[['lap', 'Across the lap'], ['case', 'Over the table'], ['head', 'Hands on head'], ['knees', 'Hands on the chair'], ['spread', 'Bent over, feet spread'], ['hips', 'Hips']].forEach(([id, label]) => {
   const b = document.createElement('button');
   b.textContent = label; b.dataset.pos = id;
   b.onclick = () => {

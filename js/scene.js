@@ -15,7 +15,8 @@ const POSITIONS = [
   ['chair', 'Hands on the chair', 'Bent forward, hands on the seat of the chair you sit in.'],
   ['spread', 'Bent over, feet apart', 'Bent forward, feet wide, palms on the thighs. Wide implements only.'],
 ];
-const ENGINE_POSITION = { lap: 'lap', case: 'case', head: 'head', chair: 'knees', spread: 'spread' };
+// 'hips' is an editor-only base position (not in POSITIONS, so never offered in the game): the table scene, bent at the hips.
+const ENGINE_POSITION = { lap: 'lap', hips: 'case', case: 'case', head: 'head', chair: 'knees', spread: 'spread' };
 const IMPLEMENTS = [
   ['hand', 'Hand', 'Nothing to fetch. Stings, and fades quickly.'],
   ['hairbrush', 'Hairbrush', 'Light and sharp; a dull ache follows.'],
