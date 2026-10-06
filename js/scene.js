@@ -266,7 +266,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
       const D = derive();
       scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
-      for (const c of [g, s]) if (c.skirt) S.setSkirtShell(c, true);   // skirts in a discipline scene are shells skinned to the body, not cloth (see Starlight.setSkirtShell)
+      if (s.skirt) S.setSkirtShell(s, true);   // the subject's skirt in a discipline scene is a shell skinned to the body, not cloth (see Starlight.setSkirtShell)
       applyLayers();
       let impl = cfg.implement || st.implement;
       if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
@@ -283,7 +283,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       }
       applyPoseOverrides(scn, position);
       if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
-      if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench]); }   // the player's own skirt (a dress) drapes over the seat or the stance
+      if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench], 1.5, false); }   // the player's own skirt (a dress) drapes over the seat or the stance
       if (oldP && scn.pain) {
         for (const k of ['sting', 'ache', 'hits', 'last', 'dwell', 'atEdge', 'atLimit', 'tooHarsh', 'peak']) scn.pain[k] = oldP[k];
         scn.pain.update(cfg.elapsed || 0, false);   // the time it took

@@ -6054,14 +6054,14 @@ function layShell(ch) {
     for (let k = 0; k < 6; k++) { const m = (lo + hi) / 2; q[0] = dx * m; q[2] = dz * m; if (inside()) lo = m; else hi = m; }
     cache.set(key, hi); return hi;
   };
-  const len = (L.length || 0.18) * H, drop = Math.min(len * 0.4, 0.085 * H), thick = Math.min(0.05, 0.014 + len * 0.035) * H / 1.78;   // (the gather runs from the waistband down the hips, not up the back)
+  const len = (L.length || 0.18) * H, rise = Math.min(len * 0.12, 0.035 * H), thick = Math.min(0.05, 0.016 + len * 0.04) * H / 1.78;   // (the gather is at the waistband and no lower: the glutes are clear of cloth; its bulk is in thickness, not length)
   for (let k = 0; k < n * 3; k++) P[k] = S.rest[k];
   if (S.gathered) {
     for (let j = 0; j < N; j++) {
-      const th = 2 * Math.PI * j / N, c = Math.cos(th), a = smooth01(0.15, -0.65, c);   // 0 at the front, 1 over the whole of the back
+      const th = 2 * Math.PI * j / N, c = Math.cos(th), a = smooth01(-0.02, -0.42, c);   // 0 at the front and sides, 1 over the whole of the back
       if (a <= 0) continue;
       for (let i = 1; i < R; i++) {
-        const t = i / (R - 1), o = 3 * (i * N + j), yG = S.top - drop * t;
+        const t = i / (R - 1), o = 3 * (i * N + j), yG = S.top + 0.004 * H + rise * t;
         const rG = surf(th, yG) + 0.006 + thick * (0.5 + 0.5 * t) * (1 + 0.3 * Math.sin(6 * th + 5 * t) + 0.15 * Math.sin(13 * th - 3 * t));
         P[o] += (Math.sin(th) * rG - P[o]) * a; P[o + 1] += (yG - P[o + 1]) * a; P[o + 2] += (Math.cos(th) * rG - P[o + 2]) * a;
       }
