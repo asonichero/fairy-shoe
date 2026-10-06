@@ -602,7 +602,7 @@ function showResult(snap, { stage }) {
             : ['You brought them to ', h('b', {}, snap.reachedName), '; they needed ', h('b', {}, snap.expectedName), '.']),
         h('div', {}, snap.text + '.')] : null,
       (snap.lines || []).map(l => h('p', { class: 'say' }, l)), snap.word ? null : chipsFor(snap.changes), exitsBlock(snap.exits),
-      canAfter ? [h('h4', {}, 'Afterwards'), h('div', { class: 'choices' }, [...Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
+      canAfter && !Object.keys(snap.done || {}).length ? [h('h4', {}, 'How does the evening end?'), h('p', { class: 'sub' }, 'One way, for this correction. What you choose is what ' + d.name + ' carries into the night.'), h('div', { class: 'choices' }, [...Object.entries(C.AFTERCARE).filter(([k]) => !(snap.done || (snap.done = {}))[k]).map(([k, a]) =>
         h('button', { class: 'choice paper', disabled: g.candle < a.cost, onclick: () => playAftercare(k, snap, wrap, draw) },
           h('b', {}, a.name, h('span', { class: 'costtag' }, '● '.repeat(a.cost).trim())), h('span', {}, a.blurb))),
         h('button', { class: 'choice paper', onclick: () => sendToBed(snap, wrap) }, h('b', {}, 'Sent to Bed', h('span', { class: 'costtag' }, 'free')), h('span', {}, 'No more tonight. They go up, and that is that.'))])] : null,

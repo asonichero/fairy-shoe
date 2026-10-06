@@ -90,13 +90,16 @@ async function liveControls(p) {
       await p.waitForSelector('.result');
       if (day === 1 && guard === 2) await shot(p, 'result');
       if (await p.locator('.result >> text=Next').count()) throw new Error('Next must not be offered before an aftercare choice');
-      if (day === 1 && guard === 2) {   // the four scenes, each from the result and back (the candle runs out partway; the rest are skipped)
-        for (const name of ['Corner Time', 'Lines', 'Held After', 'Warm Words']) {
-          const b = p.locator('.result .choice:has-text("' + name + '")'); if (!(await b.count()) || await b.first().isDisabled()) continue;
-          await b.first().click(); await p.waitForSelector('.scenebar button', { timeout: 90000 }); await p.waitForTimeout(1500);
-          if (!(await p.locator('.scenebar p').count())) throw new Error(name + ': the scene should have words in its card');
-          await shot(p, 'after-' + name.replace(/ /g, '-'));
-          await p.click('.scenebar button'); await p.waitForSelector('.result');
+      if (day === 1 && guard === 2) {   // one way for the evening to end: a scene, then Next (the choices are gone once one is made)
+        await p.click('.result .choice:has-text("Corner Time")'); await p.waitForSelector('.scenebar button', { timeout: 90000 }); await p.waitForTimeout(1500);
+        if (!(await p.locator('.scenebar p').count())) throw new Error('the scene should have words in its card');
+        await shot(p, 'after-Corner-Time');
+        await p.click('.scenebar button'); await p.waitForSelector('.result');
+        if (await p.locator('.result .choice:has-text("Lines")').count()) throw new Error('only one way for the evening to end');
+        // (the other scenes are built directly: each must come up and settle without an error)
+        for (const kind of ['lines', 'held', 'warm']) {
+          await p.evaluate(k => { const a = __fs.app; a.stage.tableau(k, { giver: __fs.B.keeper(a.keeper), subject: __fs.B.spec('red'), subjectId: 'red', layers: {} }); }, kind);
+          await p.waitForTimeout(1200); await shot(p, 'after-' + kind);
         }
         await p.click('.result >> text=Next');
       } else {   // Sent to Bed is free, fades to a few lines, and goes on as Next does
