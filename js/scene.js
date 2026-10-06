@@ -634,14 +634,15 @@ function createTableau(scene, kind, opts, env = {}) {
   const applyEdits = () => { for (const e of edits) { const c = e.who === 'giver' ? g : s; if (!(e.beat === 'base' || (e.who === 'giver' && e.beat === 'relaxed')) || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); } };
   // Two standing bodies facing each other, the subject's feet held back and the body tipped `lean` toward the player, brought together until the torsos just meet: the same
   // closeness for any pair of sizes and any pose (the edits are in place while it measures).
-  const placeClose = (lean, lat = (window.__heldLateral != null ? window.__heldLateral : -0.05)) => {   // (`lat`: how far the subject stands to the player's right, in body heights: the feet pass, the head goes on the shoulder)
+  const placeClose = (lean, latOverride) => {   // the subject stands a little to the player's right (+Z): half the spacing of the feet, so the two pairs of feet pass and the head can go on the shoulder
     const kg = g.spec.H / 1.7, ks = s.spec.H / 1.7, avg = (kg + ks) / 2, Z = new V3(0, 0, 1);
     standing(g, Math.PI / 2, 0, 0); applyEdits();
+    const lat = latOverride != null ? latOverride : (Math.abs(g.spec.J.thighL[0] - g.spec.J.thighR[0]) + Math.abs(s.spec.J.thighL[0] - s.spec.J.thighR[0])) / 4;
     const pivotY = 0;
     const placeS = x => {   // the subject faces the player (-X), the feet at x, the body tipped about them toward the player
-      standing(s, -Math.PI / 2, x, lat * avg); applyEdits();
+      standing(s, -Math.PI / 2, x, lat); applyEdits();
       const feet = ['L', 'R'].map(sd => s.bones['foot' + sd].getWorldQuaternion(new T.Quaternion()));
-      const pivot = new V3(x, pivotY, lat * avg), q = new T.Quaternion().setFromAxisAngle(Z, lean);
+      const pivot = new V3(x, pivotY, lat), q = new T.Quaternion().setFromAxisAngle(Z, lean);
       s.group.quaternion.premultiply(q); s.group.position.sub(pivot).applyQuaternion(q).add(pivot); s.group.updateMatrixWorld(true);
       ['L', 'R'].forEach((sd, i) => { const f = s.bones['foot' + sd]; f.quaternion.copy(f.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(feet[i])); });
       s.group.updateMatrixWorld(true);
@@ -715,43 +716,36 @@ function createTableau(scene, kind, opts, env = {}) {
     gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3()), 0.7); eyesAt(s, g.bones.neck.getWorldPosition(new V3()), 0.5); };
     view = { pos: new V3(2.0, 1.35, 1.9), tgt: new V3(0, 0.95, 0.1), fov: 38 };
   } else if (kind === 'held') {
-    const { avg: k } = placeClose(0);   // (the hand-posed one leans by its own spine edits)
-    hold = () => {
-      for (const [a, b] of [[g, s], [s, g]]) {
-        a.group.updateMatrixWorld(true); b.group.updateMatrixWorld(true);
-        const back = new V3(a === g ? 1 : -1, 0, 0), out = b.bones.spine2.getWorldPosition(new V3()).addScaledVector(back, 0.1 * k);   // the partner's back
-        for (const [side, dy, dz] of [['R', 0.02, 0.07], ['L', -0.05, -0.06]]) {
-          const sh = a.bones['upperArm' + side].getWorldPosition(new V3());
-          const target = out.clone().add(new V3(0, dy, a === g ? (side === 'R' ? dz : dz) : -dz));
-          S.armIK(a, side, target, sh.clone().add(new V3(0, -0.1, side === 'R' ? 0.4 : -0.4)), back.clone(), new V3(0, 1, 0));
-        }
-      }
-      s.bones.neck.rotateY(-0.9 * (s.group.quaternion.y > 0 ? 1 : 1)); s.bones.neck.rotateX(0.15); g.bones.neck.rotateX(0.2);   // the subject's head laid against the player's shoulder
-    };
-    gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3()), 0.7); eyesAt(s, g.bones.spine2.getWorldPosition(new V3()), 0.7); };
-    view = { pos: new V3(0.5, 1.35, 2.5), tgt: new V3(0, 1.15, 0), fov: 36 };
-  } else if (kind === 'heldstand') {
     // Standing, chest to chest, the subject leaning into it with the feet held back: their arms inside (round the player's waist, under the player's arms), the player's outside
     // (wide round the subject's back). Everything is measured off the two bodies, so any pair of sizes finds its own distance and its own reach.
     const { kg, ks } = placeClose(0.14);
+    // an arm to a hand-hold, its elbow and forearm kept out of both bodies: the pole is pushed outward until neither is in the skin
+    const armTo = (c, other, side, target, pole, n, fingers, out) => {
+      for (let i = 0; i < 8; i++) {
+        S.armIK(c, side, target, pole.clone().addScaledVector(out, 0.1 * i), n, fingers);
+        const el = c.bones['forearm' + side].getWorldPosition(new V3()), wr = c.bones['hand' + side].getWorldPosition(new V3()), mid = el.clone().lerp(wr, 0.5);
+        let m = Infinity;
+        for (const pt of [el, mid]) { const pts = S.posedSkinNear(other, pt, 0.15); if (pts.length) m = Math.min(m, S.skinSignedDist(pts, pt)); }
+        if (m > 0.02) break;
+      }
+    };
     hold = () => {
       g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
       const at = (c, n) => c.bones[n].getWorldPosition(new V3());
-      const sBack = new V3(1, 0, 0), gBack = new V3(-1, 0, 0), dep = c => 0.1 * c;
-      // the player's arms, outside: hands on the subject's back, high and low, the elbows wide and up
-      const gR = at(g, 'upperArmR'), gL = at(g, 'upperArmL');
-      S.armIK(g, 'R', at(s, 'spine2').addScaledVector(sBack, dep(ks)).add(new V3(0, 0.03 * ks, 0.045 * ks)), gR.clone().add(new V3(-0.1, 0.12, 0.55)), sBack.clone(), new V3(0, 0.3, -1));
-      S.armIK(g, 'L', at(s, 'spine1').addScaledVector(sBack, dep(ks)).add(new V3(0, 0.0, -0.045 * ks)), gL.clone().add(new V3(-0.1, 0.0, -0.55)), sBack.clone(), new V3(0, -0.3, 1));
-      // the subject's arms, inside: hands round the player's waist, against their back, the elbows in and low
-      const sR = at(s, 'upperArmR'), sL = at(s, 'upperArmL');
-      S.armIK(s, 'R', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.02 * kg, 0.06 * kg)), sR.clone().add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1));
-      S.armIK(s, 'L', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.02 * kg, -0.06 * kg)), sL.clone().add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1));
-      // the subject's head laid against the player (the shoulder if it reaches it, else the chest), the player's bowed over them
-      const sh = at(s, 'head'), gc = at(g, 'spine2'), gn = at(g, 'neck');
-      const ty = Math.min(gn.y, Math.max(gc.y, sh.y - 0.02));
-      S.lookAt(s, new V3(gc.x + 0.05 * kg, ty, gc.z + 0.07 * kg), 1.5); S.lookAt(g, sh, 0.9);
+      const sBack = new V3(1, 0, 0), gBack = new V3(-1, 0, 0), dep = c => 0.1 * c, Zp = new V3(0, 0, 1), Zm = new V3(0, 0, -1);
+      // the player's arms, outside the subject's: hands apart on the upper back, each on its own side (the right is +Z, the subject's left), the elbows wide
+      armTo(g, s, 'R', at(s, 'spine2').addScaledVector(sBack, dep(ks)).add(new V3(0, 0.03 * ks, 0.05 * ks)), at(g, 'upperArmR').add(new V3(-0.1, 0.12, 0.5)), sBack.clone(), new V3(0, 0.3, -1), Zp);
+      armTo(g, s, 'L', at(s, 'spine2').addScaledVector(sBack, dep(ks)).add(new V3(0, -0.02 * ks, -0.05 * ks)), at(g, 'upperArmL').add(new V3(-0.1, 0.0, -0.5)), sBack.clone(), new V3(0, -0.3, 1), Zm);
+      // the subject's arms, inside: hands apart on the player's lower back, the subject's left (+Z) on the player's right side, the elbows in and low
+      armTo(s, g, 'L', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.03 * kg, 0.06 * kg)), at(s, 'upperArmL').add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1), Zp);
+      armTo(s, g, 'R', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.03 * kg, -0.06 * kg)), at(s, 'upperArmR').add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1), Zm);
+      // the subject's head on the player's right shoulder (the side they stand to), the face turned away to that side; the player's bowed to the subject's other shoulder
+      const sh = at(s, 'head'), gs = at(g, 'upperArmR'), gn = at(g, 'neck'), gc = at(g, 'spine2');
+      const ty = sh.y > gs.y ? gs.y + 0.02 * kg : Math.max(gc.y, sh.y - 0.02);   // (the shoulder if the head reaches it, else the chest)
+      S.lookAt(s, new V3(gs.x, ty, gs.z + 0.25 * kg), 1.6);
+      S.lookAt(g, at(s, 'upperArmR').add(new V3(0, 0.03 * ks, -0.12 * ks)), 0.9);
     };
-    gaze = () => { eyesAt(g, at0(s, 'head'), 0.7); eyesAt(s, at0(g, 'spine2'), 0.4); };
+    gaze = () => { eyesAt(g, at0(s, 'upperArmR'), 0.6); s.gazeFx = null; };
     view = { pos: new V3(0.4, 1.3, 2.5), tgt: new V3(0, 1.05, 0), fov: 36 };
   } else {   // 'warm'
     const st = seated(g, 0, 0, -0.25);
@@ -874,5 +868,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, tableau, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after'], ['heldstand', 'Held after (adaptive, standing)'], ['heldalt', 'Held after (alternate, seated)'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after (standing)'], ['heldalt', 'Held after (alternate, seated)'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

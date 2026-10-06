@@ -17,11 +17,14 @@ root.FairyShoePoses = {
     { who: 'subject', beat: 'base', bones: { neck: [25.9, 0.1, -0.4], upperArmL: [-53.7, 96.4, -88.9], forearmL: [-6.6, -65.7, -70.8], handL: [28.6, -62.2, -12.7], upperArmR: [-38.8, -94.6, 97.3], forearmR: [-28.2, 86, 89.3], handR: [52.9, 6.2, -4.7], fingersR: [0, 0, -7], thumbR: [-25.5, 0, 0] } },
   ],
   // Held after as hand-posed for Mother Hubbard and Hans (the sizes it was made for); 'heldstand' (adaptive, standing) and 'heldalt' (seated) are the ones laid out in code for any pair.
-  held: [
-    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [-22.9, -9.1, 41.1], forearmL: [-82.7, 91.3, -164.8], handL: [-32.3, -15, 8.9], upperArmR: [-42.3, 56, -27.5], forearmR: [-75.2, -83.6, 149.1], handR: [17, 22.5, 13.7] } },
-    { who: 'subject', beat: 'base', bones: { neck: [23.5, -2.7, -3.4], clavL: [9.7, -39, -21.3], upperArmL: [-32.5, -23.5, 16.3], forearmL: [-9.5, -85.2, 52.7], handL: [-28.3, 50.5, -65.2], clavR: [7, 20, 11.2], upperArmR: [-49.2, 6.4, 15.6], forearmR: [-55.8, 98.5, -51.2], handR: [46.6, 3.2, 67.1] } },
-  ],
-  heldstand: [],
+  // (Held after is laid out in code, from the sizes of the pair; the hand-posed entries made for Mother Hubbard and Hans are kept below for reference. To pose it by hand, paste under held.)
+  held: [],
+  //   held: [
+  //     { who: 'giver', beat: 'relaxed', bones: { upperArmL: [-22.9, -9.1, 41.1], forearmL: [-82.7, 91.3, -164.8], handL: [-32.3, -15, 8.9], upperArmR: [-42.3, 56, -27.5], forearmR: [-75.2, -83.6, 149.1], handR: [17, 22.5, 13.7] } },
+  //     { who: 'subject', beat: 'base', bones: { neck: [23.5, -2.7, -3.4], clavL: [9.7, -39, -21.3], upperArmL: [-32.5, -23.5, 16.3], forearmL: [-9.5, -85.2, 52.7], handL: [-28.3, 50.5, -65.2], clavR: [7, 20, 11.2], upperArmR: [-49.2, 6.4, 15.6], forearmR: [-55.8, 98.5, -51.2], handR: [46.6, 3.2, 67.1] } },
+  //   ],
+  //   heldstand: [],
+
   // Editor-only base position ("Hips"): bent at the hips, arms forward; the game never offers it.
   // Editor-only base position ("Astride"): the lap scene, seated, with its own poses; the game never offers it.
   // Astride is laid out in code (setupAstride in scene.js: the hips, legs and the reach of the arms); these edits go on top, the same at every beat.
