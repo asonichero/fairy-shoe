@@ -18,8 +18,8 @@ root.FairyShoePoses = {
   ],
   // Held after as hand-posed for Mother Hubbard and Hans (the sizes it was made for); 'heldstand' (adaptive, standing) and 'heldalt' (seated) are the ones laid out in code for any pair.
   held: [
-    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [23.7, -24.2, -6.8], forearmL: [-11.6, -83.9, 52.3], handL: [-53.7, 52, -38.2], upperArmR: [-9.8, 63.6, -31.4], forearmR: [-61.2, -70.6, 131], handR: [18.1, -17.6, -4.1], thumbL: [1.1, 3.8, 3.6] } },
-    { who: 'subject', beat: 'base', bones: { spine1: [9.6, 1, 5.7], spine2: [26.5, 22.5, 12.5], neck: [19.8, -3.6, 0.5], head: [5.5, -50.5, 0], clavL: [11.7, -50.4, 5.7], upperArmL: [-9.4, 120.7, -41.3], forearmL: [-25.5, 0.9, -119.4], handL: [33.1, -17.1, -48.5], clavR: [9.6, 13.6, -28.2], upperArmR: [-10.1, -42.9, 57.1], forearmR: [-65.3, 91.5, 12.3], handR: [27.8, 1.7, 30.5], thighL: [1.6, 0, -2], shinL: [-2.5, -0.6, 1.1], footL: [3.9, 0.2, -2], thighR: [2, 0, -0.6], shinR: [-5.3, 0.5, -0.3], footR: [5.3, -0.3, 3.9] } },
+    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [-22.9, -9.1, 41.1], forearmL: [-82.7, 91.3, -164.8], handL: [-32.3, -15, 8.9], upperArmR: [-42.3, 56, -27.5], forearmR: [-75.2, -83.6, 149.1], handR: [17, 22.5, 13.7] } },
+    { who: 'subject', beat: 'base', bones: { neck: [23.5, -2.7, -3.4], clavL: [9.7, -39, -21.3], upperArmL: [-32.5, -23.5, 16.3], forearmL: [-9.5, -85.2, 52.7], handL: [-28.3, 50.5, -65.2], clavR: [7, 20, 11.2], upperArmR: [-49.2, 6.4, 15.6], forearmR: [-55.8, 98.5, -51.2], handR: [46.6, 3.2, 67.1] } },
   ],
   heldstand: [],
   // Editor-only base position ("Hips"): bent at the hips, arms forward; the game never offers it.

@@ -634,14 +634,14 @@ function createTableau(scene, kind, opts, env = {}) {
   const applyEdits = () => { for (const e of edits) { const c = e.who === 'giver' ? g : s; if (!(e.beat === 'base' || (e.who === 'giver' && e.beat === 'relaxed')) || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); } };
   // Two standing bodies facing each other, the subject's feet held back and the body tipped `lean` toward the player, brought together until the torsos just meet: the same
   // closeness for any pair of sizes and any pose (the edits are in place while it measures).
-  const placeClose = lean => {
+  const placeClose = (lean, lat = (window.__heldLateral != null ? window.__heldLateral : -0.05)) => {   // (`lat`: how far the subject stands to the player's right, in body heights: the feet pass, the head goes on the shoulder)
     const kg = g.spec.H / 1.7, ks = s.spec.H / 1.7, avg = (kg + ks) / 2, Z = new V3(0, 0, 1);
     standing(g, Math.PI / 2, 0, 0); applyEdits();
     const pivotY = 0;
     const placeS = x => {   // the subject faces the player (-X), the feet at x, the body tipped about them toward the player
-      standing(s, -Math.PI / 2, x, 0); applyEdits();
+      standing(s, -Math.PI / 2, x, lat * avg); applyEdits();
       const feet = ['L', 'R'].map(sd => s.bones['foot' + sd].getWorldQuaternion(new T.Quaternion()));
-      const pivot = new V3(x, pivotY, 0), q = new T.Quaternion().setFromAxisAngle(Z, lean);
+      const pivot = new V3(x, pivotY, lat * avg), q = new T.Quaternion().setFromAxisAngle(Z, lean);
       s.group.quaternion.premultiply(q); s.group.position.sub(pivot).applyQuaternion(q).add(pivot); s.group.updateMatrixWorld(true);
       ['L', 'R'].forEach((sd, i) => { const f = s.bones['foot' + sd]; f.quaternion.copy(f.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(feet[i])); });
       s.group.updateMatrixWorld(true);
