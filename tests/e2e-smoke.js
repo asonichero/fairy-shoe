@@ -6,34 +6,36 @@ const URL = process.argv[2] || 'http://localhost:8765/index.html', SHOTS = proce
 const shot = (p, n, o = {}) => SHOTS ? p.screenshot({ path: `${SHOTS}/${n}.png`, ...o }) : null;
 // Everything the live dock offers, once: cameras, layers, pace and strength, a change of position, a fetched implement.
 async function liveControls(p) {
-  const dock = '.dock';
-  // a real drag on the view orbits it and the wheel zooms (the page layer above the canvas must let them through)
-  await p.click(`${dock} >> button:text-is("Behind")`); await p.waitForTimeout(2500);
+  const cam = '.hudtools button[aria-label="Camera angle"]', scene = '.hudtools button[aria-label^="Position"]', card = '.hudcard';
+  // a real drag on the view orbits it and the wheel zooms (the HUD must let them through)
+  await p.click(cam); await p.waitForTimeout(2500);
   const cp = () => p.evaluate(() => { const c = __fs.app.stage.camera, t = __fs.app.stage.controls.target; return { p: c.position.toArray(), d: c.position.distanceTo(t) }; });
-  const c0 = await cp(), box = await p.locator('canvas').first().boundingBox(), mx = box.x + box.width * 0.5, my = box.y + box.height * 0.3;
+  const c0 = await cp(), box = await p.locator('canvas').first().boundingBox(), mx = box.x + box.width * 0.4, my = box.y + box.height * 0.3;
   await p.mouse.move(mx, my); await p.mouse.down(); await p.mouse.move(mx + 160, my + 20, { steps: 8 }); await p.mouse.up(); await p.waitForTimeout(1500);
   const c1 = await cp(); if (Math.hypot(...c1.p.map((v, i) => v - c0.p[i])) < 0.2) throw new Error('dragging should orbit the camera');
   await p.mouse.move(mx, my); await p.mouse.wheel(0, -400); await p.waitForTimeout(1200);
   const c2 = await cp(); if (c2.d > c1.d - 0.03) throw new Error('the wheel should zoom');
-  for (const cam of ['Behind', 'Over your shoulder', 'Face', 'Overview']) await p.click(`${dock} >> button:text-is("${cam}")`);
-  // the buttons are standard angles: after one, the user's own orbit takes over and no button stays lit
-  await p.evaluate(() => __fs.app.stage.controls.dispatchEvent({ type: 'start' }));
-  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'free') throw new Error('orbiting should free the camera');
-  await p.click(`${dock} >> button:text-is("Behind")`);
-  if ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'behind') throw new Error('a button should return to its angle');
-  await p.click(`${dock} >> button:text-is("Overview")`);
-  await p.click(`${dock} >> button:text-is("Bottoms up")`);                          // layers are live: bottoms down (they begin up)
-  await p.click(`${dock} >> button:text-is("Bottoms down")`);
-  await p.click(`${dock} >> button[aria-label="Pace up"]`); await p.click(`${dock} >> button[aria-label="Strength up"]`);
-  await p.click(`${dock} >> button[aria-label="Run down"]`);
+  // the camera button cycles the standard angles (one press each), then back to the start
+  // a single smack lands, then the giver relaxes again
+  await p.evaluate(() => __fs.app.live.smack());
+  await p.waitForFunction(() => __fs.app.live.scn.swing > 1.9, null, { timeout: 60000 });
+  await p.waitForFunction(() => __fs.app.live.scn.swing < 0.1, null, { timeout: 60000 });
+  const seen = []; for (let i = 0; i < 4; i++) { await p.click(cam); seen.push(await p.evaluate(() => __fs.app.stage.cameraMode)); }
+  if (new Set(seen).size !== 4) throw new Error('the camera button should cycle four angles: ' + seen);
+  while ((await p.evaluate(() => __fs.app.stage.cameraMode)) !== 'overview') await p.click(cam);
+  await p.click(`${card} >> button:text-is("Faster")`); await p.click(`${card} >> button:text-is("Harder")`);
+  await p.click(`${card} >> button[aria-label="Fewer smacks in a run"]`);
   const state = () => p.evaluate(() => ({ pos: __fs.app.live.position, impl: __fs.app.live.implement, pace: __fs.app.live.pace, strength: __fs.app.live.strengthMult, run: __fs.app.live.runLength, cam: __fs.app.stage.cameraMode }));
-  let s = await state(); if (s.pace !== 1.25 || s.strength !== 1.25 || s.run !== 8 || s.cam !== 'overview') throw new Error('steppers or camera: ' + JSON.stringify(s));
-  await p.click(`${dock} >> text=Change position`);
-  await p.click('.overlay .pick:has-text("Over the table")');
+  let s = await state(); if (s.pace !== 1.25 || s.strength !== 1.25 || s.run !== 8 || s.cam !== 'overview') throw new Error('nudges or camera: ' + JSON.stringify(s));
+  // clothes, in the scene pop-up
+  await p.click(scene); await p.click('.overlay button:has-text("Bottoms")'); await p.click('.overlay button:text-is("Close")');
+  if (await p.locator('.hudname').count() !== 1 || await p.locator('.dock').count() !== 0) throw new Error('the HUD should be the name, the buttons and one card');
+  await p.click(scene);
+  await p.click('.overlay .picks2 button:has-text("Over the table")');
   await p.waitForSelector('#veil', { state: 'hidden', timeout: 90000 });
   s = await state(); if (s.pos !== 'case') throw new Error('position did not change: ' + JSON.stringify(s));
-  await p.click(`${dock} >> text=Change implement`);
-  await p.click('.overlay .pick:has-text("Hairbrush")');
+  await p.click(scene);
+  await p.click('.overlay .picks2 button:has-text("Hairbrush")');
   await p.waitForSelector('.overlay .pick');                                          // the conversation
   await p.locator('.overlay .pick').first().click();
   await p.click('.overlay >> text=Continue');

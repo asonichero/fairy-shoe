@@ -312,6 +312,11 @@ function createSession(scene, opts, env = {}) {
             else { scn.cycle(D.strength, undefined, undefined, D.hold); st.toRun--; st.since = 0; }
           }
         }
+        // After a run or a single smack, once the hand has rested on the skin a moment, the giver relaxes again.
+        if (!st.ended && st.mode !== 'run' && !scn.busy() && scn.swing > 1.5) {
+          st.rest = (st.rest || 0) + dt;
+          if (st.rest > 0.8) { st.rest = 0; st.mode = 'idle'; scn.lower(0.9); }
+        } else st.rest = 0;
         if (P && P.tooHarsh && !st.ended) { st.mode = 'idle'; st.tooHarsh = true; }
         const on = [g, s];
         if (!api.frozen) {   // (frozen: the editor's pose editor holds the scene still and moves it by hand)

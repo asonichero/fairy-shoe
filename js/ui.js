@@ -37,7 +37,14 @@ function saveSettings() { store(SAVE_KEY + '.prefs', { title: app.title, keeper:
 
 function setScreen(node) { const a = $('#app'); a.replaceChildren(node); window.scrollTo(0, 0); }
 function showStage(on) { $('#stage').classList.toggle('on', on); if (on && app.stage) app.stage.resize(); }
-function say(id, text) { const s = $('#speech'); if (!text) { s.hidden = true; return; } s.replaceChildren(h('b', {}, CH[id].name), fmt(text)); s.hidden = false; }
+// A line of speech: shown, then faded after a reasonable time to read it (a couple of seconds plus about a third of a second a word).
+function say(id, text) {
+  const s = $('#speech'); clearTimeout(app.speechT); s.classList.remove('fade');
+  if (!text) { s.hidden = true; return; }
+  s.replaceChildren(h('b', {}, CH[id].name), fmt(text)); s.hidden = false;
+  const ms = 2800 + String(text).split(/\s+/).length * 330;
+  app.speechT = setTimeout(() => { s.classList.add('fade'); app.speechT = setTimeout(() => { s.hidden = true; s.classList.remove('fade'); }, 900); }, ms);
+}
 async function busy(text, fn) {
   $('#loading-text').textContent = text; $('#loading').hidden = false;
   await delay(40);
@@ -380,47 +387,42 @@ function buildLiveDock(ses, card) {
   const fill = h('div', { class: 'fill' }), aim = h('div', { class: 'aim', style: 'left:' + (lo / SCALE * 100) + '%;width:' + ((hi - lo) / SCALE * 100) + '%' });
   const meter = h('div', { class: 'meter' }, aim, fill, h('div', { class: 'edge', title: 'The edge of resistance' }));
   const reading = h('div', { class: 'reading' }), aimText = h('small', {});
-  app.refreshGuidance = () => { aim.hidden = !app.settings.guidance; aimText.textContent = app.settings.guidance ? 'You are aiming for: ' + R.BANDS[expected] + ' (shaded). The white tick is the edge of resistance.' : ''; };
+  app.refreshGuidance = () => { aim.hidden = !app.settings.guidance; aimText.textContent = app.settings.guidance ? 'Aim for ' + R.BANDS[expected] + ' (shaded). The white tick is the edge of resistance.' : ''; };
   app.refreshGuidance();
 
-  // cameras
-  const cams = h('div', { class: 'tabs' }, SC.CAMERAS.map(([v, l]) => h('button', { 'data-v': v, onclick: () => { app.camera = v; app.stage.setCamera(v); sync(); } }, l)));
-  // position and implement: each opens a list
-  const posBtn = h('button', { class: 'wide', onclick: () => { ses.stop(); choosePosition(ses.position, ses.implement, doPosition); } });
-  const impBtn = h('button', { class: 'wide', onclick: () => { ses.stop(); chooseImplement(ses.implement, ses.position, doImplement); } });
-  // layers
-  const layerBtns = {}; const avail = ses.layerAvailable();
-  const layers = h('div', { class: 'tabs' }, ['bottoms', 'briefs'].filter(n => avail[n]).map(n => (layerBtns[n] = h('button', { onclick: () => { ses.setLayer(n, SC.layerNext(n, ses.layers[n])); sync(); } }))));
-  // pace, strength, run length: multipliers with − and +
-  const stepper = (label, get, step, title) => {
-    const val = h('b', {}, ''), minus = h('button', { onclick: () => { step(-1); sync(); }, 'aria-label': label + ' down' }, '−'), plus = h('button', { onclick: () => { step(1); sync(); }, 'aria-label': label + ' up' }, '+');
-    return { el: h('div', { class: 'step', title }, h('span', {}, label), minus, val, plus), val, minus, plus, get };
+  // The HUD over the view: the name at the top left, a camera button and a scene button (position, implement, clothes) at the top right, and one floating card.
+  const ICON = {
+    camera: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l1.6-2.4h6.8L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.4"/></svg>',
+    scene: '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5.5" r="2.2"/><path d="M8 8v5l-3 5M8 13l3 5M5 10.5h6"/><path d="M15 7h5M15 12h5M15 17h5"/></svg>',
   };
-  const steppers = [
-    stepper('Pace', () => '×' + ses.pace, d => ses.stepPace(d), 'How fast you swing, and how soon the next one comes'),
-    stepper('Strength', () => '×' + ses.strengthMult, d => ses.stepStrength(d), 'How hard each one lands'),
-    stepper('Run', () => ses.runLength + ' smacks', d => ses.stepRun(d), 'How many a run gives before it stops by itself'),
-  ];
+  const icon = (svg, title, fn) => { const b = h('button', { class: 'ico', title, 'aria-label': title, onclick: fn }); b.innerHTML = svg; return b; };
+  const camNames = SC.CAMERAS.map(c => c[0]), camLabel = Object.fromEntries(SC.CAMERAS);
+  const camBtn = icon(ICON.camera, 'Camera angle', () => { const i = camNames.indexOf(app.stage.cameraMode); app.camera = camNames[(i + 1) % camNames.length]; app.stage.setCamera(app.camera); camTip(); sync(); });
+  const camTipEl = h('div', { class: 'camtip', hidden: true });
+  let camTipT; const camTip = () => { camTipEl.textContent = camLabel[app.camera]; camTipEl.hidden = false; clearTimeout(camTipT); camTipT = setTimeout(() => { camTipEl.hidden = true; }, 1400); };
+  const sceneBtn = icon(ICON.scene, 'Position, implement and clothes', () => { ses.stop(); showSceneMenu(ses); });
+  // pace, strength, run length
+  const nudge = (label, fn) => h('button', { class: 'nb', onclick: () => { fn(); sync(); } }, label);
+  const slower = nudge('Slower', () => ses.stepPace(-1)), faster = nudge('Faster', () => ses.stepPace(1));
+  const softer = nudge('Softer', () => ses.stepStrength(-1)), harder = nudge('Harder', () => ses.stepStrength(1));
+  const runVal = h('b', {}), runMinus = h('button', { class: 'tiny', 'aria-label': 'Fewer smacks in a run', onclick: () => { ses.stepRun(-1); sync(); } }, '−'), runPlus = h('button', { class: 'tiny', 'aria-label': 'More smacks in a run', onclick: () => { ses.stepRun(1); sync(); } }, '+');
   const smack = h('button', { onclick: () => ses.smack() }, 'Smack');
   const run = h('button', { onclick: () => { if (ses.running) ses.stop(); else ses.run(); } }, 'Run');
-  const info = h('div', { class: 'sub' }), end = h('button', { class: 'primary big', onclick: () => finishLive(ses, card) }, 'End the correction');
-  const dock = h('div', { class: 'dock' },
-    h('h2', {}, d.name), h('div', { class: 'sub', id: 'subline' }), h('h4', {}, 'How they are'), reading, meter, aimText,
-    h('h4', {}, 'Camera'), h('div', { class: 'sub' }, 'Drag to orbit, scroll to zoom, right-drag to pan. These return to a standard angle.'), cams,
-    h('h4', {}, 'Position'), posBtn, h('h4', {}, 'Implement'), impBtn, h('h4', {}, 'What they wear'), layers,
-    h('h4', {}, 'Your hand'), ...steppers.map(s => s.el), h('div', { class: 'pair' }, smack, run), info,
-    h('div', { class: 'word' }, h('b', {}, 'The word '), 'is always honoured. ', 'Space smacks.'), end);
-  setScreen(dock);
+  const info = h('div', { class: 'hint' }), end = h('button', { class: 'primary', onclick: () => finishLive(ses, card) }, 'End the correction');
+  const card_ = h('div', { class: 'hudcard' },
+    h('div', { class: 'rd' }, reading), meter, aimText, info,
+    h('div', { class: 'nudges' }, h('div', { class: 'pairb' }, slower, faster), h('div', { class: 'pairb' }, softer, harder)),
+    h('div', { class: 'acts' }, h('div', { class: 'runset', title: 'How many smacks a run gives' }, runMinus, runVal, runPlus), run, smack),
+    end);
+  setScreen(h('div', { class: 'hud' }, h('div', { class: 'hudname' }, d.name), h('div', { class: 'hudtools' }, camBtn, sceneBtn), camTipEl, card_));
 
   const sync = () => {
-    cams.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === app.stage.cameraMode));
-    posBtn.textContent = 'Change position…  (' + POS[ses.position].label + ')'; impBtn.textContent = 'Change implement…  (' + IMPL[ses.implement].label + ')';
-    for (const [n, b] of Object.entries(layerBtns)) { b.classList.toggle('on', !!ses.layers[n] && ses.layers[n] !== 'off'); b.textContent = SC.layerLabel(n, ses.layers[n]); b.disabled = n === 'briefs' && !ses.layers.bottoms; }
-    steppers.forEach(s => { s.val.textContent = s.get(); });
-    steppers[0].minus.disabled = ses.pace <= SC.PACE[0]; steppers[0].plus.disabled = ses.pace >= SC.PACE[SC.PACE.length - 1];
-    steppers[1].minus.disabled = ses.strengthMult <= SC.STRENGTH[0]; steppers[1].plus.disabled = ses.strengthMult >= SC.STRENGTH[SC.STRENGTH.length - 1];
-    steppers[2].minus.disabled = ses.runLength <= SC.RUN[0]; steppers[2].plus.disabled = ses.runLength >= SC.RUN[SC.RUN.length - 1];
-    $('#subline').textContent = POS[ses.position].label + ' · ' + IMPL[ses.implement].label;
+    camBtn.title = 'Camera angle: ' + camLabel[app.stage.cameraMode === 'free' ? app.camera || 'overview' : app.stage.cameraMode];
+    runVal.textContent = ses.runLength;
+    slower.disabled = ses.pace <= SC.PACE[0]; faster.disabled = ses.pace >= SC.PACE[SC.PACE.length - 1];
+    softer.disabled = ses.strengthMult <= SC.STRENGTH[0]; harder.disabled = ses.strengthMult >= SC.STRENGTH[SC.STRENGTH.length - 1];
+    slower.title = faster.title = 'Pace ×' + ses.pace; softer.title = harder.title = 'Strength ×' + ses.strengthMult;
+    runMinus.disabled = ses.runLength <= SC.RUN[0]; runPlus.disabled = ses.runLength >= SC.RUN[SC.RUN.length - 1];
   };
   ses.syncDock = sync; sync(); app.stage.onCameraTaken(() => sync());
   let spoke = false, last = 0;
@@ -429,16 +431,28 @@ function buildLiveDock(ses, card) {
     const dist = ses.distress();
     fill.style.width = Math.min(100, dist / SCALE * 100) + '%';
     fill.style.background = dist < 0.3 ? '#6b9e5a' : dist < 0.6 ? '#b4a24a' : dist < 0.9 ? '#c8803c' : dist < 1 ? '#c24a3a' : dist < 1.5 ? '#b08ad0' : '#7a1f1f';
-    reading.replaceChildren(cap(ses.band()), h('small', {}, ses.st.smacks + (ses.st.smacks === 1 ? ' smack' : ' smacks')));
+    reading.replaceChildren(h('span', {}, cap(ses.band())), h('small', {}, ses.st.smacks + (ses.st.smacks === 1 ? ' smack' : ' smacks')));
     const can = ses.canStrike();
     smack.disabled = !can || ses.running;
-    run.textContent = ses.running ? 'Stop' : 'Run ' + ses.runLength; run.disabled = !can && !ses.running;
+    run.textContent = ses.running ? 'Stop' : 'Run'; run.disabled = !can && !ses.running;
     // Past the point of no return they stop: nothing further is struck.
     if (ses.st.tooHarsh && !spoke) { spoke = true; info.textContent = d.name + ' has been brought too far. Nothing more will be struck.'; say(id, C.SAYINGS.harsh[0]); end.textContent = 'End it'; }
   };
   ses.onChange(ses);
 }
 
+// Position, implement and clothes, in one pop-up.
+function showSceneMenu(ses) {
+  const tabs = (items, cur, fn) => h('div', { class: 'picks2' }, items.map(([v, l, dis, tip]) => h('button', { class: v === cur ? 'on' : '', disabled: dis || v === cur, title: tip || '', onclick: () => fn(v) }, l)));
+  const wide = () => ses.position === 'spread';
+  const pos = tabs(SC.POSITIONS.map(p => [p[0], p[1], p[0] === 'spread' && !dual(ses.implement), p[0] === 'spread' && !dual(ses.implement) ? 'Needs a wide implement' : p[2]]), ses.position, v => { closeModal(); doPosition(v); });
+  const imp = tabs(SC.IMPLEMENTS.map(p => [p[0], p[1], wide() && !dual(p[0]), p[2]]), ses.implement, v => { closeModal(); doImplement(v); });
+  const avail = ses.layerAvailable(), lay = h('div', { class: 'picks2' });
+  const paintLay = () => lay.replaceChildren(...['bottoms', 'briefs'].filter(n => avail[n]).map(n => h('button', { class: !!ses.layers[n] ? 'on' : '', disabled: n === 'briefs' && !ses.layers.bottoms, onclick: () => { ses.setLayer(n, SC.layerNext(n, ses.layers[n])); paintLay(); } }, SC.layerLabel(n, ses.layers[n]))));
+  paintLay();
+  modal(h('h2', {}, 'The scene'), h('h4', {}, 'Position'), pos, h('h4', {}, 'Implement'), imp, avail.bottoms ? h('h4', {}, 'Clothes') : null, avail.bottoms ? lay : null,
+    h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { onclick: closeModal }, 'Close')));
+}
 // Changing position: pick one, a line of narration while the room is set again, then on with it. The pain carries over.
 async function doPosition(pos) {
   const ses = app.live, id = ses.card.id, d = ses.distress();
@@ -520,7 +534,7 @@ function showResult(snap, { stage }) {
   draw(); wrap.append(body);
   if (!stage) { const s = h('div', { class: 'screen' }, header(candle()), wrap); setScreen(s); } else $('#app').append(wrap);
   // the dock is replaced by the result when the room is on screen
-  if (stage) { const dock = $('#app .dock'); if (dock) dock.remove(); }
+  if (stage) { const hud = $('#app .hud'); if (hud) hud.remove(); }
 }
 
 // ── The end of the night ────────────────────────────────────────

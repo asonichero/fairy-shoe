@@ -25,7 +25,7 @@ h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; }
 .stage.on { visibility: visible; }
 .stage canvas { display: block; }
 .glbanner { position: fixed; left: 8px; right: 8px; bottom: 8px; z-index: 60; background: #5a1f1f; color: #ffd9d9; font: 12px/1.4 monospace; padding: 8px 10px; border-radius: 6px; white-space: pre-wrap; max-height: 40vh; overflow: auto; }
-.speech { position: fixed; z-index: 5; left: 16px; top: 64px; max-width: min(420px, calc(100vw - 32px)); background: rgba(241,231,210,.94); color: var(--paper-ink); font-family: var(--serif); font-style: italic; padding: 10px 14px; border-radius: 10px 10px 10px 2px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
+.speech { position: fixed; z-index: 5; left: 16px; top: 60px; transition: opacity .9s; max-width: min(420px, calc(100vw - 32px)); background: rgba(241,231,210,.94); color: var(--paper-ink); font-family: var(--serif); font-style: italic; padding: 10px 14px; border-radius: 10px 10px 10px 2px; box-shadow: 0 4px 18px rgba(0,0,0,.4); }
 .speech b { font-style: normal; font-family: var(--sans); font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: #7a5a22; display: block; margin-bottom: 2px; }
 
 #app { position: relative; z-index: 2; min-height: 100%; }
@@ -121,7 +121,7 @@ body.live #app > * { pointer-events: auto; }
 
 /* setup + live panel */
 .dock { position: fixed; z-index: 4; top: 0; right: 0; bottom: 0; width: 340px; background: rgba(24,20,30,.95); border-left: 1px solid var(--line); padding: 14px 16px 18px; overflow-y: auto; }
-@media (max-width: 800px) { .dock { top: auto; width: 100%; height: 56vh; border-left: 0; border-top: 1px solid var(--line); } .speech { top: 52px; } .stage { bottom: 56vh; } }
+
 .dock h2 { font-size: 18px; color: var(--gold); }
 .dock .sub { color: var(--muted); font-size: 12.5px; margin: 2px 0 8px; line-height: 1.45; }
 .dock h4 { margin: 14px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #9a90a2; border-bottom: 1px solid var(--line); padding-bottom: 4px; font-weight: 600; }
@@ -225,3 +225,31 @@ a.linkbtn:hover { color: var(--ink); background: #2e2837; }
 .chorelist .chore { margin-bottom: 0; }
 .residents { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; align-items: start; }
 .residents .res { margin-bottom: 0; }
+
+/* ── The live correction's HUD: name, two icon buttons, one floating card ── */
+.speech.fade { opacity: 0; }
+body.live #app > .hud { pointer-events: none; }
+.hud { position: fixed; inset: 0; z-index: 4; }
+.hud > * { pointer-events: auto; }
+.hudname { position: fixed; top: 14px; left: 16px; font-family: var(--serif); font-size: 24px; color: var(--gold); text-shadow: 0 1px 6px rgba(0,0,0,.85); pointer-events: none; }
+.hudtools { position: fixed; top: 12px; right: 14px; display: flex; gap: 8px; }
+.hudtools .ico { width: 44px; height: 44px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: rgba(24,20,30,.82); border: 1px solid var(--line); color: #e8e0f0; backdrop-filter: blur(4px); }
+.hudtools .ico:hover { background: rgba(46,40,55,.95); }
+.camtip { position: fixed; top: 62px; right: 14px; padding: 4px 10px; border-radius: 12px; background: rgba(24,20,30,.9); font-size: 12px; color: var(--ink); pointer-events: none; }
+.hudcard { position: fixed; right: 16px; bottom: 16px; width: 360px; max-width: calc(100vw - 20px); box-sizing: border-box; padding: 12px 14px 14px; border-radius: 16px; background: rgba(24,20,30,.9); border: 1px solid var(--line); backdrop-filter: blur(6px); box-shadow: 0 8px 28px rgba(0,0,0,.5); }
+.hudcard .rd .reading { display: flex; justify-content: space-between; align-items: baseline; margin: 0; font-size: 17px; }
+.hudcard .reading small { display: inline; }
+.hudcard .meter { margin-top: 6px; }
+.hudcard .hint { color: var(--muted); font-size: 12px; margin-top: 4px; line-height: 1.35; }
+.hudcard small { font-size: 12px; }
+.nudges { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+.pairb { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.hudcard button { padding: 7px 6px; font-size: 13px; }
+.acts { display: grid; grid-template-columns: auto 1fr 1fr; gap: 8px; margin-top: 8px; align-items: center; }
+.runset { display: flex; align-items: center; gap: 4px; color: var(--gold); font-variant-numeric: tabular-nums; }
+.runset b { min-width: 22px; text-align: center; font-weight: 600; }
+.hudcard button.tiny { padding: 2px 9px; font-size: 15px; line-height: 1.2; }
+.hudcard .primary { width: 100%; margin-top: 8px; padding: 10px; }
+.picks2 { display: flex; flex-wrap: wrap; gap: 8px; }
+.picks2 button.on { background: #4a3d1f; border-color: var(--gold); }
+@media (max-width: 800px) { .hudcard { left: 10px; right: 10px; bottom: 10px; width: auto; max-width: none; } .hudname { font-size: 21px; } }
