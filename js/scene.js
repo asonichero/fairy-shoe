@@ -343,11 +343,12 @@ function createSession(scene, opts, env = {}) {
       const S_ = opts.stats; if (!S_ || !scn) { if (scn) scn.legK = 1; return; }
       const ss = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
       const wil = clamp((S_.wil - 1) / 5, 0, 1), com = clamp((S_.com - 1) / 4, 0, 1), d = scn.pain ? scn.pain.distress() : 0;
-      const base = 1 - 0.72 * wil - 0.2 * com;                        // at ease: 0.08 (most wilful) … 1 (not wilful, uncomposed)
-      const ceiling = 1 - 0.4 * wil;                                  // worked up: the wilful never quite let go
-      const gain = Math.max(0.06, base + (ceiling - base) * ss(0.35, 1.1, d));
-      const freq = clamp(0.25 + 0.9 * gain, 0, 1);
-      scn.legK = Math.random() < freq ? gain * (0.8 + 0.4 * Math.random()) : gain * 0.25;
+      const base = 1 - 0.72 * wil - 0.2 * com;                        // at ease: 0.08 (most wilful and composed) … 1 (not wilful, uncomposed)
+      const ceiling = 1 - 0.4 * wil * (0.5 + 0.5 * com);              // worked up: the wilful never quite let go, unless they are also uncomposed
+      const gain = Math.max(0.06, base + (ceiling - base) * ss(0.25, 0.9, d));
+      const freq = clamp(0.3 + 1.0 * gain, 0, 1);
+      // (1 is the engine's own kick; a free kick is well past it: knees well up, the heels high)
+      scn.legK = Math.random() < freq ? Math.min(1.8, gain * 1.8 * (0.85 + 0.3 * Math.random())) : gain * 0.3;
     }
     function make(cfg = {}) {
       const position = cfg.position || st.position;
