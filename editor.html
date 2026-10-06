@@ -674,8 +674,8 @@ function buildScene() {
   for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); applyViewToChar(c); }
   const seatTop = sc.position === 'knees' ? EDITOR.seatTop(g) : 0;   // (the chair the player sits in, for the hands-on-the-chair position)
   scn = S.createDisciplineScene(scene, g, s, { lower: !!lowered[sc.subject], position: sc.position });
-  scn.chairPlant = EDITOR.furnish(scene, scn, s, sc.position, seatTop);   // cottage furniture in place of the engine's cases
-  EDITOR.poses(scn, sc.position);                                         // the pose edits in js/poses.js, as the game applies them
+  EDITOR.prepare(scn);                                                    // the game's own set-up: the hybrid skirt,
+  scn.chairPlant = EDITOR.furnish(scene, scn, g, s, sc.position, seatTop);   // the cottage furniture, the seat and the pose edits in js/poses.js
   EDITOR.skirt(scn, sc.skirt);                                            // the subject's skirt, draped over the pose
   if (lowered[sc.giver]) S.setLowered(g, 'bottom', true);
   for (const c of [g, s]) if (briefsDown[c.key]) S.setLowered(c, 'briefs', true);

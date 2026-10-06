@@ -20,16 +20,18 @@ window.EDITOR = {
   initial: id => S.clone(S.PRESETS[id]),
   cameraPose: (mode, scn) => SC.cameraPose(mode, { subject: scn.s, giver: scn.g }),
   seatTop: g => SC.chairSeatTop(g),
-  furnish: (parent, scn, s, pos, seatTop) => SC.furnishScene(parent, scn, s, gamePos(pos), seatTop),
-  poses: (scn, pos) => SC.applyPoseOverrides(scn, gamePos(pos)),
+  // the game's own set-up of a discipline scene (see scene.js): the subject's hybrid skirt, then the furniture, the seat and the pose edits in js/poses.js
+  prepare: scn => SC.prepareSubject(scn.s),
+  furnish: (parent, scn, g, s, pos, seatTop) => SC.furnishDiscipline(parent, scn, g, s, gamePos(pos), seatTop),
   hold: (s, plant) => SC.holdChairHands(s, plant),
   // The subject's skirt in the discipline scene (the engine takes it off; here it is put back on, over the pose, as the game does).
   skirt: (scn, mode) => {
+    const g = scn.g; if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [scn.s], [scn.bench], 1.5, false); }   // the disciplinarian's own skirt (a dress), as in the game
     const s = scn.s; if (!s.skirt) return;
     S.setSkirtOff(s, mode === 'off'); if (mode === 'off') return;
     S.setSkirtGathered(s, mode === 'up');
     scn.update(0.016); scn.update(0.016);
-    S.settleSkirt(s, [scn.g], [scn.bench]);
+    S.settleSkirt(s, [scn.g], [scn.bench]);   // (as the game does, once, after the pose is set)
   },
   lift: scn => scn.s.skirt && !scn.s.skirt.off && !scn.s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0,   // the palm lands on the cloth
 };

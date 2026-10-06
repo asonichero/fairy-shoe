@@ -5307,6 +5307,7 @@ function skinPoints(ch, S) {
       nx += w * (e[0] * qx + e[4] * qy + e[8] * qz); ny += w * (e[1] * qx + e[5] * qy + e[9] * qz); nz += w * (e[2] * qx + e[6] * qy + e[10] * qz);
     }
     const nl = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+    if (ch.pressFloor != null && y < ch.pressFloor) { y = ch.pressFloor; nx = 0; ny = -nl; nz = 0; }   // (skin the scene flattens against a seat is flat for the cloth too)
     if (K.lin) for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) { let v = 0; for (let a = 0; a < 4; a++) { const w = K.w[4 * k + a]; if (w) v += w * M[K.i[4 * k + a]][4 * c + r]; } K.lin[9 * k + 3 * r + c] = v; }   // (the blended turn of this skin point, row r column c)
     K.wp[3 * k] = x; K.wp[3 * k + 1] = y; K.wp[3 * k + 2] = z; K.wn[3 * k] = nx / nl; K.wn[3 * k + 1] = ny / nl; K.wn[3 * k + 2] = nz / nl;
     const key = cellKey(Math.floor(x / SKIN_CELL), Math.floor(y / SKIN_CELL), Math.floor(z / SKIN_CELL));
@@ -5816,6 +5817,12 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
   }
   skinPoints(ch, S);
   const bodies = everyone.filter(o => o !== ch && o.group.parent && o.group.visible && o.mesh && o.bones.pelvis.getWorldPosition(new THREE.Vector3()).distanceTo(hip) < 2.2).map(o => otherSkin(o, hip));
+  // Other people's cloth (their skirts) is solid too: its points, in a grid, each a small sphere the cloth is pushed out of.
+  const clothGrid = new Map(), CR = 0.026;
+  for (const o of everyone) {
+    const T = o !== ch && o.skirt && !o.skirt.off && o.skirt.p && o.skirt.mesh.visible && o.group.parent ? o.skirt : null; if (!T) continue;
+    for (let k = T.N; k < T.R * T.N; k++) { const key = cellKey(Math.floor(T.p[3 * k] / CR), Math.floor(T.p[3 * k + 1] / CR), Math.floor(T.p[3 * k + 2] / CR)); let c = clothGrid.get(key); if (!c) clothGrid.set(key, c = []); c.push(T.p[3 * k], T.p[3 * k + 1], T.p[3 * k + 2]); }
+  }
   const boxes = [], obbs = [];
   for (const o of solids.filter(Boolean)) {
     if (!o.userData || !o.userData.obb) { boxes.push(new THREE.Box3().setFromObject(o)); continue; }
@@ -5906,6 +5913,17 @@ function skirtStep(ch, dt, everyone = [], solids = []) {
     if (bp && best < T) { const g = [0, 0, 0], gl = grad(bp, q, g), push = T - best; for (let a = 0; a < 3; a++) q[a] += g[a] / gl * push; hit = true; }
     // Other bodies' skin (a hand, a thigh, an arm, whatever is near), by the same plane test as the wearer's own.
     for (const B of bodies) if (skinPush(B.wp, B.wn, B.grid, q)) hit = true;
+    if (clothGrid.size) {
+      const cx = Math.floor(q[0] / CR), cy = Math.floor(q[1] / CR), cz = Math.floor(q[2] / CR);
+      for (let ix = cx - 1; ix <= cx + 1; ix++) for (let iy = cy - 1; iy <= cy + 1; iy++) for (let iz = cz - 1; iz <= cz + 1; iz++) {
+        const c = clothGrid.get(cellKey(ix, iy, iz)); if (!c) continue;
+        for (let m = 0; m < c.length; m += 3) {
+          const dx = q[0] - c[m], dy = q[1] - c[m + 1], dz = q[2] - c[m + 2], d2 = dx * dx + dy * dy + dz * dz;
+          if (d2 >= CR * CR || d2 < 1e-10) continue;
+          const d = Math.sqrt(d2), f = (CR - d) / d; q[0] += dx * f; q[1] += dy * f; q[2] += dz * f; hit = true;
+        }
+      }
+    }
     // Hands (a capsule from wrist to fingertips): a palm comes down on top of the cloth.
     for (const P of hands) {
       const dx = q[0] - P.sc[0], dy = q[1] - P.sc[1], dz = q[2] - P.sc[2];

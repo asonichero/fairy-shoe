@@ -130,6 +130,27 @@ function holdChairHands(s, plant) {
   }
 }
 
+// ── Setting up a discipline scene (the game and the editor both call these, so what is seen in one is what is in the other) ──
+// The subject's skirt in a discipline scene: the gathered back is driven by the body, the front and sides are cloth (see Starlight.setSkirtHybrid).
+function prepareSubject(s) { if (s.skirt) S.setSkirtHybrid(s, true); }
+// Furniture in place, the seat under a seated disciplinarian, and the pose edits from js/poses.js. Returns `plant` (where the hands go on the chair).
+function furnishDiscipline(parent, scn, g, s, position, seatTop) {
+  const plant = furnishScene(parent, scn, s, position, seatTop);
+  g.pressFloor = null;
+  if (position === 'lap' && scn.seatTop != null) {
+    // The seat flattens the seated disciplinarian's glutes (the contact shader, as a palm flattens skin) so that the skin lies flush on it and never
+    // passes through. With a skirt on, the flat is a skirt's thickness above the seat, so the cloth lies between skin and seat; the cloth sees the
+    // same flat (see skinPoints), not the glutes the shader has pressed away.
+    const up = 0.009 * g.spec.H / 1.7;   // the pair sit a little higher: the thighs rest on the seat and not in it
+    for (const c of [g, s]) { c.group.position.y += up; c.group.updateMatrixWorld(true); }
+    const flat = scn.seatTop + (g.skirt ? 0.016 : 0.0015), pel = g.bones.pelvis.getWorldPosition(new T.Vector3());
+    g.pressFloor = flat;
+    S.setPress(g, new T.Vector3(pel.x, flat, pel.z), new T.Vector3(0, -1, 0), 0.24 * g.spec.H / 1.7, 1, '', null, 0, 0.09);
+  }
+  applyPoseOverrides(scn, position);
+  return plant;
+}
+
 // ── Standard camera angles ──────────────────────────────────────
 // Where each standard view puts the camera for a session's two bodies ({ subject, giver }, posed). The stage takes the camera there when
 // a button is pressed; the editor does the same. (Frame: which way the subject faces, how upright they are, where the glutes are.)
@@ -266,22 +287,13 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
       const D = derive();
       scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
-      if (s.skirt) S.setSkirtHybrid(s, true);   // the subject's skirt in a discipline scene: the gathered back is driven by the body, the front and sides are cloth (see Starlight.setSkirtHybrid)
+      prepareSubject(s);
       applyLayers();
       let impl = cfg.implement || st.implement;
       if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
       st.implement = impl; scn.setImplement(impl); scn.setBeat('relaxed');
       scn.timing = { ...scn.timing, speed: D.speed };
-      furniture = null; plant = furnishScene(scene, scn, s, position, seatTop);
-      if (position === 'lap' && scn.seatTop != null) {
-        // The seated disciplinarian's weight is on the chair: the pair sit a little higher, so the thighs rest on the seat and not in it, and the
-        // seat flattens the glutes (the contact shader, as a palm flattens skin) so that they are pressed on it and never pass through it.
-        const up = 0.012 * g.spec.H / 1.7;
-        for (const c of [g, s]) { c.group.position.y += up; c.group.updateMatrixWorld(true); }
-        const pel = g.bones.pelvis.getWorldPosition(new T.Vector3());
-        S.setPress(g, new T.Vector3(pel.x, scn.seatTop, pel.z), new T.Vector3(0, -1, 0), 0.24 * g.spec.H / 1.7, 1, '', null, 0, 0.08);
-      }
-      applyPoseOverrides(scn, position);
+      furniture = null; plant = furnishDiscipline(scene, scn, g, s, position, seatTop);   // furniture, the seat, the pose edits (shared with the editor)
       if (s.skirt && skirtMode(st.layers.skirt) !== 'off') settleSkirt();
       if (g.skirt) { scn.update(0.016); S.settleSkirt(g, [s], [scn.bench], 1.5, false); }   // the player's own skirt (a dress) drapes over the seat or the stance
       if (oldP && scn.pain) {
@@ -375,5 +387,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);
