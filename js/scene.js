@@ -266,6 +266,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
       const D = derive();
       scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
+      for (const c of [g, s]) if (c.skirt) S.setSkirtShell(c, true);   // skirts in a discipline scene are shells skinned to the body, not cloth (see Starlight.setSkirtShell)
       applyLayers();
       let impl = cfg.implement || st.implement;
       if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';

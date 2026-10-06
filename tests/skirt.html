@@ -10,7 +10,10 @@ window.setup = function (id, pos, impl, mode) {
   window.ses = stage.begin({ giver: B.keeper(window.__keeper || 'a'), subject: window.__patch ? FairyShoeEdits.deepMerge(B.spec(id), window.__patch) : B.spec(id), subjectId: id, position: pos, implement: impl, layers: { bottoms: true }, pain: { ...C.CHARACTERS[id].pain } });
   window.clock = 0; window.skirt = ses.subject.skirt;
   // (the game forces a skirt to be hitched up; here the mode is applied afterwards so the loose cloth is tested too)
-  if (skirt && (mode === 'down' || mode === 'free')) { Starlight.setSkirtGathered(ses.subject, false); ses.scn.update(0.016); Starlight.settleSkirt(ses.subject, [ses.giver], [ses.scn.bench], 1.5, mode !== 'free'); }   // ('free': left as simulated cloth, for the weight test) if (window.skirt) window.skirt.debug = true;
+  // ('free' is simulated cloth, for the weight test; the discipline scenes' skirt is the shell)
+  if (skirt && mode === 'free') { Starlight.setSkirtShell(ses.subject, false); Starlight.setSkirtGathered(ses.subject, false); ses.scn.update(0.016); Starlight.settleSkirt(ses.subject, [ses.giver], [ses.scn.bench], 1.5, false); }
+  if (skirt && mode === 'down') Starlight.setSkirtGathered(ses.subject, false);
+  if (window.skirt) window.skirt.debug = true;
   return !!window.skirt;
 };
 // Step the scene by hand: `seconds` of it in frames of `dt`, a smack every `every` seconds (0: none). Returns the skirt's stats.
