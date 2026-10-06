@@ -518,7 +518,14 @@ function createTableau(scene, kind, opts, env = {}) {
     ch.group.updateMatrixWorld(true);
     return { furn, top, pel };
   };
-  let view = { pos: new V3(0, 1.4, 3), tgt: new V3(0, 1, 0), fov: 38 }, hold = () => {}, gaze = null;
+  let view = { pos: new V3(0, 1.4, 3), tgt: new V3(0, 1, 0), fov: 38 }, hold = () => {}, gaze = () => {};
+  // Where the eyes go (the engine's own: a gaze offset in the head's frame, read by faceStep), once the heads have turned.
+  const eyesAt = (ch, point, w = 0.9) => {
+    const hq = ch.bones.head.getWorldQuaternion(new T.Quaternion()).invert();
+    const v = point.clone().sub(ch.bones.head.getWorldPosition(new V3())).applyQuaternion(hq).normalize();
+    ch.gazeFx = { x: clamp(v.x * S.FACE.EYE_GAIN, -1, 1), y: clamp(v.y * S.FACE.EYE_GAIN, -1, 1), w };
+  };
+  const edits = Poses[kind] || [];
   if (kind === 'corner') {
     g.group.visible = false; g.helper.visible = false;
     const c = -Room.HALF + 0.62; standing(s, face(-1, -1), c, c); s.handsOnHead = true;
@@ -542,6 +549,7 @@ function createTableau(scene, kind, opts, env = {}) {
       s.bones.neck.rotateX(0.55); s.bones.head.rotateX(0.35);   // head bent over the page
       pen.position.copy(st.furn.worldToLocal(s.bones.handR.getWorldPosition(new V3()).add(new V3(0, -0.02, 0.0)))); pen.rotation.x = 0.8;
     };
+    gaze = () => eyesAt(s, st.furn.localToWorld(new V3(0.02, 0.746, 0.46)), 1);
     view = { pos: st.furn.localToWorld(new V3(1.5, 1.45, 1.55)), tgt: st.furn.localToWorld(new V3(0, 0.95, 0.3)), fov: 40 };
   } else if (kind === 'held') {
     const k = (g.spec.H + s.spec.H) / 2 / 1.7, gap = 0.31 * k;
@@ -558,6 +566,7 @@ function createTableau(scene, kind, opts, env = {}) {
       }
       s.bones.neck.rotateY(-0.9 * (s.group.quaternion.y > 0 ? 1 : 1)); s.bones.neck.rotateX(0.15); g.bones.neck.rotateX(0.2);   // the subject's head laid against the player's shoulder
     };
+    gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3()), 0.7); eyesAt(s, g.bones.spine2.getWorldPosition(new V3()), 0.7); };
     view = { pos: new V3(0.5, 1.35, 2.5), tgt: new V3(0, 1.15, 0), fov: 36 };
   } else {   // 'warm'
     const st = seated(g, 0, 0, -0.25);
@@ -566,6 +575,7 @@ function createTableau(scene, kind, opts, env = {}) {
       g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
       S.lookAt(g, s.bones.head.getWorldPosition(new V3()), 0.9); S.lookAt(s, g.bones.head.getWorldPosition(new V3()), 0.9);
     };
+    gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3())); eyesAt(s, g.bones.head.getWorldPosition(new V3())); };
     view = { pos: new V3(2.3, 1.3, 0.4), tgt: new V3(0, 1.05, 0.3), fov: 38 };
   }
   function a0() { return 0; }
@@ -576,13 +586,14 @@ function createTableau(scene, kind, opts, env = {}) {
     view, subject: s, giver: g,
     tick(dt, t) {
       for (const c of both) if (c.group.visible) S.animateCharacter(c, dt, t);
-      hold(t); 
+      for (const e of edits) { const c = e.who === 'giver' ? g : s; if (e.beat !== 'base' || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); }
+      hold(t); gaze();
       for (const c of both) if (c.group.visible) { c.group.updateMatrixWorld(true); S.bustSpring(c, dt); }
       const on = both.filter(c => c.group.visible);
       for (const c of on) S.bustContact(c, on);
       S.updateContacts(on);
       const colliders = on.flatMap(S.bodyColliders);
-      for (const c of on) { S.hairStep(c, dt, colliders); S.faceStep && 0; S.skirtStep(c, dt, on, []); S.bunchStep(c); S.fadeMarks(c, 0); }
+      for (const c of on) { S.hairStep(c, dt, colliders); S.faceStep(c, dt); S.skirtStep(c, dt, on, []); S.bunchStep(c); S.fadeMarks(c, 0); }
     },
     dispose() {
       marks[opts.subjectId] = { marks: s.marks, stripes: s.stripes };
@@ -678,5 +689,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, tableau, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

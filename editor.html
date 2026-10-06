@@ -106,6 +106,10 @@
   <div class="row"><label><span>Hold with arm raised</span><span id="v-t-raisedHold">0.20 s</span></label><input id="s-t-raisedHold" type="range" min="0" max="2" step="0.05" value="0.2"></div>
   <div class="row" style="margin-top:8px"><label><span>Palm angle at contact (skin → glute centre)</span><span id="v-aim">65%</span></label><input id="s-aim" type="range" min="0" max="100" step="5" value="65"></div>
 
+  <h3>Aftercare scene</h3>
+  <div class="sub" style="margin:0 0 6px">The four scenes shown after a correction, with the Disciplinarian and Subject chosen above and the clothes as set for the Subject. Pose edits for them go in js/poses.js under corner, lines, held and warm; the Discipline scene is closed while one is open.</div>
+  <div class="tabs" id="af-kinds"></div>
+
   <h3>Pose editor</h3>
   <div class="sub" style="margin:0 0 6px">Freezes the discipline scene at the current beat so you can reshape it. Drag a joint in the view; click one to fine-tune it below. The gold handle moves the implement, and the arm follows. Report collects everything for Claude. The scene goes back to its own pose when you stop editing.</div>
   <div class="toggles">
@@ -163,7 +167,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261007-0110";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261007-0130";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -253,7 +257,7 @@ const PE = { on: false };
 const build = k => S.buildCharacter(current[k], { voxel: view.voxel, key: k, weights: view.weights, wire: view.wire });
 
 function placeChars() {
-  const keys = sc.on ? [] : view.lineup ? ORDER : [view.selected];
+  const keys = sc.on || tab ? [] : view.lineup ? ORDER : [view.selected];
   ORDER.forEach(k => { if (chars[k]) { chars[k].group.visible = keys.includes(k); chars[k].helper.visible = view.skeleton && keys.includes(k); } });
   const gap = view.pose === SPREAD ? 1.25 : 0.75;   // room for a wide stance
   keys.forEach((k, i) => { chars[k].group.position.x = (i - (keys.length - 1) / 2) * gap; });
@@ -723,6 +727,7 @@ BEATS.forEach(([beat, label]) => {
   document.getElementById('sc-beats').appendChild(b);
 });
 document.getElementById('sc-on').onclick = () => {
+  if (tab) clearTab();
   if (PE.on && sc.on) PE.stop();
   sc.on = !sc.on;
   if (sc.on) { buildScene(); camera.position.set(1.8, 1.3, 2.4); controls.target.set(0, 0.6, 0.2); }
@@ -781,6 +786,23 @@ Object.keys(S.IMPLEMENTS).forEach(name => {
 controls.addEventListener('start', () => { camGo = null; document.querySelectorAll('#sc-cams button').forEach(x => x.classList.remove('on')); });
 function refreshImplements() { document.querySelectorAll('#sc-implements button').forEach(b => b.classList.toggle('on', b.dataset.impl === sc.implement)); }
 refreshImplements(); refreshPositions();
+// The aftercare scenes (the game's own: see scene.js createTableau), shown in place of the discipline scene.
+let tab = null, tabKind = null;
+function clearTab() { if (tab) { tab.dispose(); tab = null; } tabKind = null; document.querySelectorAll('#af-kinds button').forEach(b => b.classList.remove('on')); placeChars(); }
+function showTab(kind) {
+  if (sc.on) document.getElementById('sc-on').click();
+  clearTab();
+  tab = EDITOR.tableau(scene, kind, { giver: current[sc.giver], subject: current[sc.subject], subjectId: sc.subject,
+    layers: { bottoms: !!lowered[sc.subject], briefs: !!briefsDown[sc.subject], skirt: sc.skirt } }, { marks: {} });
+  tabKind = kind; camera.position.copy(tab.view.pos); controls.target.copy(tab.view.tgt); camera.fov = tab.view.fov; camera.updateProjectionMatrix(); controls.update();
+  document.querySelectorAll('#af-kinds button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
+  placeChars();
+}
+EDITOR.tableaux.forEach(([id, label]) => {
+  const b = document.createElement('button'); b.textContent = label; b.dataset.kind = id;
+  b.onclick = () => { if (tabKind === id) clearTab(); else showTab(id); };
+  document.getElementById('af-kinds').appendChild(b);
+});
 let pinWanted = false;
 const syncPin = () => document.getElementById('sc-pin').classList.toggle('on', !!(sess && sess.pinned));
 document.getElementById('sc-pin').onclick = () => { if (!sess) return; pinWanted = !sess.pinned; sess.pinFeet(pinWanted); syncPin(); };
@@ -1263,6 +1285,7 @@ function animate() {
     ch.group.position.y += (-(ch.stanceDrop || 0) - ch.group.position.y) * (1 - Math.exp(-dt * 7));
     if (view.spin) ch.group.rotation.y += dt * 0.5;
   }
+  if (tab) tab.tick(dt, t);
   if (sess) { sess.frozen = PE.on; sess.tick(dt, t); }   // the game's own per-frame step for the scene (held still while the pose editor is on)
   if (PE.on) { PE.frame(); if (sess) sess.applyPins(); }   // (the pose editor's own bones first, then the pinned feet are put back)
   // Marks fade slowly (the scene's bodies fade in the session).

@@ -23,6 +23,8 @@ window.EDITOR = {
   // the game's own set-up of a discipline scene (see scene.js): the subject's hybrid skirt, then the furniture, the seat and the pose edits in js/poses.js
   // the game's own session (scene.js), given the editor's bodies
   session: (scene, opts, env) => SC.createSession(scene, { ...opts, position: gamePos(opts.position) }, env),
+  tableau: (scene, kind, opts, env) => SC.createTableau(scene, kind, opts, env),
+  tableaux: SC.TABLEAUX,
   hold: (s, plant) => SC.holdChairHands(s, plant),
 };
 })();

@@ -11,6 +11,8 @@ root.FairyShoePoses = {
   head: [],
   chair: [],
   spread: [],
+  // The aftercare scenes (corner, lines, held, warm): bones set on top of each scene's own standing or seated pose (who: 'subject' or 'giver', beat: 'base').
+  corner: [], lines: [], held: [], warm: [],
   // Editor-only base position ("Hips"): bent at the hips, arms forward; the game never offers it.
   // Editor-only base position ("Astride"): the lap scene, seated, with its own poses; the game never offers it.
   astride: [
