@@ -182,7 +182,8 @@ function pinFeetTo(ch, marks) {
   ch.group.updateMatrixWorld(true);
   for (const side of ['L', 'R']) {
     S.twoBoneTo(ch, ['thigh' + side, 'shin' + side, 'foot' + side], marks[side].pos);
-    S.rotateBoneWorld(ch.bones['foot' + side], marks[side].quat);
+    const f = ch.bones['foot' + side];   // (set, not turned: rotateBoneWorld applies a change on top of the current angle)
+    f.quaternion.copy(f.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(marks[side].quat)); f.updateMatrixWorld(true);
   }
 }
 function setupHips(parent, scn, g, s) {
@@ -408,6 +409,7 @@ function createSession(scene, opts, env = {}) {
         if (!api.frozen) {   // (frozen: the editor's pose editor holds the scene still and moves it by hand)
           for (const ch of on) S.animateCharacter(ch, dt, t);
           scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
+          if (st.position === 'hips') scn.gaze = scn.swing < 0.3 ? 'head' : null;   // at rest the giver looks at the subject's head; for a smack, at the skin as usual
           scn.update(dt);
           if (plant) holdChairHands(s, plant);   // hands on the chair
         }
