@@ -596,6 +596,34 @@ const ARRIVAL_NARR = {
   many: ['The door opens more than once. By the time the kettle has boiled there are new people in the hall, bundles at their feet, looking round at the house and at each other.', 'They come up the path together or one by one, and gather in the hall of Birchwood House with their bags, a little unsure who is meant to speak first.', 'A knock, and then another, and a third. The hall fills with new arrivals, each with a story that ended somewhere short.'],
 };
 
-root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR, ALONE_LINES, ARRIVAL_NARR };
+// The last page of a game. `grown`: who a resident is when they move on, from what the house taught them. `lost`: why a bridge was broken, and what that may mean out in the world.
+const EPILOGUE = {
+  red: {
+    grown: 'Red still takes the path, but now she knows why it is there. She has learned to stay with a task past the first flower, and to say what she is thinking before it turns into trouble. Out in the world she will be the one who is still on the road when others have wandered off, and she will not be frightened of the wolf, only careful.',
+    lost: 'Red was never made to see why the rules mattered, and she took the hand that came instead of the reason as a verdict on her. She left having learned only that the path is guarded by people who do not explain. Out in the world she may keep meeting that guard, and keep leaving the road to spite it.',
+  },
+  goldilocks: {
+    grown: 'Goldilocks has learned that a house is not a menu. She finishes what she starts, leaves the small chair whole, and can hear "no" without needing it to be negotiable. Out in the world she will be a guest people are glad to see come back.',
+    lost: 'Goldilocks tested every limit until she found one that held, and then found that she could not forgive it for holding. She left certain that no house would ever be just right. Out in the world she may go on trying other people\'s chairs, and finding fault with each, until one of them is hers.',
+  },
+  rapunzel: {
+    grown: 'Rapunzel has stopped waiting at the window. She says what she wants aloud, and has found that she can be wanted by the house without having to be rescued from it. Out in the world she will climb down on her own, and mean it.',
+    lost: 'Rapunzel kept her wishes to herself so long that the house never learned them, and it answered the quiet girl, not the one inside. She left unseen, again. Out in the world she may go back to a tower of her own making, and keep letting down her hair for whoever happens to pass.',
+  },
+  jack: {
+    grown: 'Jack has learned that the luck was never the whole of it. He plants what he trades for, counts what he is given, and has found out how little he needs to climb. Out in the world he will be careful of beanstalks, and kind to the people at the bottom of them.',
+    lost: 'Jack read every consequence as a trick, and every kindness as a trade he had not agreed to. He left sure that nothing is given freely. Out in the world he may keep gambling on beans, and keep being surprised when the giant is at home.',
+  },
+  hans: {
+    grown: 'Hans has learned to shiver, and to be glad of it. He feels the cold, and the warmth, and the difference, and he can say so. Out in the world he will not be fearless any more, which is a better thing to be than he knew.',
+    lost: 'Hans found that nothing the house did reached him, and so, in the end, nothing it said did either. He left unchanged, and not unhurt. Out in the world he may keep walking into the haunted castle, waiting for the thing that will finally make him feel it.',
+  },
+  snow: {
+    grown: 'Snow White has found out that she can open her own door, and that most apples are only fruit. She names what she wants, takes help when it is offered and not only when it is forced on her, and no longer waits to be woken. Out in the world she will be the one holding the knife, and the bread.',
+    lost: 'Snow White had been rescued so often that being held to account felt like one more thing done to her, and she would not be rescued from it. She left the way she had always left: quietly, trusting no one. Out in the world she may keep sleeping through the days that matter, and distrusting everyone who wakes her.',
+  },
+};
+
+root.FairyShoeContent = { MORNING, RESULT_LINES, SCENES, MOVES, STATS, STAT_NAMES, STAT_HINTS, CHARACTERS, ORDER, CHORES, CHORE_LINES, PAIR_LINES, EVENTS, CATEGORIES, REPRIEVES, AFTERCARE, SAYINGS, CHANGE, REOPEN, AFTER_SCENES, AFTER_NARR, ALONE_LINES, ARRIVAL_NARR, EPILOGUE };
 if (typeof module !== 'undefined' && module.exports) module.exports = root.FairyShoeContent;
 })(typeof window !== 'undefined' ? window : globalThis);

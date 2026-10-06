@@ -453,7 +453,7 @@ function createSession(scene, opts, env = {}) {
       st.position = position;
       const mk = (spec, role) => env.build ? env.build(spec, role) : S.buildCharacter(S.clone(spec), { voxel: 0.011, key: spec.name });
       const bent = position !== 'head' && position !== 'astride';   // (bent over or face down, the male front only shows as an artefact between the legs: left out there)
-      g = mk(opts.giver, 'giver'); s = mk(bent ? { ...opts.subject, endowment: 0 } : opts.subject, 'subject');
+      g = mk(opts.giver, 'giver'); s = mk(bent && typeof opts.subject === 'object' ? (opts.subject.m ? { ...opts.subject, m: { ...opts.subject.m, endowment: 0 } } : { ...opts.subject, endowment: 0 }) : opts.subject, 'subject');
       for (const c of [g, s]) { scene.add(c.group); scene.add(c.helper); c.helper.visible = false; }
       const sv = marks[opts.subjectId];
       if (sv) { s.marks = sv.marks; s.stripes = sv.stripes; S.copyMarks(s, s); }
@@ -534,8 +534,8 @@ function createSession(scene, opts, env = {}) {
         const P = scn.pain;
         if (st.mode === 'run' && !st.ended) {
           st.since += dt;
-          const D = derive();
-          if (!scn.busy() && st.since > D.dwell) {
+          const D = derive(), dwell = st.implement === 'rod' ? Math.min(D.dwell, 0.1) : D.dwell;   // (a switch comes straight off the skin whatever the pace)
+          if (!scn.busy() && st.since > dwell) {
             if (st.toRun <= 0 || (P && P.tooHarsh)) st.mode = 'idle';
             else { scn.cycle(D.strength, undefined, undefined, D.hold); st.toRun--; st.since = 0; }
           }
@@ -543,7 +543,8 @@ function createSession(scene, opts, env = {}) {
         // After a run or a single smack, once the hand has rested on the skin a moment, the giver relaxes again.
         if (!st.ended && st.mode !== 'run' && !scn.busy() && scn.swing > 1.5) {
           st.rest = (st.rest || 0) + dt;
-          if (st.rest > 0.8) { st.rest = 0; st.mode = 'idle'; scn.lower(0.9); }
+          const snap = st.implement === 'rod';   // a switch's sting is the sharp stroke and the pull back: it is never held on the skin, however firm
+          if (st.rest > (snap ? 0 : 0.8)) { st.rest = 0; st.mode = 'idle'; scn.lower(snap ? 0.28 : 0.9); }
         } else st.rest = 0;
         if (P && P.tooHarsh && !st.ended) { st.mode = 'idle'; st.tooHarsh = true; }
         const on = [g, s];
@@ -680,13 +681,22 @@ function createTableau(scene, kind, opts, env = {}) {
     const pen = new T.Mesh(new T.CylinderGeometry(0.004, 0.004, 0.15, 6), new T.MeshStandardMaterial({ color: 0x20160e })); st.furn.add(pen);
     hold = (t) => {   // (the seated pose is the one seatGiver left: thighs level, shins down)
       s.group.updateMatrixWorld(true);
-      const nib = st.furn.localToWorld(new V3(0.02 + 0.045 * Math.sin(t * 1.9) + 0.015 * Math.sin(t * 7), 0.746, 0.46 + 0.03 * Math.sin(t * 0.45) + 0.012 * Math.sin(t * 9)));
+      // writing: the nib travels along a line of the page, flicks back to the start of the next and lifts a little between, with small strokes riding on the travel
+      const per = 4.2, ln = Math.floor(t / per) % 5, u = (t % per) / per, travel = Math.min(1, u / 0.86), lift = u > 0.86 ? Math.sin((u - 0.86) / 0.14 * Math.PI) * 0.012 : 0;
+      const nib = st.furn.localToWorld(new V3(-0.06 + 0.12 * (u > 0.86 ? 1 - (u - 0.86) / 0.14 : travel) + 0.006 * Math.sin(t * 11), 0.745 + lift, 0.52 - 0.016 * ln + 0.004 * Math.sin(t * 17)));
       const shR = s.bones.upperArmR.getWorldPosition(new V3()), shL = s.bones.upperArmL.getWorldPosition(new V3());
       const dir = new V3(0, 0, 1).applyAxisAngle(Y, a0());
-      S.armIK(s, 'R', nib, shR.clone().add(new V3(0.35, -0.1, -0.3).applyAxisAngle(Y, a0())), new V3(0, 1, 0), dir.clone().add(new V3(0.5, 0, 0).applyAxisAngle(Y, a0())));
+      // the writing hand: the fingertips at the nib, the hand tilted up behind them toward the wrist, the palm turned in
+      const back = new V3(shR.x - nib.x, 0, shR.z - nib.z).normalize(), palmT = nib.clone().addScaledVector(back, 0.062).add(new V3(0, 0.05, 0));
+      S.armIK(s, 'R', palmT, shR.clone().add(new V3(0.3, -0.15, -0.25)), null, null, new V3(-1, -0.2, 0.3).normalize());
       S.armIK(s, 'L', st.furn.localToWorld(new V3(-0.1, 0.746, 0.40)), shL.clone().add(new V3(-0.3, -0.1, -0.3).applyAxisAngle(Y, a0())), new V3(0, 1, 0), dir);
       s.bones.neck.rotateX(0.55); s.bones.head.rotateX(0.35);   // head bent over the page
-      pen.position.copy(st.furn.worldToLocal(s.bones.handR.getWorldPosition(new V3()).add(new V3(0, -0.02, 0.0)))); pen.rotation.x = 0.8;
+      // the pen is held: fingers and thumb closed on it, its tip on the nib, its body lying back along the hand toward the wrist
+      s.bones.fingersR.quaternion.multiply(S.degQ([0, 0, 38])); s.bones.thumbR.quaternion.multiply(S.degQ([-20, 0, 0])); s.group.updateMatrixWorld(true);
+      const hp = s.bones.handR.getWorldPosition(new V3()), axis = hp.clone().sub(nib).add(new V3(0, 0.045, 0)).normalize();
+      const q = new T.Quaternion().setFromUnitVectors(new V3(0, 1, 0), axis);
+      pen.quaternion.copy(st.furn.getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
+      pen.position.copy(st.furn.worldToLocal(nib.clone().addScaledVector(axis, 0.075)));
     };
     gaze = () => eyesAt(s, st.furn.localToWorld(new V3(0.02, 0.746, 0.46)), 1);
     view = { pos: st.furn.localToWorld(new V3(0.9, 2.15, -0.95)), tgt: st.furn.localToWorld(new V3(0, 0.85, 0.45)), fov: 50 };   // over the subject's shoulder, down at the page
@@ -725,20 +735,27 @@ function createTableau(scene, kind, opts, env = {}) {
         S.armIK(c, side, target, pole.clone().addScaledVector(out, 0.1 * i), n, fingers);
         const el = c.bones['forearm' + side].getWorldPosition(new V3()), wr = c.bones['hand' + side].getWorldPosition(new V3()), mid = el.clone().lerp(wr, 0.5);
         let m = Infinity;
-        for (const pt of [el, mid]) { const pts = S.posedSkinNear(other, pt, 0.15); if (pts.length) m = Math.min(m, S.skinSignedDist(pts, pt)); }
+        for (const pt of [el, mid, c.bones['upperArm' + side].getWorldPosition(new V3()).lerp(el, 0.5)]) { const pts = S.posedSkinNear(other, pt, 0.15); if (pts.length) m = Math.min(m, S.skinSignedDist(pts, pt)); }
         if (m > 0.02) break;
       }
+    };
+    // where a palm goes on the other's back: the outermost skin behind the bone at that height and that far to the side, the palm a hair off it
+    const backAt = (c, bone, back, dy, dz) => {
+      const o = c.bones[bone].getWorldPosition(new V3()).add(new V3(0, dy, dz)), pts = S.posedSkinNear(c, o.clone().addScaledVector(back, 0.1), 0.2);
+      let best = null, bd = -Infinity;
+      for (let i = 0; i < pts.length; i += 6) { if (Math.abs(pts[i + 1] - o.y) > 0.03 || Math.abs(pts[i + 2] - o.z) > 0.04) continue; const d = (pts[i] - o.x) * back.x; if (d > bd) { bd = d; best = i; } }
+      return best == null ? o.addScaledVector(back, 0.12) : new V3(pts[best], pts[best + 1], pts[best + 2]).addScaledVector(back, 0.012);
     };
     hold = () => {
       g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
       const at = (c, n) => c.bones[n].getWorldPosition(new V3());
-      const sBack = new V3(1, 0, 0), gBack = new V3(-1, 0, 0), dep = c => 0.1 * c, Zp = new V3(0, 0, 1), Zm = new V3(0, 0, -1);
+      const sBack = new V3(1, 0, 0), gBack = new V3(-1, 0, 0), Zp = new V3(0, 0, 1), Zm = new V3(0, 0, -1);
       // the player's arms, outside the subject's: hands apart on the upper back, each on its own side (the right is +Z, the subject's left), the elbows wide
-      armTo(g, s, 'R', at(s, 'spine2').addScaledVector(sBack, dep(ks)).add(new V3(0, 0.03 * ks, 0.05 * ks)), at(g, 'upperArmR').add(new V3(-0.1, 0.12, 0.5)), sBack.clone(), new V3(0, 0.3, -1), Zp);
-      armTo(g, s, 'L', at(s, 'spine2').addScaledVector(sBack, dep(ks)).add(new V3(0, -0.02 * ks, -0.05 * ks)), at(g, 'upperArmL').add(new V3(-0.1, 0.0, -0.5)), sBack.clone(), new V3(0, -0.3, 1), Zm);
+      armTo(g, s, 'R', backAt(s, 'spine2', sBack, 0.03 * ks, 0.05 * ks), at(g, 'upperArmR').add(new V3(-0.1, 0.12, 0.5)), sBack.clone(), new V3(0, 0.3, -1), Zp);
+      armTo(g, s, 'L', backAt(s, 'spine2', sBack, -0.02 * ks, -0.05 * ks), at(g, 'upperArmL').add(new V3(-0.1, 0.0, -0.5)), sBack.clone(), new V3(0, -0.3, 1), Zm);
       // the subject's arms, inside: hands apart on the player's lower back, the subject's left (+Z) on the player's right side, the elbows in and low
-      armTo(s, g, 'L', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.03 * kg, 0.06 * kg)), at(s, 'upperArmL').add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1), Zp);
-      armTo(s, g, 'R', at(g, 'spine1').addScaledVector(gBack, dep(kg)).add(new V3(0, -0.03 * kg, -0.06 * kg)), at(s, 'upperArmR').add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1), Zm);
+      armTo(s, g, 'L', backAt(g, 'spine1', gBack, -0.03 * kg, 0.06 * kg), at(s, 'upperArmL').add(new V3(0.0, -0.3, 0.1)), gBack.clone(), new V3(0, 0.2, 1), Zp);
+      armTo(s, g, 'R', backAt(g, 'spine1', gBack, -0.03 * kg, -0.06 * kg), at(s, 'upperArmR').add(new V3(0.0, -0.3, -0.1)), gBack.clone(), new V3(0, 0.2, -1), Zm);
       // the subject's head on the player's right shoulder (the side they stand to), the face turned away to that side; the player's bowed to the subject's other shoulder
       const sh = at(s, 'head'), gs = at(g, 'upperArmR'), gn = at(g, 'neck'), gc = at(g, 'spine2');
       const ty = sh.y > gs.y ? gs.y + 0.02 * kg : Math.max(gc.y, sh.y - 0.02);   // (the shoulder if the head reaches it, else the chest)

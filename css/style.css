@@ -285,3 +285,4 @@ body.live #app > .hud { pointer-events: none; }
 .hudcard.scenebar p { font-family: var(--serif); font-size: 16px; line-height: 1.5; margin: 0 0 10px; color: #e5dccb; }
 .hudcard.scenebar p.say { font-style: italic; color: #f0d9a0; }
 .hudcard.scenebar button { width: 100%; }
+.endcard { cursor: default; } .endcard.lost { border-color: #b08a82; } .endcard .story { border-top: 1px dashed var(--paper-line); }

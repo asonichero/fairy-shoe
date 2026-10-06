@@ -145,13 +145,22 @@ function continueGame(saved) {
 // Everyone has moved on or left: the score is how many moved on.
 function showEnd() {
   teardownLive(); closeModal(); showStage(false); say(null, null);
-  const g = app.g, moved = g.collection.map(id => CH[id]), gone = (g.gone || []).map(id => CH[id]);
+  const g = app.g, E = C.EPILOGUE;
   save();
+  const card = (id, kind) => {
+    const d = CH[id], fin = g.chars[id].final || g.chars[id].stats;
+    return h('div', { class: 'res endcard' + (kind === 'lost' ? ' lost' : '') },
+      h('div', { class: 'head' }, h('div', { class: 'mono', style: 'background:' + COLOURS[id] }, d.name[0]),
+        h('div', {}, h('div', { class: 'nm' }, d.name + ', ' + d.age), h('div', { class: 'sub' }, d.tagline))),
+      statsBlock(id, fin),
+      h('div', { class: 'story' }, fmt(E[id][kind === 'lost' ? 'lost' : 'grown'] + ''), kind === 'moved' ? h('div', { style: 'margin-top:6px' }, h('b', {}, 'What you learned: '), d.note) : null));
+  };
+  const n = g.collection.length;
   setScreen(h('div', { class: 'screen' }, header(),
     h('div', { class: 'morning' }, h('div', { class: 'narration' }, h('p', {}, 'The house is quiet. Nobody is left to take in, and nobody left to see off.')),
-      h('div', { class: 'col' }, h('h2', {}, 'Birchwood House'), h('p', { class: 'verdict' }, g.collection.length + (g.collection.length === 1 ? ' resident moved on.' : ' residents moved on.')),
-        moved.length ? h('div', {}, h('h4', {}, 'Moved on'), moved.map(d => h('p', {}, h('b', {}, d.name), ' — ', h('i', {}, d.tagline)))) : null,
-        gone.length ? h('div', {}, h('h4', {}, 'Left, by the safe word'), gone.map(d => h('p', {}, d.name))) : null,
+      h('div', { class: 'col' }, h('h2', {}, 'Birchwood House'), h('p', { class: 'verdict' }, n + (n === 1 ? ' resident moved on.' : ' residents moved on.')),
+        n ? h('div', {}, h('h4', {}, 'Moved on'), h('div', { class: 'residents' }, g.collection.map(id => card(id, 'moved')))) : null,
+        (g.gone || []).length ? h('div', {}, h('h4', {}, 'Bridges broken'), h('div', { class: 'residents' }, g.gone.map(id => card(id, 'lost')))) : null,
         h('div', { class: 'row', style: 'margin-top:14px' }, h('button', { class: 'primary', onclick: startNew }, 'Begin again'))))));
 }
 function nextDay() {
@@ -225,8 +234,8 @@ async function playScene(notice) {
 }
 
 // ── Cards for people ────────────────────────────────────────────
-function statsBlock(id) {
-  const s = app.g.chars[id].stats, g = app.g;
+function statsBlock(id, final) {
+  const s = final || app.g.chars[id].stats, g = app.g;
   const rows = []; for (const k of C.STATS) rows.push(h('span', { class: 'k', title: C.STAT_HINTS[k] }, C.STAT_NAMES[k]), pips(s[k], k === 'wil' || k === 'res' ? 'hot' : ''));
   return h('div', { class: 'stats' }, rows);
 }
@@ -713,7 +722,7 @@ function showRules() {
     h('h3', {}, 'Six measures'),
     h('ul', {}, h('li', {}, 'Wilfulness and Resentment are the trouble. Satisfaction, Valued and Composure are what holds a person steady. Attention is how well they work.'), h('li', {}, 'Low Valued makes a correction read as punishment. Resentment at the top with Valued at the bottom is when someone calls the safe word.')),
     h('h3', {}, 'The correction is yours'),
-    h('p', {}, 'You choose the position, what they wear and the implement to begin with, then everything is live: smack, run a few, wait, stop. Change position or implement whenever you like (a new implement has to be fetched, which means a word with them), take layers off or put them back, move the pace and strength up or down, and look from behind, over your shoulder or from the floor. The meter shows how far you have brought them; the white tick is their edge of resistance. A resident needs a different amount depending on their Wilfulness and on what happened that day: more for a bold or troublesome one, more again after a bad day or a bad event. Too little does not land; too much costs trust. A few kinds of trouble are better met with a kind word than a hand.'),
+    h('p', {}, 'You choose the position, what they wear and the implement to begin with, then everything is live: smack, run a few, wait, stop. Change position or implement whenever you like (a new implement has to be fetched, which means a word with them), take layers off or put them back, move the pace and strength up or down, and look from behind, over your shoulder or watch their reactions. The meter shows how far you have brought them; the white tick is their edge of resistance. A resident needs a different amount depending on their Wilfulness and on what happened that day: more for a bold or troublesome one, more again after a bad day or a bad event. Too little does not land; too much costs trust. A few kinds of trouble are better met with a kind word than a hand.'),
     h('p', {}, 'The highest distress you bring them to counts, not where they end up. Stop at the right moment. Beyond too harsh, nothing more is struck, and a resident whose trust is thin will call the safe word.'),
     h('h3', {}, 'Candle'),
     h('p', {}, 'Corrections cost nothing, but aftercare (corner time, lines, held after, warm words) and reprieves (a stern, kind or written word) are paid from the evening\'s candle, and there is never enough for everything.'),
@@ -722,7 +731,7 @@ function showRules() {
     h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: closeModal }, 'Close')));
 }
 
-window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro, playScene };
+window.__fs = { app, R, C, B, SC, renderMorning, renderEvening, showIntro, playScene, showEnd };
 function boot() {
   const tag = document.createElement('div'); tag.textContent = 'build ' + (window.FS_BUILD || '?'); tag.style.cssText = 'position:fixed;left:6px;bottom:4px;z-index:9;font:10px monospace;color:#8a8a96;opacity:.6;pointer-events:none';
   document.body.appendChild(tag);   // so it is plain which version of the game this is

@@ -92,7 +92,7 @@ function leave(g, id) { g.roster = g.roster.filter(r => r !== id); g.cards = g.c
 // Moved on or left: either way they are out of the pool for good; the house takes in whoever has not yet been through it.
 function moveOn(g, id) {
   leave(g, id);
-  g.chars[id].moveOns++;
+  g.chars[id].moveOns++; g.chars[id].final = { ...g.chars[id].stats };   // (their last state, for the last page)
   if (!g.collection.includes(id)) g.collection.push(id);   // unique, permanent
   const n = { type: 'moveon', id, text: CHARACTERS[id].name + ' has moved on.' };
   g.notices.push(n); return n;
@@ -102,8 +102,10 @@ function useWord(g, id, why) {
   const mood = fetchMood(stats(g, id));   // how they were, for the goodbye
   const c = g.chars[id]; c.safeWords = (c.safeWords || 0) + 1;
   const need = safeWordsToLeave(c.stats), rec = [];
+  const before = { ...c.stats };
   changeStat(g, id, 'val', -2, 'safeword', rec); changeStat(g, id, 'sat', -1, 'safeword', rec); changeStat(g, id, 'com', -1, 'safeword', rec); changeStat(g, id, 'res', 1, 'safeword', rec);
   if (c.safeWords >= need) {
+    c.final = { ...c.stats };
     leave(g, id);
     if (!g.gone.includes(id)) g.gone.push(id);
     const n = { type: 'word', id, why, mood, count: c.safeWords, text: CHARACTERS[id].name + ' called the safe word and left.' };

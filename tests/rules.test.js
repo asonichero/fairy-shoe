@@ -331,3 +331,10 @@ test('every line the scene-change interlude can show fills completely (no stray 
   walk(C.CHANGE); walk(C.REOPEN); walk(C.MOVES);
   for (const t of strings) assert.doesNotMatch(R.fillTemplate(t, ctx), /\{\w+\}/, t);
 });
+
+test('the last page: every resident has a grown and a lost epilogue, and their last stats are kept when they go', () => {
+  for (const id of C.ORDER) { assert.ok(C.EPILOGUE[id].grown.length > 40); assert.ok(C.EPILOGUE[id].lost.length > 40); }
+  const g = house(['red', 'jack']); g.unseen = [];
+  R.moveOn(g, 'red'); assert.deepEqual(g.chars.red.final, g.chars.red.stats);
+  let n; for (let i = 0; i < 3; i++) n = R.useWord(g, 'jack', 'harsh'); assert.equal(n.type, 'word'); assert.ok(g.chars.jack.final);
+});

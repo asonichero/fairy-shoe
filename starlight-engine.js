@@ -6203,7 +6203,7 @@ function layShell(ch) {
   for (let k = 0; k < n * 3; k++) P[k] = S.rest[k];
   if (S.gathered) {
     for (let j = 0; j < N; j++) {
-      const th = 2 * Math.PI * j / N, c = Math.cos(th), a = smooth01(-0.02, -0.42, c);   // 0 at the front and sides, 1 over the whole of the back
+      const th = 2 * Math.PI * j / N, c = Math.cos(th), a = smooth01(0.12, -0.3, c);   // 0 at the front, 1 over the whole of the back and round the hips
       if (a <= 0) continue;
       for (let i = 1; i < R; i++) {
         const t = i / (R - 1), o = 3 * (i * N + j), yG = S.top + 0.004 * H + rise * t;
@@ -6262,7 +6262,7 @@ function setSkirtHybrid(ch, on) {
 function hybridKin(ch) {   // which points are driven: the whole of the back, from the first ring down
   const S = ch.skirt, N = S.N, R = S.R, list = [];
   if (!S.gathered) { S.kin = null; S.kinSet = null; return; }
-  for (let j = 0; j < N; j++) { const c = Math.cos(2 * Math.PI * j / N); if (smooth01(-0.02, -0.42, c) >= 0.55) for (let i = 1; i < R; i++) list.push(i * N + j); }
+  for (let j = 0; j < N; j++) { const c = Math.cos(2 * Math.PI * j / N); if (smooth01(0.12, -0.3, c) >= 0.5) for (let i = 1; i < R; i++) list.push(i * N + j); }
   S.kin = Int32Array.from(list); S.kinSet = new Set(list);
 }
 const _hM = [];
