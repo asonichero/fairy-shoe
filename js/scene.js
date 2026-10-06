@@ -142,6 +142,17 @@ function holdChairHands(s, plant) {
   }
 }
 
+// How far the neck and head extend (about their own x, 40% / 60%) for the face to look level, as the body lies across the lap, and which way that is.
+function lapLookAhead(s) {
+  const neck = s.bones.neck, head = s.bones.head, q0 = neck.quaternion.clone(), q1 = head.quaternion.clone(), X = new V3(1, 0, 0), best = { sign: 1, e: 0 };
+  const faceY = () => { s.group.updateMatrixWorld(true); return new V3(0, 0, 1).applyQuaternion(head.getWorldQuaternion(new T.Quaternion())).y; };
+  const at = (sign, e) => { neck.quaternion.copy(q0).multiply(new T.Quaternion().setFromAxisAngle(X, sign * e * 0.4 * Math.PI / 180)); head.quaternion.copy(q1).multiply(new T.Quaternion().setFromAxisAngle(X, sign * e * 0.6 * Math.PI / 180)); return faceY(); };
+  const y0 = at(1, 0), up = at(1, 30) > at(-1, 30) ? 1 : -1; best.sign = up;
+  for (let e = 0; e <= 100; e += 2) { best.e = e; if (at(up, e) >= -0.02) break; }
+  neck.quaternion.copy(q0); head.quaternion.copy(q1); s.group.updateMatrixWorld(true);
+  return y0 >= -0.02 ? null : best;
+}
+
 // ── Hips (editor-only base position) ────────────────────────────
 // The subject lies along a table, chest on the boards and fingers curled over its far edge; the disciplinarian stands square behind,
 // facing the same way, hands pinned to the subject's hips.
@@ -286,7 +297,7 @@ function createSession(scene, opts, env = {}) {
   const marks = env.marks || {};
     const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
       layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: (opts.layers && opts.layers.skirt) || 'up' }   /* a skirt is always hitched up for a correction (the editor may ask for another) */, implement: opts.implement || 'hand', position: opts.position || 'case' };
-    let g = null, s = null, scn = null, furniture = null, plant = null, pins = null;
+    let g = null, s = null, scn = null, furniture = null, plant = null, pins = null, lookAhead = null;
 
     const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
 
@@ -309,6 +320,16 @@ function createSession(scene, opts, env = {}) {
     }
     // The skirt is put on over the pose she is already in: it is dropped and draped (see Starlight.settleSkirt).
     function settleSkirt() { scn.update(0.016); scn.update(0.016); S.settleSkirt(s, [g], [scn.bench]); }
+    // Across the lap, where the subject looks: down toward the chair when they are less composed (the stat), straight ahead from 4 up; a smack that lands lifts
+    // anyone's head to look straight ahead for a few seconds. The neck and head extend about their own x; the hands stay on the floor, fingers down.
+    function lapLook(dt) {
+      st.lookT = Math.max(0, (st.lookT || 0) - dt);
+      const com = opts.composure == null ? 2.5 : opts.composure, own = clamp((com - 1) / 3, 0, 1), want = st.lookT > 0 ? 1 : own;
+      st.look += (want - st.look) * (1 - Math.exp(-dt * 3.5));
+      const e = lookAhead.e * st.look * Math.PI / 180 * lookAhead.sign;
+      for (const [b, w] of [['neck', 0.4], ['head', 0.6]]) s.bones[b].quaternion.multiply(new T.Quaternion().setFromAxisAngle(new V3(1, 0, 0), e * w));
+      s.group.updateMatrixWorld(true);
+    }
     function make(cfg = {}) {
       const position = cfg.position || st.position;
       const oldP = scn && scn.pain;
@@ -337,8 +358,9 @@ function createSession(scene, opts, env = {}) {
         if (!st.frozen) scn.pain.update(cfg.elapsed || 0, false);   // the time it took
       }
       if (scn.pain) { const real = scn.pain.update; scn.pain.update = (dt, onSkin) => { if (!st.frozen) real(dt, onSkin); }; }   // (composure held still while frozen)
-      scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
+      scn.onImpact = (side, strength) => { st.lookT = 3; st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
+      lookAhead = position === 'lap' ? lapLookAhead(s) : null; st.look = 0;
       pins = null; if (st.pinFeet || position === 'hips') { st.pinFeet = true; pins = { g: footMarks(g), s: footMarks(s) }; }
       if (env.afterMake) env.afterMake(g, s);
     }
@@ -365,6 +387,7 @@ function createSession(scene, opts, env = {}) {
       pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g), s: footMarks(s) } : null; },
       get pinned() { return !!pins; },
       applyPins() { if (pins) { pinFeetTo(g, pins.g); pinFeetTo(s, pins.s); } },
+      get lookAhead() { return lookAhead; },
       get frozenComposure() { return !!st.frozen; },
       setBeat(b) { scn.setBeat(b); },
       get pace() { return PACE[st.paceIdx]; }, get strengthMult() { return STRENGTH[st.strengthIdx]; }, get runLength() { return RUN[st.runIdx]; },
@@ -411,6 +434,7 @@ function createSession(scene, opts, env = {}) {
           scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
           if (st.position === 'hips') scn.gaze = scn.swing < 0.3 ? 'head' : null;   // at rest the giver looks at the subject's head; for a smack, at the skin as usual
           scn.update(dt);
+          if (lookAhead) lapLook(dt);
           if (plant) holdChairHands(s, plant);   // hands on the chair
         }
         api.applyPins();

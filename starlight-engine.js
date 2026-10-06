@@ -597,7 +597,7 @@ function buildSpec(m) {
     P(ellipsoid(add(craniumC, V(s * 0.034 * hs, 0.05 * hs, -0.016 * hs)), [0.024 * hs, 0.023 * hs, 0.024 * hs]), 'head', 'head', 0.008 * H, s, { tag: 'hairBun' });
   }
   if (style === 'ponytail') {
-    P(ellipsoid(add(craniumC, V(0, 0.016 * hs, -0.06 * hs)), [0.017 * hs, 0.017 * hs, 0.017 * hs]), 'head', 'head', 0.01 * H, 0, { tag: 'hairBun' });
+    P(ellipsoid(add(craniumC, V(0, (0.016 - ((m.outfit || {}).ponyDrop || 0)) * hs, -0.06 * hs)), [0.017 * hs, 0.017 * hs, 0.017 * hs]), 'head', 'head', 0.01 * H, 0, { tag: 'hairBun' });
   }
 
   // Arms
@@ -1930,12 +1930,12 @@ function addHead(spec, headBone) {
   const chains = [];
   const bob = spec.m.outfit.bobbles || [];
   if (style === 'ponytail') {
-    const knot = [0, cy + 0.016 * H, -0.066 * H];
+    const drop = spec.m.outfit.ponyDrop || 0, knot = [0, cy + (0.016 - drop) * H, -0.066 * H];   // (`ponyDrop`: how far below the crown, in heights, the tie sits — 0.045 is the base of the skull)
     if (spec.m.outfit.scrunchie != null) {
       // Gathered by the scrunchie: a stub of hair from the scalp out through its hole,
       // held proud of the head along its axis (both ends fixed to the head), then the
       // tail falls from the end of the stub.
-      const dir = norm([0, 0.2, -1]), end = add(knot, mul(dir, 0.034 * H));
+      const dir = norm([0, drop ? -0.15 : 0.2, -1]), end = add(knot, mul(dir, 0.034 * H));
       chains.push({ tie: bob[0], stiff: 0.004, bias: 1, fixed: 2,
         nodes: [at(...knot), at(...end), ...[1, 2, 3, 4].map(k => at(0, end[1] - k * 0.05 * H, end[2] - 0.004 * H - k * 0.004 * H))],
         rad: [[0.0105 * H, 0.0095 * H], ...[0, 1, 2, 3].map(i => [0.017 * H * (1 - i * 0.14), 0.015 * H * (1 - i * 0.1)])] });
@@ -1986,7 +1986,7 @@ function addHead(spec, headBone) {
   });
   if (style === 'ponytail' && spec.m.outfit.scrunchie != null) {
     // The scrunchie gathers the ponytail where it leaves the scalp, round the knot.
-    const knot = add(cranium, [0, 0.016 * H, -0.06 * H]), dir = norm([0, 0.2, -1]);
+    const drop = spec.m.outfit.ponyDrop || 0, knot = add(cranium, [0, (0.016 - drop) * H, -0.06 * H]), dir = norm([0, drop ? -0.15 : 0.2, -1]);
     const m = ring(knotOf(0), add(knot, mul(dir, 0.004 * H)), dir, spec.m.outfit.scrunchie, 0.0075 * H, true);
     rings.push({ c: m.position.clone(), axis: new THREE.Vector3(...dir), R: m.userData.ring.R, tube: m.userData.ring.tube });
   }

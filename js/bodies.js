@@ -96,7 +96,7 @@ const KEEPERS = {
     const m = S.clone(S.PRESETS.aya);
     A(m, { name: 'Mother Hubbard', height: 165, legs: 1.0, shoulders: 37, bust: 95, underbust: 78, cup: 4, waist: 72, hip: 103, glutes: 1.3, neck: 30, arm: 29, forearm: 23, wrist: 15, thigh: 57, knee: 37, calf: 35, ankle: 21,
       skin: 0xe6c6a8, youth: 0.05, brow: 0.3, lips: 0.95, cheeks: 0.9, jaw: 0.97,
-      outfit: { hair: 0x6a5a52, hairStyle: 'ponytail', scrunchie: 0x3c2a38, bobbles: [0x3c2a38] },   // brown going to silver
+      outfit: { hair: 0x6a5a52, hairStyle: 'ponytail', ponyDrop: 0.045, scrunchie: 0x3c2a38, bobbles: [0x3c2a38] },   // brown going to silver; tied at the base of the skull
       expr: { browInner: -0.1, browOuter: -0.05, mouthL: 0.1, mouthR: 0.1, lidUpper: -0.1, saccade: 0.15, contact: 0.85, blink: 0.7 } });
     m.moods = { effort: { browInner: 0.05, browFurrow: 0.5, lidUpper: -0.3, squint: 0.4, mouthL: -0.2, mouthR: -0.2 }, enjoyment: { browOuter: 0.05, squint: 0.2, mouthL: 0.4, mouthR: 0.4 } };
     m.wardrobe = {
