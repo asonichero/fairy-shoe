@@ -101,7 +101,12 @@ function startNew() {
 }
 function continueGame(saved) {
   app.rng = seed(); app.g = saved.g; app.title = saved.title; app.keeper = saved.keeper || 'a'; app.settings = { ...app.settings, ...(saved.settings || {}) };
-  app.g.title = app.title; app.selected = null; renderMorning();
+  app.g.title = app.title; app.selected = null;
+  // Back to wherever the game was left: the chore list, the evening's corrections, or the night between (which is finished off, as it would have been).
+  const g = app.g;
+  if (g.phase === 'evening') renderEvening();
+  else if (g.phase === 'boundary') { const n = g.notices || []; if (n.length) showNotices('Overnight', n, nextDay, 'Morning'); else nextDay(); }
+  else renderMorning();
 }
 function nextDay() {
   if (app.stage) app.stage.clearMarks();

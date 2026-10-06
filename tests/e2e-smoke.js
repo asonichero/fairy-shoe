@@ -65,6 +65,10 @@ async function liveControls(p) {
       const n = await p.evaluate(() => __fs.R.pendingCards(__fs.app.g).length);
       if (!n) break;
       if (guard === 1 && day === 1) await shot(p, 'evening', { fullPage: true });
+      if (guard === 1 && day === 1) {   // leaving for the menu in the evening and continuing returns to the evening, not a morning that cannot progress
+        await p.click('button:text-is("Menu")'); await p.click('button:has-text("Continue")'); await p.waitForTimeout(400);
+        if (!(await p.locator('.evening').count())) throw new Error('Continue from the menu should return to the evening');
+      }
       if (guard % 2) {   // a word
         await p.locator('.choice').nth(1).click();
         const w = p.locator('.words .choice:not([disabled])');
