@@ -5,7 +5,7 @@
 'use strict';
 const BONE_RE = /^[A-Za-z0-9]+$/;
 const BEATS = { relaxed: 'relaxed', 'arm raised': 'raised', raised: 'raised', contact: 'contact' };
-const POSITIONS = ['lap', 'case', 'head', 'chair', 'spread', 'hips'];
+const POSITIONS = ['lap', 'case', 'head', 'chair', 'spread', 'hips', 'astride'];
 
 const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
 // Objects merge key by key; arrays and scalars replace. `null` deletes a key.

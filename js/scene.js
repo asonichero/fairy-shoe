@@ -16,7 +16,8 @@ const POSITIONS = [
   ['spread', 'Bent over, feet apart', 'Bent forward, feet wide, palms on the thighs. Wide implements only.'],
 ];
 // 'hips' is an editor-only base position (not in POSITIONS, so never offered in the game): the table scene, bent at the hips.
-const ENGINE_POSITION = { lap: 'lap', hips: 'case', case: 'case', head: 'head', chair: 'knees', spread: 'spread' };
+// 'astride' is another editor-only base position: the lap scene (the player seated on the chair) with its own pose edits.
+const ENGINE_POSITION = { lap: 'lap', astride: 'lap', hips: 'case', case: 'case', head: 'head', chair: 'knees', spread: 'spread' };
 const IMPLEMENTS = [
   ['hand', 'Hand', 'Nothing to fetch. Stings, and fades quickly.'],
   ['hairbrush', 'Hairbrush', 'Light and sharp; a dull ache follows.'],
@@ -104,7 +105,7 @@ function furnishScene(parent, scn, s, position, seatTop, giver) {
   const old = scn.bench; let made = null, plant = null;
   if (old) {
     const b = new T.Box3().setFromObject(old); parent.remove(old); Room.disposeGroup(old);
-    if (position === 'lap') {
+    if (position === 'lap' || position === 'astride') {
       // A straight-backed chair for a seated disciplinarian: the seat runs from the small of the back to the knee joint (deep enough to carry the thighs out to it,
       // so they do not hang over an edge at the hip), its top is the underside of the thighs, and the backrest meets the lower back.
       scn.seatTop = b.max.y;
@@ -184,19 +185,28 @@ function holdHipHands(g, s) {
   }
 }
 // ── Pinned feet: both bodies' feet held where they are (position and angle) while everything above them moves ──
-function footMarks(ch) {
+function footMarks(ch, hands) {
   ch.group.updateMatrixWorld(true); const m = {};
   for (const side of ['L', 'R']) { const f = ch.bones['foot' + side]; m[side] = { pos: f.getWorldPosition(new T.Vector3()), quat: f.getWorldQuaternion(new T.Quaternion()) }; }
+  if (hands) { m.hands = {}; for (const side of ['L', 'R']) { const h = ch.bones['hand' + side]; m.hands[side] = { pos: h.getWorldPosition(new T.Vector3()), quat: h.getWorldQuaternion(new T.Quaternion()) }; } }
   return m;
+}
+// Hands held where they are, too: the arms are bent to the marks, the hands turned back to their angle.
+function pinHandsTo(ch, marks) {
+  for (const side of ['L', 'R']) {
+    ch.group.updateMatrixWorld(true);
+    S.twoBoneTo(ch, ['upperArm' + side, 'forearm' + side, 'hand' + side], marks.hands[side].pos);
+    const h = ch.bones['hand' + side]; h.quaternion.copy(h.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(marks.hands[side].quat)); h.updateMatrixWorld(true);
+  }
 }
 // The feet are held where they are, and the hips follow the legs: the whole body is carried by however far the posed feet are from their marks (so the pose's own hip and
 // knee angles decide where the hips sit in space), then what is left over is taken up by bending each leg.
-function pinFeetTo(ch, marks) {
+function pinFeetTo(ch, marks, fixed) {
   ch.group.updateMatrixWorld(true);
   const off = new T.Vector3();
   for (const side of ['L', 'R']) off.add(marks[side].pos.clone().sub(ch.bones['foot' + side].getWorldPosition(new T.Vector3())));
   off.multiplyScalar(0.5); if (off.length() > 0.5) off.setLength(0.5);
-  ch.group.position.add(off); ch.group.updateMatrixWorld(true);
+  if (!fixed) { ch.group.position.add(off); ch.group.updateMatrixWorld(true); }   // (fixed: the bodies stay where they are in the room, and only the limbs reach)
   for (const side of ['L', 'R']) {
     S.twoBoneTo(ch, ['thigh' + side, 'shin' + side, 'foot' + side], marks[side].pos);
     const f = ch.bones['foot' + side];   // (set, not turned: rotateBoneWorld applies a change on top of the current angle)
@@ -238,7 +248,7 @@ function prepareSubject(s) { if (s.skirt) S.setSkirtHybrid(s, true); }
 function furnishDiscipline(parent, scn, g, s, position, seatTop) {
   const plant = furnishScene(parent, scn, s, position, seatTop, g);
   g.pressFloor = null;
-  if (position === 'lap' && scn.seatTop != null) {
+  if ((position === 'lap' || position === 'astride') && scn.seatTop != null) {
     // The seat flattens the seated disciplinarian's glutes (the contact shader, as a palm flattens skin) so that the skin lies flush on it and never
     // passes through. With a skirt on, the flat is a skirt's thickness above the seat, so the cloth lies between skin and seat; the cloth sees the
     // same flat (see skinPoints), not the glutes the shader has pressed away.
@@ -303,7 +313,7 @@ function createSession(scene, opts, env = {}) {
   const marks = env.marks || {};
     const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
       layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: (opts.layers && opts.layers.skirt) || 'up' }   /* a skirt is always hitched up for a correction (the editor may ask for another) */, implement: opts.implement || 'hand', position: opts.position || 'case' };
-    let g = null, s = null, scn = null, furniture = null, plant = null, pins = null, lookAhead = null;
+    let g = null, s = null, scn = null, furniture = null, plant = null, pins = null, lookAhead = null, fixedPins = false;
 
     const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
 
@@ -382,7 +392,7 @@ function createSession(scene, opts, env = {}) {
       scn.onImpact = (side, strength) => { st.lookT = 3; kickLegs(); st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
       lookAhead = position === 'lap' ? lapLookAhead(s) : null; st.look = 0; scn.legK = opts.stats ? 0.1 : 1;
-      pins = null; if (st.pinFeet || position === 'hips') { st.pinFeet = true; pins = { g: footMarks(g), s: footMarks(s) }; }
+      pins = null; fixedPins = position === 'astride'; if (st.pinFeet || position === 'hips' || fixedPins) { st.pinFeet = true; pins = { g: footMarks(g, fixedPins), s: footMarks(s, fixedPins) }; }
       if (env.afterMake) env.afterMake(g, s);
     }
 
@@ -405,9 +415,9 @@ function createSession(scene, opts, env = {}) {
       // Composure held still (nothing fades, nothing builds) from here until the first smack or run begins again.
       freeze() { st.frozen = true; },
       // Both bodies' feet held where they stand (position and angle) however the rest of the pose moves; the hips position always does.
-      pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g), s: footMarks(s) } : null; },
+      pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g, fixedPins), s: footMarks(s, fixedPins) } : null; },
       get pinned() { return !!pins; },
-      applyPins() { if (pins) { pinFeetTo(g, pins.g); pinFeetTo(s, pins.s); if (plant && plant.hips) holdHipHands(g, s); } },
+      applyPins() { if (pins) { pinFeetTo(g, pins.g, fixedPins); pinFeetTo(s, pins.s, fixedPins); if (fixedPins) { pinHandsTo(g, pins.g); pinHandsTo(s, pins.s); } if (plant && plant.hips) holdHipHands(g, s); } },
       get lookAhead() { return lookAhead; },
       get frozenComposure() { return !!st.frozen; },
       setBeat(b) { scn.setBeat(b); },

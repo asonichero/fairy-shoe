@@ -85,7 +85,7 @@
     <button id="sc-smack">Smack</button>
     <button id="sc-clear">Clear marks</button>
     <button id="sc-sound" class="on">Sound</button>
-    <button id="sc-pin" title="Hold both bodies' feet where they stand (position and angle) while you edit the rest of the pose; the Hips position always does">Pin feet</button>
+    <button id="sc-pin" title="Hold both bodies' feet where they stand (position and angle) while you edit the rest of the pose; the Hips position always does. Astride also holds both pairs of hands, and the bodies themselves, where they are, so everything stays put relative to the chair">Pin feet</button>
   </div>
   <div class="sub" style="margin:8px 0 3px">Implement</div>
   <div class="tabs" id="sc-implements"></div>
@@ -163,7 +163,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261007-0040";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261007-0110";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -730,7 +730,7 @@ document.getElementById('sc-on').onclick = () => {
   placeChars(); refreshSceneUI();
 };
 // Positions: across the lap, bent over the table with palms flat on it, or standing with hands on head.
-[['lap', 'Across the lap'], ['case', 'Over the table'], ['head', 'Hands on head'], ['knees', 'Hands on the chair'], ['spread', 'Bent over, feet spread'], ['hips', 'Hips']].forEach(([id, label]) => {
+[['lap', 'Across the lap'], ['case', 'Over the table'], ['head', 'Hands on head'], ['knees', 'Hands on the chair'], ['spread', 'Bent over, feet spread'], ['hips', 'Hips'], ['astride', 'Astride']].forEach(([id, label]) => {
   const b = document.createElement('button');
   b.textContent = label; b.dataset.pos = id;
   b.onclick = () => {

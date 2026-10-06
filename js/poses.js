@@ -12,6 +12,11 @@ root.FairyShoePoses = {
   chair: [],
   spread: [],
   // Editor-only base position ("Hips"): bent at the hips, arms forward; the game never offers it.
+  // Editor-only base position ("Astride"): the lap scene, seated, with its own poses; the game never offers it.
+  astride: [
+    { who: 'subject', beat: 'base', bones: { pelvis: [0, 108.5, -88.5], upperArmL: [-75, 0, -30], forearmL: [-15, 0, 0], handL: [0, 0, 0], upperArmR: [-75, 0, 30], forearmR: [-15, 0, 0], handR: [0, 0, 0], thighL: [-6.6, -8.8, 30.2], shinL: [28.8, 1.4, -33.1], footL: [5, 0.5, 36.2], spine1: [10.7, 0.7, 0.2], spine2: [25.1, 0.5, -2], neck: [25.5, 1.1, 6.8], thighR: [-30.2, -39.7, -12.4], shinR: [42.2, 22.6, 1.8], footR: [-3, 12.5, 9.9], fingersL: [0, 0, -48], fingersR: [0, 0, 41] } },
+    { who: 'giver', beat: 'relaxed', bones: { pelvis: [-29.5, 0, 0], neck: [6, 0, 0], head: [0, 0, 0], upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], thighL: [-56.8, -1.3, -2.6], shinL: [72.2, -2, -3.4], footL: [14.3, -1.2, 3.4], thighR: [-55.3, 1.1, 2.3], shinR: [69.9, 2.9, 3.1], footR: [14, 1.1, -2.2] } },
+  ],
   hips: [
     { who: 'giver', beat: 'contact', bones: { spine1: [-10.1, 0, 1], upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], thighL: [3.3, -1, 5.7], shinL: [19.6, -10.7, -15.5], footL: [-24.9, 2.2, 0], thighR: [3.5, -0.3, -5.5], shinR: [20.9, -3.3, -4.8], footR: [-25.4, 5.3, 16.1], fingersR: [0, 0, 16] } },
     { who: 'subject', beat: 'contact', bones: { spine1: [-19.2, 0, -0.6], neck: [-54.2, -0.3, 0.8], upperArmL: [-75, 0, -30], forearmL: [-15, 0, 0], handL: [0, 0, 0], upperArmR: [-75, 0, 30], forearmR: [-15, 0, 0], handR: [0, 0, 0], thighL: [-78.8, -2.2, 1.4], shinL: [14.9, 0.1, -6.9], footL: [-17.3, -0.1, -3.1], thighR: [-79.1, -0.1, 7], shinR: [15.3, -1.6, -6.2], footR: [-18, 2, -3.9], fingersL: [0, 0, -114], fingersR: [0, 0, 105.5] } },
