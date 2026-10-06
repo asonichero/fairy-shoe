@@ -509,7 +509,7 @@ function buildSpec(m) {
   if (!female) {
     const fr = loftRing(prims[0], Y.crotch + 0.012 * H), front = fr[1] + fr[3];
     // Long and flat: from just below the belly line down to a little below the crotch, only about 2.5 cm proud of the pelvis at its fullest; `endowment` scales it.
-    const e = m.endowment == null ? 1 : m.endowment, lowest = Y.crotch + 0.003 * H - 0.03 * H, highest = Y.belly - 0.045 * H;
+    const e = m.endowment == null ? 1 : m.endowment, lowest = Y.crotch + 0.003 * H - 0.03 * H, highest = Y.hip;   // (the top of the front is level with the hips)
     const r = [0.02 * H * e, (highest - lowest) / 2, 0.0125 * H * e];
     P(ellipsoid(V(0, (highest + lowest) / 2, front + r[2] * 0.1), r, V(0, 1, 0.1)), 'pelvis', 'torso', 0.02 * H, 0, { tag: 'groin' });
   }

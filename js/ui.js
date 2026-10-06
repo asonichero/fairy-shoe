@@ -508,7 +508,10 @@ function planChanges(ses, want) {
   const had = { bottoms: !!ses.layers.bottoms, briefs: !!ses.layers.briefs }, L = K.clothes; let touched = false;
   if (want.layers.bottoms !== had.bottoms) { lines.push({ n: T(want.layers.bottoms ? L.bottomsDown : L.bottomsUp) }); touched = true; }
   if (want.layers.briefs !== had.briefs) { lines.push({ n: T(want.layers.briefs ? L.briefsDown : L.briefsUp) }); touched = true; }
-  if (touched && (want.layers.bottoms || want.layers.briefs)) lines.push({ n: T(L.react[mood]) });
+  if (touched && (want.layers.bottoms || want.layers.briefs) && app.rng() < 0.7) {   // (a reaction most times, never the one before)
+    const pool = L.react[mood].filter(t => t !== app.lastReact), pick = pool[Math.floor(app.rng() * pool.length)];
+    app.lastReact = pick; lines.push({ n: T(pick) });
+  }
   return lines;
 }
 async function applyChanges(ses, want) {

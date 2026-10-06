@@ -493,13 +493,14 @@ const CHANGE = {
     bottomsUp: 'You draw {Poss} bottoms back up and settle the waistband.',
     briefsDown: 'You hook your thumbs in {Poss} briefs and draw them down after.',
     briefsUp: 'You draw {Poss} briefs back up into place.',
-    react: {
-      willing: '{Name} holds still for it and does not look round.',
-      sullen: '{Name} stares straight ahead and says nothing at all.',
-      cheeky: '{Name} opens {Poss} mouth to say something, and, for once, thinks better of it.',
-      flustered: '{Name} goes pink to the ears and screws {Poss} eyes shut.',
-      plain: '{Name} lets you.',
+    react: {   // (one is picked, some of the time: see ui.js planChanges)
+      willing: ['{Name} holds still for it and does not look round.', '{Name} steps out of the way without being asked, and keeps {Poss} eyes on the floor.', '"Thank you, {Title}," {Name} murmurs, quite steadily.', '{Name} lets out a long breath and stands as {Subj} should.'],
+      sullen: ['{Name} stares straight ahead and says nothing at all.', '{Name} looks at the wall, jaw set, and lets it happen.', '{Name} makes a small, flat sound through {Poss} nose, and nothing more.', '{Name} shifts {Poss} weight once, hard, and then is still.'],
+      cheeky: ['{Name} glances back over {Poss} shoulder, and receives a look that settles the matter.', '{Name} wiggles, once, as if testing the rules, and thinks better of a second try.', '"Draughty," {Name} observes, to the room in general.', '{Name} grins at the floor, until the grin runs out.'],
+      flustered: ['{Name} goes pink to the ears and screws {Poss} eyes shut.', '{Name} covers {Poss} face with both hands for a moment, then lowers them again.', '{Name} breathes in sharply, and tries to think of something else.', '{Name} whispers a small, hurried apology to nobody in particular.'],
+      plain: ['{Name} lets you.', '{Name} breathes out slowly and stays where {Subj} is.', '{Name} folds {Poss} hands and waits.', '{Name} takes it in silence.'],
     },
+
   },
 };
 
