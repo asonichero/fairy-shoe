@@ -30,7 +30,7 @@ const LAYER_LABELS = { skirt: { down: 'Skirt down', up: 'Skirt hitched up', off:
 const layerLabel = (name, v) => name === 'skirt' ? LAYER_LABELS.skirt[skirtMode(v)] : LAYER_LABELS[name][v ? 0 : 1];
 const layerNext = (name, v) => name === 'skirt' ? SKIRT_MODES[(SKIRT_MODES.indexOf(skirtMode(v)) + 1) % SKIRT_MODES.length] : !v;
 const CAMERAS = [['overview', 'Overview'], ['behind', 'Behind'], ['shoulder', 'Over your shoulder'], ['floor', 'Face']];
-const PACE = [0.5, 0.75, 1, 1.25, 1.5, 2];
+const PACE = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
 const STRENGTH = [0.4, 0.6, 0.8, 1, 1.25, 1.5];
 const RUN = [4, 8, 12, 16, 24, 32, 48];
 

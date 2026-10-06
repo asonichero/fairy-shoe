@@ -403,6 +403,7 @@ function buildLiveDock(ses, card) {
   const sceneBtn = icon(ICON.scene, 'Position, implement and clothes', () => { ses.stop(); showSceneMenu(ses); });
   // pace, strength, run length
   const nudge = (label, fn) => h('button', { class: 'nb', onclick: () => { fn(); sync(); } }, label);
+  const paceVal = h('b', { class: 'mult', title: 'Pace' }), strVal = h('b', { class: 'mult', title: 'Strength' });
   const slower = nudge('Slower', () => ses.stepPace(-1)), faster = nudge('Faster', () => ses.stepPace(1));
   const softer = nudge('Softer', () => ses.stepStrength(-1)), harder = nudge('Harder', () => ses.stepStrength(1));
   const runVal = h('b', {}), runMinus = h('button', { class: 'tiny', 'aria-label': 'Fewer smacks in a run', onclick: () => { ses.stepRun(-1); sync(); } }, '−'), runPlus = h('button', { class: 'tiny', 'aria-label': 'More smacks in a run', onclick: () => { ses.stepRun(1); sync(); } }, '+');
@@ -411,7 +412,7 @@ function buildLiveDock(ses, card) {
   const info = h('div', { class: 'hint' }), end = h('button', { class: 'primary', onclick: () => finishLive(ses, card) }, 'End the correction');
   const card_ = h('div', { class: 'hudcard' },
     h('div', { class: 'rd' }, reading), meter, aimText, info,
-    h('div', { class: 'nudges' }, h('div', { class: 'pairb' }, slower, faster), h('div', { class: 'pairb' }, softer, harder)),
+    h('div', { class: 'nudges' }, h('div', { class: 'pairb' }, slower, paceVal, faster), h('div', { class: 'pairb' }, softer, strVal, harder)),
     h('div', { class: 'acts' }, h('div', { class: 'runset', title: 'How many smacks a run gives' }, runMinus, runVal, runPlus), run, smack),
     end);
   setScreen(h('div', { class: 'hud' }, h('div', { class: 'hudname' }, d.name), h('div', { class: 'hudtools' }, camBtn, sceneBtn), camTipEl, card_));
@@ -419,6 +420,7 @@ function buildLiveDock(ses, card) {
   const sync = () => {
     camBtn.title = 'Camera angle: ' + camLabel[app.stage.cameraMode === 'free' ? app.camera || 'overview' : app.stage.cameraMode];
     runVal.textContent = ses.runLength;
+    paceVal.textContent = '×' + ses.pace; strVal.textContent = '×' + ses.strengthMult;
     slower.disabled = ses.pace <= SC.PACE[0]; faster.disabled = ses.pace >= SC.PACE[SC.PACE.length - 1];
     softer.disabled = ses.strengthMult <= SC.STRENGTH[0]; harder.disabled = ses.strengthMult >= SC.STRENGTH[SC.STRENGTH.length - 1];
     slower.title = faster.title = 'Pace ×' + ses.pace; softer.title = harder.title = 'Strength ×' + ses.strengthMult;
