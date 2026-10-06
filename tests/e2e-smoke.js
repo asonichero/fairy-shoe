@@ -84,6 +84,11 @@ async function liveControls(p) {
       await p.locator('.choice').first().click();
       await p.click('text=Get started');
       await p.waitForSelector('text=End the correction', { timeout: 90000 });
+      if (await p.locator('.overlay:not([hidden]) h2:text-is("Your first correction")').count()) {   // the walk-through is offered once: take it, all the way
+        await p.click('.overlay button:text-is("Walk me through")');
+        let n = 0; while (await p.locator('.coach').count() && n++ < 10) { await p.waitForSelector('.coach .primary'); await shot(p, 'tutorial-' + n); await p.click('.coach .primary'); await p.waitForTimeout(300); }
+        if (n !== 7) throw new Error('the walk-through should have 7 steps, saw ' + n);
+      }
       if (day === 1 && guard === 2) await liveControls(p);
       if (day === 1 && guard === 2) await p.evaluate(() => { __fs.app.g.candle = 8; });   // (enough for every aftercare scene)
       await p.click('text=End the correction');

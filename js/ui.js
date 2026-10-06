@@ -403,7 +403,45 @@ async function startLive(card, set) {
   ses.card = card; ses.talked = false; ses.talkChanges = [];
   buildLiveDock(ses, card);
   document.addEventListener('keydown', onKey);
+  maybeTutorial(ses);
 }
+
+// ── The first correction's walk-through (offered once; either answer is remembered) ──
+const TUTORIAL = [
+  { sel: '.hudcard .meter', title: 'The meter', text: 'This shows how far you have brought them. The shaded band is what they need today, and the white tick is the edge of their resistance. Where you stop counts, not where they end up.' },
+  { sel: '.hudcard .b-smack', title: 'Smack', text: 'One smack, with the hand or whatever you are holding. Press it now to try one.', wait: s => s.st.smacks >= 1, waitText: 'Waiting for your first smack…' },
+  { sel: '.hudcard .nudges', title: 'Pace and strength', text: 'Slower and Faster change how quickly each one comes; Softer and Harder, how firmly. Both change how it lands, and how they take it.' },
+  { sel: '.hudcard .acts', title: 'A run', text: 'Run gives a short run of smacks without you pressing each one; the number beside it sets how many. Stop (the same button) halts it whenever you like.' },
+  { sel: '.hudtools button[aria-label^="Position"]', title: 'Position, implement and clothes', text: 'Choose a new position, implement and what they wear all at once, then confirm. They are kept exactly as they are while the scene changes, and a new implement has to be fetched.' },
+  { sel: '.hudtools', title: 'Camera and sound', text: 'The camera button cycles the standard angles, and you can always drag or scroll the view yourself. The speaker turns the sound off.' },
+  { sel: '.hudcard .primary', title: 'Ending it', text: 'End the correction when they have had what they needed. If they call the safe word (“Red”), everything stops at once, and it costs them. Take it seriously.' },
+];
+function maybeTutorial(ses) {
+  if (recall('fairyshoe.tutorial')) return;
+  store('fairyshoe.tutorial', 1);
+  const o = $('#overlay'); o.dataset.dismiss = 'no';
+  modal(h('h2', {}, 'Your first correction'), h('p', {}, 'Would you like a step-by-step walk-through of the controls? It points at each one in turn. You can skip it at any point.'),
+    h('div', { class: 'row', style: 'margin-top:12px' }, h('button', { class: 'primary', onclick: () => { closeModal(); runTutorial(ses); } }, 'Walk me through'), h('button', { onclick: closeModal }, 'No thanks')));
+  o.dataset.dismiss = 'no';
+}
+function runTutorial(ses) {
+  let i = 0, hl = null, poll = null;
+  const coach = h('div', { class: 'coach' });
+  $('#app').append(coach);
+  const finish = () => { clearInterval(poll); if (hl) hl.classList.remove('tut-hl'); coach.remove(); };
+  const show = () => {
+    clearInterval(poll); if (hl) hl.classList.remove('tut-hl'); hl = null;
+    if (i >= TUTORIAL.length || app.live !== ses) return finish();
+    const t = TUTORIAL[i]; hl = document.querySelector(t.sel); if (hl) hl.classList.add('tut-hl');
+    const next = () => { i++; show(); };
+    const nextBtn = h('button', { class: 'primary', onclick: next }, i === TUTORIAL.length - 1 ? 'Done' : 'Next');
+    coach.replaceChildren(h('div', { class: 'step' }, 'Step ' + (i + 1) + ' of ' + TUTORIAL.length), h('h4', {}, t.title), h('p', {}, t.text), ...(t.waitText ? [h('p', { class: 'wait' }, t.waitText)] : []),
+      h('div', { class: 'row' }, nextBtn, h('button', { class: 'quiet', onclick: finish }, 'Skip the rest')));
+    if (t.wait) poll = setInterval(() => { if (app.live !== ses) return finish(); if (t.wait(ses)) { clearInterval(poll); setTimeout(next, 900); } }, 300);
+  };
+  show();
+}
+
 function buildLiveDock(ses, card) {
   const id = card.id, d = CH[id], g = app.g;
   const expected = R.expectedBand(g.chars[id].stats, card), cuts = R.BAND_CUTS, SCALE = 1.5;
@@ -438,7 +476,7 @@ function buildLiveDock(ses, card) {
   const slower = nudge('Slower', () => ses.stepPace(-1)), faster = nudge('Faster', () => ses.stepPace(1));
   const softer = nudge('Softer', () => ses.stepStrength(-1)), harder = nudge('Harder', () => ses.stepStrength(1));
   const runVal = h('b', {}), runMinus = h('button', { class: 'tiny', 'aria-label': 'Fewer smacks in a run', onclick: () => { ses.stepRun(-1); sync(); } }, '−'), runPlus = h('button', { class: 'tiny', 'aria-label': 'More smacks in a run', onclick: () => { ses.stepRun(1); sync(); } }, '+');
-  const smack = h('button', { onclick: () => ses.smack() }, 'Smack');
+  const smack = h('button', { class: 'b-smack', onclick: () => ses.smack() }, 'Smack');
   const run = h('button', { onclick: () => { if (ses.running) ses.stop(); else ses.run(); } }, 'Run');
   const info = h('div', { class: 'hint' }), end = h('button', { class: 'primary', onclick: () => finishLive(ses, card) }, 'End the correction');
   const card_ = h('div', { class: 'hudcard' },
