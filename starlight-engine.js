@@ -2984,10 +2984,10 @@ const LAP_ALONG = 0.78, LAP_SETTLE = 0.9;
 // The joint angles that result are her base pose; the reaction to a stroke is a change from them (see lapReact), and the hands go to the floor each frame as before.
 const LAP_BACK_X = -0.06;      // her hips sit this far back along the lap (m, for a 1.7 m subject): clear of the giver's torso, room for a skirt between the thighs
 const LAP_TOUCH = 0.003;       // the torso counts as touching the thigh this close
-function twoBoneTo(ch, [a, b, c], target) {
+function twoBoneTo(ch, [a, b, c], target, pole = null) {
   const A = ch.bones[a], B = ch.bones[b], C = ch.bones[c], pa = A.getWorldPosition(new THREE.Vector3()), pb = B.getWorldPosition(new THREE.Vector3()), pc = C.getWorldPosition(new THREE.Vector3());
   const L1 = pa.distanceTo(pb), L2 = pb.distanceTo(pc), d = target.clone().sub(pa), dist = clamp(d.length(), Math.abs(L1 - L2) + 1e-4, (L1 + L2) * 0.9999); d.normalize();
-  const bend = pb.clone().sub(pa); bend.addScaledVector(d, -bend.dot(d)); if (bend.lengthSq() < 1e-10) bend.set(0, 1, 0).cross(d); bend.normalize();
+  const bend = (pole || pb.clone().sub(pa)).clone(); bend.addScaledVector(d, -bend.dot(d)); if (bend.lengthSq() < 1e-10) bend.set(0, 1, 0).cross(d); bend.normalize();
   const cosA = clamp((L1 * L1 + dist * dist - L2 * L2) / (2 * L1 * dist), -1, 1), E = pa.clone().addScaledVector(d, L1 * cosA).addScaledVector(bend, L1 * Math.sqrt(1 - cosA * cosA));
   rotateBoneWorld(A, new THREE.Quaternion().setFromUnitVectors(pb.clone().sub(pa).normalize(), E.sub(pa).normalize()));
   const pb2 = B.getWorldPosition(new THREE.Vector3()), pc2 = C.getWorldPosition(new THREE.Vector3()), Tg = pa.clone().addScaledVector(d, dist);
@@ -2998,37 +2998,47 @@ function lapDominantVerts(ch, pick) {   // a sample of the skin vertices whose s
   for (let v = 0; v < si.length / 4; v += 3) { let bw = -1, bb = 0; for (let m = 0; m < 4; m++) if (sw[4 * v + m] > bw) { bw = sw[4 * v + m]; bb = si[4 * v + m]; } if (pick(BONES[bb])) out.push(v); }
   return out;
 }
+function posedBoneCone(ch, bone) {   // the thigh (or any limb) cone of a character, posed, straight from its body spec
+  const P = ch.spec.prims.find(q => q.type === 'cone' && q.bone === bone); if (!P) return null;
+  const m = ch.bones[bone].matrixWorld.clone().multiply(ch.mesh.skeleton.boneInverses[BONES.indexOf(bone)]);
+  const a = new THREE.Vector3(...P.a).applyMatrix4(m).toArray(), b = new THREE.Vector3(...P.b).applyMatrix4(m).toArray(), C = cone(a, b, P.r1, P.r2);
+  C.sc = mul(add3(a, b), 0.5); C.sr = len3(sub(b, a)) / 2 + Math.max(P.r1, P.r2); return C;
+}
 function solveLap(scn, g, s) {
   const sc = s.spec.H / 1.7, v = new THREE.Vector3();
   const skin = i => { v.fromBufferAttribute(s.mesh.geometry.attributes.position, i); s.mesh.boneTransform(i, v); return v.applyMatrix4(s.mesh.matrixWorld); };
   const setBones = o => { for (const b in o) s.bones[b].quaternion.copy(degQ(o[b])); s.group.updateMatrixWorld(true); };
   const base = SUBJECT_BASE;
   // 1. The torso bends forward from the anchored hip until it rests on the giver's left thigh.
-  const prox = posedProxies(g), nEll = g.proxies.ells.length, thighL = prox[nEll + g.proxies.cones.findIndex(q => q.bone === 'thighL')];   // the giver's left thigh, as the contact proxies have it
-  const torso = lapDominantVerts(s, n => n === 'spine2' || n === 'spine1').filter(i => { const p = new THREE.Vector3().fromBufferAttribute(s.mesh.geometry.attributes.position, i), J = s.spec.J.pelvis; return p.y > J[1] + 0.17 * s.spec.H; });   // (the ribs and chest, which the bend moves; not the hips, which are anchored)
+  const thighL = posedBoneCone(g, 'thighL');   // the giver's left thigh
+  const torso = lapDominantVerts(s, n => n === 'spine2' || n === 'spine1').filter(i => { const p = new THREE.Vector3().fromBufferAttribute(s.mesh.geometry.attributes.position, i), J = s.spec.J.pelvis; return p.y > J[1] + 0.12 * s.spec.H; });   // (the ribs and chest, which the bend moves; not the hips, which are anchored)
   // Her torso rests on the thigh: the bend at which the nearest point of her ribs and belly just touches it (sunk in at 0° → straightened until clear; short of it → bent forward until it arrives).
   const gap = bend => { setBones({ spine1: [base.spine1[0] + 0.55 * bend, 0, 0], spine2: [base.spine2[0] + 0.45 * bend, 0, 0] }); let m = Infinity; if (thighL) for (const i of torso) { const d = primDist(skin(i).toArray(), thighL); if (d < m) m = d; } return m; };
   // Her weight is on the thighs: lifted until no part of her skin is more than a hair inside either of the giver's thighs (the contact shader takes up the rest).
-  const thighs = ['thighL', 'thighR'].map(n => prox[nEll + g.proxies.cones.findIndex(q => q.bone === n)]).filter(Boolean), all = lapDominantVerts(s, n => /^(pelvis|spine|thigh)/.test(n));
-  const sink = () => { let m = Infinity; for (const i of all) { const p = skin(i).toArray(); for (const P of thighs) { const d = primDist(p, P); if (d < m) m = d; } } return m; };
+  const thighR = posedBoneCone(g, 'thighR'), hipVerts = lapDominantVerts(s, n => n === 'pelvis');
+  const hipGap = () => { let m = Infinity; if (thighR) for (const i of hipVerts) { const d = primDist(skin(i).toArray(), thighR); if (d < m) m = d; } return m; };   // how far her hips are off (+) or in (−) the right thigh
   let bend = 0;
-  for (let round = 0; round < 3; round++) {
+  for (let round = 0; round < 8; round++) {
     if (gap(0) < 0) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
-    gap(bend); const m = sink(); if (m > -0.004) break;
-    s.group.position.y += -m - 0.002; s.group.updateMatrixWorld(true);
+    gap(bend); const m = hipGap();
+    if (Math.abs(m) < 0.003) break;
+    s.group.position.y -= m; s.group.updateMatrixWorld(true);   // down onto the thigh if she hangs above it, up out of it if she is sunk in
   }
   if (false) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
   const pose = { spine1: [base.spine1[0] + 0.55 * bend, 0, 0], spine2: [base.spine2[0] + 0.45 * bend, 0, 0] };
   setBones(pose);
   // 2. The hips and knees bend until the toes touch the floor: each leg reaches an ankle height at which the lowest point of the foot, plantar-flexed, is on the floor.
   const feetVerts = { L: lapDominantVerts(s, n => n === 'footL'), R: lapDominantVerts(s, n => n === 'footR') };
+  const solveLegs = () => {
   for (const side of ['L', 'R']) {
     const hip = s.bones['thigh' + side].getWorldPosition(new THREE.Vector3()), kn = s.bones['shin' + side].getWorldPosition(new THREE.Vector3()), an0 = s.bones['foot' + side].getWorldPosition(new THREE.Vector3());
     const Ltot = hip.distanceTo(kn) + kn.distanceTo(an0), dir = new THREE.Vector3(an0.x - hip.x, 0, an0.z - hip.z); if (dir.lengthSq() < 1e-6) dir.set(1, 0, 0); dir.normalize();
     let ankleY = 0.07 * sc, best = null;
     for (let it = 0; it < 10; it++) {
       const horiz = Math.sqrt(Math.max(1e-4, (0.92 * Ltot) ** 2 - (hip.y - ankleY) ** 2));
-      twoBoneTo(s, ['thigh' + side, 'shin' + side, 'foot' + side], new THREE.Vector3(hip.x + dir.x * horiz, ankleY, hip.z + dir.z * horiz));
+      const reach = new THREE.Vector3(hip.x + dir.x * horiz, ankleY, hip.z + dir.z * horiz);
+      // the knee folds the one way it can: toward the front of the thigh (the thigh's own forward axis), never backward
+      twoBoneTo(s, ['thigh' + side, 'shin' + side, 'foot' + side], reach, new THREE.Vector3(0, 0, 1).applyQuaternion(s.bones['thigh' + side].getWorldQuaternion(new THREE.Quaternion())));
       // the toes down: pitch the foot about its own x until its lowest point is lowest (whichever way is plantar flexion)
       let pick = null;
       for (const sg of [1, -1]) { s.bones['foot' + side].quaternion.copy(degQ([sg * 55, 0, 0])); s.group.updateMatrixWorld(true); let lo = Infinity; for (const i of feetVerts[side]) lo = Math.min(lo, skin(i).y); if (!pick || lo < pick.lo) pick = { sg, lo }; }
@@ -3037,6 +3047,15 @@ function solveLap(scn, g, s) {
       best = pick;
     }
   }
+  };
+  // the legs move the hip skin as they turn, so the hips' contact with the thigh and the legs are settled together
+  const bendTorso = () => { if (gap(0) < 0) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); } gap(bend); };
+  for (let k = 0; k < 6; k++) {
+    solveLegs(); bendTorso();   // (turning the legs and bending the torso each move the hip skin a little, so they are settled together)
+    const m = hipGap(); if (Math.abs(m) < 0.003 && gap(bend) <= LAP_TOUCH * 1.5) break;
+    s.group.position.y -= m; s.group.updateMatrixWorld(true);
+  }
+  solveLegs();
   // 3. Bake: the poses are these joint angles; the reaction is a change from them.
   const rest = new THREE.Quaternion(), baseQ = {}, deltas = {};
   for (const b of BONES) baseQ[b] = s.bones[b].quaternion.clone();
@@ -6623,7 +6642,7 @@ function bustContact(ch, everyone) {
 }
 
 global.Starlight = {
-  SKIRT, SKIRT_THICK, posedProxies, primDist, settleSkirt, freezeSkirt, unfreezeSkirt, skirtClipReport, setSkirtShell, setSkirtHybrid, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
+  SKIRT, SKIRT_THICK, posedProxies, posedBoneCone, primDist, settleSkirt, freezeSkirt, unfreezeSkirt, skirtClipReport, setSkirtShell, setSkirtHybrid, PRESETS, ORDER, FACE_DEFAULTS, faceParams, BONES, POSES, clone, SKIN, BRA_STYLES, lookLayers, dress, setSkin,
   buildCharacter, disposeCharacter, resetCharacter, setPose, groundFeet, wideStance, poseQuats, degQ, mirrorPose, animateCharacter, bustSpring, bustContact, updateContacts, faceStep, setExpression, setMood, setMoods, MOODS, moodFor, EXPR_RANGE, mouthOpening, EXPR_DEFAULTS, skirtStep, bunchStep, setSkirtOff, setSkirtGathered, setLowered, addMark, clearMarks, fadeMarks, fadeMarksMove, copyMarks, markStrength, markCount,
   hairStep, bodyColliders, hairReset, setFingerCurl, setFingerBend, fistPocket,
   ALL_MATS, lin, field, loftRing,
