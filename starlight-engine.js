@@ -914,7 +914,8 @@ const VNECK_DEPTH = 0.05, VNECK_HALF = 0.031;
 const vNeckDrop = (H, x) => Math.max(0, 1 - Math.abs(x) / (VNECK_HALF * H)) * VNECK_DEPTH * H;
 function topCoverage(spec, L, tag, torso, p, t, coneLen) {
   const Y = spec.Y, H = spec.H;
-  const from = { underbust: Y.under - 0.012 * H, belly: Y.belly - 0.01 *H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
+  let from = { underbust: Y.under - 0.012 * H, belly: Y.belly - 0.01 *H, waist: Y.waist - 0.01 * H, hip: Y.hip - 0.02 * H }[L.from];
+  if (L.hemUp) from = Math.max(from, Y.belly - 0.01 * H);   // (bottoms are down: a long top is drawn up to the belly line, see buildHem)
   const neck = L.neck || (spec.m.build === 'male' ? 'crew' : 'scoop');
   const neckline = neck === 'crew' || neck === 'v'
     ? (L.collar ? Y.neckBase + 0.03 * H : Y.neckBase - 0.016 * H + 0.008 * H * smooth01(0.02, -0.02, p[2]))   // (a collared shirt is painted right up to the neck: the collar band lies over the edge, so no skin shows at the shoulders or the nape) - (neck === 'v' ? vNeckDrop(H, p[0]) * smooth01(-0.02, 0.02, p[2]) : 0)   // (a V is cut into the front only)
@@ -1110,7 +1111,8 @@ function dress(ch, layers = lookLayers(ch.spec.m)) {
   if (ch.skirt) ch.skirt.mesh.material.color.copy(lin(cloth.color));
   layers = layers.filter(L => LAYER_KINDS[L.kind]).slice(0, MAX_LAYERS);
   // Lowered garments (setLowered) are measured as such; ch.layers keeps the originals.
-  const cov = layers.map(L => ch.lowered && ch.lowered.has(L) ? { ...L, lowered: true } : L);
+  const bottomsDown = layers.some(L => L.kind === 'bottom' && ch.lowered && ch.lowered.has(L));
+  const cov = layers.map(L => ch.lowered && ch.lowered.has(L) ? { ...L, lowered: true } : (bottomsDown && L.kind === 'top' ? { ...L, hemUp: true } : L));
   // The bunched rolls only show while the lowered garment is actually worn, and lowered
   // briefs only once nothing worn over them (bottoms still up) hides them.
   const bottomsUp = layers.some(L => L.kind === 'bottom' && !(ch.lowered && ch.lowered.has(L)));
@@ -1190,6 +1192,9 @@ function dress(ch, layers = lookLayers(ch.spec.m)) {
   if (shirt) buildShirtParts(ch, shirt); else removeShirtParts(ch);
   const belted = layers.find(L => L.belt && (L.kind === 'bottom' || L.kind === 'top' || L.kind === 'skirt') && !(ch.lowered && ch.lowered.has(L)));
   if (belted) buildBelt(ch, belted); else removeBelt(ch);
+  // A top that reaches below the belly, with the bottoms down, is tugged up to it: a solid roll of cloth round the hips there (not simulated: the way the collar and the lowered bottoms are)
+  const hemL = bottomsDown && layers.find(L => L.kind === 'top' && ({ underbust: 9, belly: 9, waist: 9 }[L.from] == null));
+  if (hemL) buildHem(ch, hemL); else removeHem(ch);
 }
 // The crease where each thigh takes over from the torso, as a smooth curve: around
 // the thigh's axis (CREASE_BINS angles), how far down the axis from the hip joint
@@ -6557,6 +6562,30 @@ function buildShirtParts(ch, L) {
 // metal buckle at the front. On bottoms it sits at the belly line, where a top and the bottoms meet; on a dress (a top or a skirt) at the waist. It is skinned to the same pelvis/spine blend as the body at that height, so it bends with the
 // waist; it comes off with the bottoms when they are lowered.
 // ════════════════════════════════════════════════════════════════
+function removeHem(ch) {
+  if (!ch.hem) return;
+  for (const m of ch.hem) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); }
+  ch.hem = null;
+}
+function buildHem(ch, L) {
+  removeHem(ch);
+  const spec = ch.spec, H = spec.H, Y = spec.Y, half = 0.016 * H / 1.78, y = Y.belly - 0.01 * H - half * 0.2, ring = loftRing(spec.prims[0], y);
+  const W = loftWeights(spec, y), names = BONES, boneIdx = W.map(([b]) => names.indexOf(b));
+  const [a, bf, bb, zc] = ring, N = 72, sect = [[0.0025, -half], [0.0105, -half * 0.55], [0.0125, 0], [0.0105, half * 0.55], [0.0025, half]], pos = [], idx = [], K = sect.length;
+  for (let i = 0; i <= N; i++) {
+    const th = 2 * Math.PI * i / N, c = Math.cos(th), sn = Math.sin(th), d = c > 0 ? bf : bb, x = a * sn, z = zc + d * c;
+    const nx = sn / a, nz = c / d, nl = Math.hypot(nx, nz) || 1;
+    for (const [off, dy] of sect) pos.push(x + nx / nl * (off + 0.006), y + dy, z + nz / nl * (off + 0.006));
+  }
+  for (let i = 0; i < N; i++) for (let j = 0; j < K - 1; j++) { const a0 = i * K + j, b0 = i * K + j + 1; idx.push(a0, b0, b0 + K, a0, b0 + K, a0 + K); }
+  const g = new THREE.BufferGeometry(), n = pos.length / 3, si = new Uint16Array(n * 4), sw = new Float32Array(n * 4);
+  for (let i = 0; i < n; i++) for (let k = 0; k < W.length; k++) { si[4 * i + k] = boneIdx[k]; sw[4 * i + k] = W[k][1]; }
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4)); g.setAttribute('skinWeight', new THREE.Float32BufferAttribute(sw, 4));
+  g.setIndex(idx); g.computeVertexNormals();
+  const mesh = new THREE.SkinnedMesh(g, new THREE.MeshStandardMaterial({ color: lin(L.color), roughness: 0.85, side: THREE.DoubleSide, skinning: true }));
+  mesh.bind(ch.mesh.skeleton, ch.mesh.bindMatrix); mesh.castShadow = mesh.receiveShadow = true; mesh.frustumCulled = false;
+  ch.group.add(mesh); ch.hem = [mesh];
+}
 function removeBelt(ch) {
   if (!ch.belt) return;
   for (const m of ch.belt) { if (m.parent) m.parent.remove(m); m.geometry.dispose(); m.material.dispose(); }
