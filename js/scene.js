@@ -189,8 +189,14 @@ function footMarks(ch) {
   for (const side of ['L', 'R']) { const f = ch.bones['foot' + side]; m[side] = { pos: f.getWorldPosition(new T.Vector3()), quat: f.getWorldQuaternion(new T.Quaternion()) }; }
   return m;
 }
+// The feet are held where they are, and the hips follow the legs: the whole body is carried by however far the posed feet are from their marks (so the pose's own hip and
+// knee angles decide where the hips sit in space), then what is left over is taken up by bending each leg.
 function pinFeetTo(ch, marks) {
   ch.group.updateMatrixWorld(true);
+  const off = new T.Vector3();
+  for (const side of ['L', 'R']) off.add(marks[side].pos.clone().sub(ch.bones['foot' + side].getWorldPosition(new T.Vector3())));
+  off.multiplyScalar(0.5); if (off.length() > 0.5) off.setLength(0.5);
+  ch.group.position.add(off); ch.group.updateMatrixWorld(true);
   for (const side of ['L', 'R']) {
     S.twoBoneTo(ch, ['thigh' + side, 'shin' + side, 'foot' + side], marks[side].pos);
     const f = ch.bones['foot' + side];   // (set, not turned: rotateBoneWorld applies a change on top of the current angle)
@@ -386,7 +392,7 @@ function createSession(scene, opts, env = {}) {
       // Both bodies' feet held where they stand (position and angle) however the rest of the pose moves; the hips position always does.
       pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g), s: footMarks(s) } : null; },
       get pinned() { return !!pins; },
-      applyPins() { if (pins) { pinFeetTo(g, pins.g); pinFeetTo(s, pins.s); } },
+      applyPins() { if (pins) { pinFeetTo(g, pins.g); pinFeetTo(s, pins.s); if (plant && plant.hips) holdHipHands(g, s); } },
       get lookAhead() { return lookAhead; },
       get frozenComposure() { return !!st.frozen; },
       setBeat(b) { scn.setBeat(b); },
