@@ -135,10 +135,54 @@ function furnishScene(parent, scn, s, position, seatTop, giver) {
 }
 // Hands on the chair: planted on the seat however the body moves. Call each frame after the scene's own update.
 function holdChairHands(s, plant) {
+  if (plant.hips) return holdHipHands(plant.g, s);
   for (const side of ['L', 'R']) {
     const sh = s.bones['upperArm' + side].getWorldPosition(new T.Vector3()), out = side === 'L' ? -1 : 1;
     S.armIK(s, side, plant[side], sh.clone().add(new V3(-0.1, 0.05, out * 0.5)), new V3(0, 1, 0), new V3(1, 0, 0));
   }
+}
+
+// ── Hips (editor-only base position) ────────────────────────────
+// The subject lies along a table, chest on the boards and fingers curled over its far edge; the disciplinarian stands square behind,
+// facing the same way, hands pinned to the subject's hips.
+function hipTarget(s, side) {
+  const pel = s.bones.pelvis.getWorldPosition(new T.Vector3()), th = s.bones['thigh' + side].getWorldPosition(new T.Vector3()), k = s.spec.H / 1.7;
+  const out = side === 'L' ? -1 : 1;
+  return { at: new T.Vector3(pel.x - 0.005 * k, pel.y + 0.035 * k, th.z + out * 0.07 * k), n: new T.Vector3(0, 0, out) };
+}
+function holdHipHands(g, s) {
+  g.group.updateMatrixWorld(true);
+  for (const side of ['L', 'R']) {
+    const { at, n } = hipTarget(s, side), sh = g.bones['upperArm' + side].getWorldPosition(new T.Vector3());
+    S.armIK(g, side, at, sh.clone().add(new V3(-0.1, -0.1, n.z * 0.5)), n, new V3(1, -0.2, 0));
+  }
+}
+function setupHips(parent, scn, g, s) {
+  s.group.updateMatrixWorld(true);
+  // the table: its top meets the underside of the chest, the near edge at the waist, the far edge just past where the palms land
+  // (the lowest skinned point of the chest, between the waist and the neck and clear of the arms)
+  const sp = s.bones.spine1.getWorldPosition(new T.Vector3()), nk = s.bones.neck.getWorldPosition(new T.Vector3());
+  const pos = s.mesh.geometry.attributes.position, v = new T.Vector3(); let low = Infinity;
+  s.mesh.skeleton.update();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i); s.mesh.boneTransform(i, v); v.applyMatrix4(s.mesh.matrixWorld);
+    if (v.x > sp.x + 0.02 && v.x < nk.x && Math.abs(v.z - nk.z) < 0.14 * s.spec.H / 1.7 && v.y < low) low = v.y;
+  }
+  const top = isFinite(low) ? low - 0.001 : scn.caseTop;
+  scn.caseTop = top;
+  const pL = S.casePalm(s, 'L', top), pR = S.casePalm(s, 'R', top);
+  const old = scn.bench; if (old) { parent.remove(old); Room.disposeGroup(old); }
+  const made = Room.buildTable(top, sp.x, Math.max(pL.x, pR.x) + 0.045, 0.9); made.userData.obb = true;
+  made.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scn.bench = made; parent.add(made);
+  // the disciplinarian: square behind the subject (facing +X, as they do), hips at the same height as now, close enough for the hands
+  const pel = s.bones.pelvis.getWorldPosition(new T.Vector3()), gp = g.bones.pelvis.getWorldPosition(new T.Vector3());
+  g.group.quaternion.setFromAxisAngle(new T.Vector3(0, 1, 0), Math.PI / 2);
+  g.group.updateMatrixWorld(true);
+  const now = g.bones.pelvis.getWorldPosition(new T.Vector3());
+  g.group.position.add(new V3(pel.x - 0.4 * (g.spec.H / 1.7) - now.x, 0, pel.z - now.z));
+  g.group.updateMatrixWorld(true);
+  return { hips: true, g };
 }
 
 // ── Setting up a discipline scene (the game and the editor both call these, so what is seen in one is what is in the other) ──
@@ -160,6 +204,10 @@ function furnishDiscipline(parent, scn, g, s, position, seatTop) {
     S.setPress(g, new T.Vector3(pel.x, flat, pel.z), new T.Vector3(0, -1, 0), 0.24 * g.spec.H / 1.7, 1, '', null, 0, 0.09);
   }
   applyPoseOverrides(scn, position);
+  if (position === 'hips') {   // the pose edits first, so the table is laid against the chest as posed
+    s.target = scn.baseQ; for (const b of Object.keys(scn.baseQ)) if (s.bones[b]) { s.pose[b] = scn.baseQ[b].clone(); s.bones[b].quaternion.copy(scn.baseQ[b]); }
+    return setupHips(parent, scn, g, s);
+  }
   return plant;
 }
 
