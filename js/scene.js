@@ -613,6 +613,23 @@ function createTableau(scene, kind, opts, env = {}) {
   };
   const edits = Poses[kind] || [];
   // Pose edits (js/poses.js): the base pose, set on top of the scene's own and set again after its arms and heads have been placed, so an edited bone is the edited bone.
+  // A pasted arm pose with big twists (a shoulder turned 150° about its own axis) skins badly: the sleeve and the skin wring up at the shoulder. The arm is solved again from the
+  // bind pose to the same elbow and wrist, with the hand's own turn kept, which is the same arm with the least twist the skin can take.
+  const cleanArms = () => {
+    for (const [who, c] of [['giver', g], ['subject', s]]) {
+      if (!c.group.visible) continue;
+      const armEdited = edits.some(e => e.who === who && (e.beat === 'base' || (who === 'giver' && e.beat === 'relaxed')) && Object.keys(e.bones).some(b => /^(upperArm|forearm)/.test(b)));
+      if (!armEdited) continue;
+      c.group.updateMatrixWorld(true);
+      for (const side of ['L', 'R']) {
+        const up = c.bones['upperArm' + side], fo = c.bones['forearm' + side], ha = c.bones['hand' + side];
+        const A = up.getWorldPosition(new V3()), B = fo.getWorldPosition(new V3()), C = ha.getWorldPosition(new V3()), Q = ha.getWorldQuaternion(new T.Quaternion());
+        up.quaternion.identity(); fo.quaternion.identity(); c.group.updateMatrixWorld(true);
+        S.twoBoneTo(c, ['upperArm' + side, 'forearm' + side, 'hand' + side], C, B.clone().sub(A));
+        ha.quaternion.copy(ha.parent.getWorldQuaternion(new T.Quaternion()).invert().multiply(Q)); c.group.updateMatrixWorld(true);
+      }
+    }
+  };
   const applyEdits = () => { for (const e of edits) { const c = e.who === 'giver' ? g : s; if (!(e.beat === 'base' || (e.who === 'giver' && e.beat === 'relaxed')) || !c.group.visible) continue; for (const [b, v] of Object.entries(e.bones)) if (c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); } };
   if (kind === 'corner') {
     g.group.visible = false; g.helper.visible = false;
@@ -644,6 +661,31 @@ function createTableau(scene, kind, opts, env = {}) {
     };
     gaze = () => eyesAt(s, st.furn.localToWorld(new V3(0.02, 0.746, 0.46)), 1);
     view = { pos: st.furn.localToWorld(new V3(1.5, 1.45, 1.55)), tgt: st.furn.localToWorld(new V3(0, 0.95, 0.3)), fov: 40 };
+  } else if (kind === 'heldalt') {   // the player seated, the subject sideways on their lap, arms round each other: it sits by the seat's own height, so it takes any pair of sizes
+    const st = seated(g, 0, 0, 0), kg = g.spec.H / 1.7, ks = s.spec.H / 1.7;
+    S.setPose(s, 'Sit', true); for (const b of S.BONES) s.bones[b].quaternion.copy(s.pose[b]);
+    s.group.quaternion.copy(yawQ(Math.PI / 2)); s.group.updateMatrixWorld(true);
+    const gp = g.bones.pelvis.getWorldPosition(new V3()), gth = g.bones.thighL.getWorldPosition(new V3()), rTh = g.spec.m.thigh / 100 / (2 * Math.PI);
+    const pelLocal = new V3(...s.spec.J.pelvis).applyQuaternion(s.group.quaternion);
+    s.group.position.copy(new V3(gp.x - 0.04 * kg, gth.y + rTh + 0.075 * ks, gp.z + 0.2 * kg)).sub(pelLocal); s.group.updateMatrixWorld(true);
+    // leaning in toward the player, the head laid against their shoulder
+    s.bones.spine1.quaternion.multiply(S.degQ([-4, 0, 12])); s.bones.spine2.quaternion.multiply(S.degQ([-2, 0, 10]));
+    for (const b of S.BONES) s.pose[b].copy(s.bones[b].quaternion); s.target = Object.fromEntries(S.BONES.map(b => [b, s.pose[b]]));
+    hold = () => {
+      g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
+      const Yv = new V3(0, 1, 0), gsh = g.bones.spine2.getWorldPosition(new V3()), ssp = s.bones.spine1.getWorldPosition(new V3());
+      // the player's right arm round the subject's back, the left hand resting on their thigh
+      S.armIK(g, 'R', ssp.clone().add(new V3(-0.1 * ks, 0.02 * ks, 0.02 * ks)), g.bones.upperArmR.getWorldPosition(new V3()).add(new V3(-0.3, -0.2, 0.25)), new V3(-1, 0, 0), new V3(0, 0, 1));
+      const thigh = s.bones.thighL.getWorldPosition(new V3()).lerp(s.bones.shinL.getWorldPosition(new V3()), 0.35).add(new V3(0, 0.07 * ks, 0));
+      S.armIK(g, 'L', thigh, g.bones.upperArmL.getWorldPosition(new V3()).add(new V3(0.2, -0.2, 0.2)), Yv, new V3(1, 0, 0));
+      // the subject's left arm round the player's neck, the right hand on their chest
+      const nk = g.bones.neck.getWorldPosition(new V3());
+      S.armIK(s, 'L', nk.clone().add(new V3(-0.06 * kg, -0.02 * kg, -0.02 * kg)), s.bones.upperArmL.getWorldPosition(new V3()).add(new V3(0.0, -0.1, -0.3)), new V3(0, 1, 0), new V3(-1, 0, 0));
+      S.armIK(s, 'R', gsh.clone().add(new V3(0.06 * kg, 0.02 * kg, 0.1 * kg)), s.bones.upperArmR.getWorldPosition(new V3()).add(new V3(0.1, -0.2, 0.1)), new V3(0, 0, 1), new V3(-1, 0, 0));
+      S.lookAt(s, g.bones.neck.getWorldPosition(new V3()).add(new V3(0.05, 0.04 * kg, 0)), 1.3); S.lookAt(g, s.bones.head.getWorldPosition(new V3()), 0.6);
+    };
+    gaze = () => { eyesAt(g, s.bones.head.getWorldPosition(new V3()), 0.7); eyesAt(s, g.bones.neck.getWorldPosition(new V3()), 0.5); };
+    view = { pos: new V3(2.0, 1.35, 1.9), tgt: new V3(0, 0.95, 0.1), fov: 38 };
   } else if (kind === 'held') {
     const k = (g.spec.H + s.spec.H) / 2 / 1.7, gap = 0.31 * k;
     standing(g, Math.PI / 2, -gap / 2, 0); standing(s, -Math.PI / 2, gap / 2, 0);
@@ -680,7 +722,7 @@ function createTableau(scene, kind, opts, env = {}) {
     tick(dt, t) {
       for (const c of both) if (c.group.visible) S.animateCharacter(c, dt, t);
       applyEdits();
-      hold(t); applyEdits(); gaze();
+      hold(t); applyEdits(); cleanArms(); gaze();
       for (const c of both) if (c.group.visible) { c.group.updateMatrixWorld(true); S.bustSpring(c, dt); }
       const on = both.filter(c => c.group.visible);
       for (const c of on) S.bustContact(c, on);
@@ -782,5 +824,5 @@ function createStage(viewEl, { onGLProblem } = {}) {
   return { begin, tableau, end, loop, clearMarks, setCamera, onCameraTaken: fn => { api_onCam = fn; }, get cameraMode() { return cam.mode; }, renderer, camera, controls, scene, get session() { return session; }, resize };
 }
 
-root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
+root.FairyShoeScene = { TABLEAUX: [['corner', 'Corner time'], ['lines', 'Lines'], ['held', 'Held after'], ['heldalt', 'Held after (alternate)'], ['warm', 'Warm words']], cameraPose, layerLabel, layerNext, skirtMode, furnishScene, holdChairHands, chairSeatTop, applyPoseOverrides, prepareSubject, furnishDiscipline, createSession, createTableau, createStage, POSITIONS, IMPLEMENTS, CAMERAS, LAYER_LABELS, PACE, STRENGTH, RUN, Sound };
 })(window);

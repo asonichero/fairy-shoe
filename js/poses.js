@@ -12,7 +12,14 @@ root.FairyShoePoses = {
   chair: [],
   spread: [],
   // The aftercare scenes (corner, lines, held, warm): bones set on top of each scene's own standing or seated pose (who: 'subject' or 'giver', beat: 'base').
-  corner: [], lines: [], held: [], warm: [],
+  corner: [], warm: [], heldalt: [],
+  lines: [
+    { who: 'subject', beat: 'base', bones: { neck: [25.9, 0.1, -0.4], upperArmL: [-53.7, 96.4, -88.9], forearmL: [-6.6, -65.7, -70.8], handL: [28.6, -62.2, -12.7], upperArmR: [-38.8, -94.6, 97.3], forearmR: [-28.2, 86, 89.3], handR: [52.9, 6.2, -4.7], fingersR: [0, 0, -7], thumbR: [-25.5, 0, 0] } },
+  ],
+  held: [
+    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [22.1, -46.1, -5.3], forearmL: [-70.5, 99.5, -139.2], handL: [14.4, -42, -5.5], upperArmR: [-27.1, 43.1, 22.7], forearmR: [15, -82.1, 147.5], handR: [67.5, -128, -167.5] } },
+    { who: 'subject', beat: 'base', bones: { spine1: [9.6, 1, 5.7], spine2: [19, 16.9, 0.5], neck: [5.4, -54.1, -2.4], head: [5.5, -50.5, 0], clavL: [10, -16.8, 17.8], upperArmL: [-53.8, 151.6, -125.6], forearmL: [21.1, -11.4, -123.6], handL: [14, -26.5, -18.5], clavR: [9.6, 13.6, -28.2], upperArmR: [-16.1, -64.7, 83.6], forearmR: [-58.5, -40.5, 147.6], handR: [-18.2, 11.5, 28.9], thighL: [1.3, 0, -3.8], shinL: [-2.1, -0.4, 0.4], footL: [3.8, 0.2, 0.5], thighR: [2, 0, -0.6], shinR: [-5.3, 0.5, -0.3], footR: [5.3, -0.3, 3.9] } },
+  ],
   // Editor-only base position ("Hips"): bent at the hips, arms forward; the game never offers it.
   // Editor-only base position ("Astride"): the lap scene, seated, with its own poses; the game never offers it.
   // Astride is laid out in code (setupAstride in scene.js: the hips, legs and the reach of the arms); these edits go on top, the same at every beat.
