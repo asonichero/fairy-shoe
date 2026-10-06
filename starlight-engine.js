@@ -3018,13 +3018,36 @@ function solveLap(scn, g, s) {
   const thighR = posedBoneCone(g, 'thighR'), hipVerts = lapDominantVerts(s, n => n === 'pelvis');
   const hipGap = () => { let m = Infinity; if (thighR) for (const i of hipVerts) { const d = primDist(skin(i).toArray(), thighR); if (d < m) m = d; } return m; };   // how far her hips are off (+) or in (−) the right thigh
   let bend = 0;
+  // The whole body tips forward about the anchored hip as far as it comfortably can, so the spine itself stays as straight as it will lie: the tilt at which the torso
+  // just meets the thigh with its natural curve (no arching up to meet it, no folding down onto it).
+  const A = scn.lapAnchor;
+  const setTilt = t => {
+    const c = Math.cos(t), sn = Math.sin(t);
+    s.group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3(0, 0, -1), new THREE.Vector3(c, -sn, 0), new THREE.Vector3(-sn, -c, 0)));
+    s.group.updateMatrixWorld(true);
+    const pl = new THREE.Vector3(...s.spec.J.pelvis).applyQuaternion(s.group.quaternion);
+    s.group.position.copy(A.pelvisAt).sub(pl); s.group.updateMatrixWorld(true);
+    setBones({ spine1: [base.spine1[0], 0, 0], spine2: [base.spine2[0], 0, 0] });
+  };
+  const fitTilt = () => {
+    if (!(A && thighL)) return;
+    let lo = -0.6, hi = 0.9;   // gap(0) > touch: the torso hangs above the thigh (tip further forward); below it, it is sunk in (tip back)
+    for (let it = 0; it < 9; it++) { const mid = (lo + hi) / 2; setTilt(mid); if (gap(0) > LAP_TOUCH) lo = mid; else hi = mid; }
+    A.tilt = (lo + hi) / 2; setTilt(A.tilt);
+  };
+  const lower = m => { s.group.position.y -= m; if (A) A.pelvisAt.y -= m; s.group.updateMatrixWorld(true); };
+  const findBend = () => {   // (the tilt did the work: the spine stays at its natural curve unless the torso still misses the thigh by more than a few mm)
+    fitTilt(); const g0 = gap(0);
+    if (g0 < LAP_TOUCH + 0.006 && g0 > -0.004) { bend = 0; gap(0); return; }
+    if (g0 < 0) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
+    gap(bend);
+  };
   for (let round = 0; round < 8; round++) {
-    if (gap(0) < 0) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
-    gap(bend); const m = hipGap();
+    findBend(); const m = hipGap();
     if (Math.abs(m) < 0.003) break;
-    s.group.position.y -= m; s.group.updateMatrixWorld(true);   // down onto the thigh if she hangs above it, up out of it if she is sunk in
+    lower(m);   // down onto the thigh if she hangs above it, up out of it if she is sunk in
   }
-  if (false) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); }
+  findBend();
   const pose = { spine1: [base.spine1[0] + 0.55 * bend, 0, 0], spine2: [base.spine2[0] + 0.45 * bend, 0, 0] };
   setBones(pose);
   // 2. The hips and knees bend until the toes touch the floor: each leg reaches an ankle height at which the lowest point of the foot, plantar-flexed, is on the floor.
@@ -3049,11 +3072,11 @@ function solveLap(scn, g, s) {
   }
   };
   // the legs move the hip skin as they turn, so the hips' contact with the thigh and the legs are settled together
-  const bendTorso = () => { if (gap(0) < 0) { for (bend = 0; bend > -90 && gap(bend) < LAP_TOUCH * 0.5; bend -= 1); } else { for (bend = 0; bend < 80 && gap(bend) > LAP_TOUCH; bend += 1); } gap(bend); };
+  const bendTorso = findBend;
   for (let k = 0; k < 6; k++) {
     solveLegs(); bendTorso();   // (turning the legs and bending the torso each move the hip skin a little, so they are settled together)
     const m = hipGap(); if (Math.abs(m) < 0.003 && gap(bend) <= LAP_TOUCH * 1.5) break;
-    s.group.position.y -= m; s.group.updateMatrixWorld(true);
+    lower(m);
   }
   solveLegs();
   // 3. Bake: the poses are these joint angles; the reaction is a change from them.
@@ -3157,6 +3180,7 @@ function createDisciplineScene(parent, g, s, opts = {}) {
   const pelvisAt = new THREE.Vector3(onThigh.x + LAP_BACK_X * (s.spec.H / 1.7), onThigh.y + rHere + hipRing[1] * LAP_SETTLE, onThigh.z);
   const pelvisLocal = new THREE.Vector3(...s.spec.J.pelvis).applyQuaternion(s.group.quaternion);
   s.group.position.copy(pelvisAt).sub(pelvisLocal);
+  scn.lapAnchor = { pelvisAt: pelvisAt.clone(), tilt };
   for (const b of BONES) s.bones[b].quaternion.copy(s.pose[b]);
   s.group.updateMatrixWorld(true);
   g.group.updateMatrixWorld(true);
@@ -6647,7 +6671,7 @@ global.Starlight = {
   hairStep, bodyColliders, hairReset, setFingerCurl, setFingerBend, fistPocket,
   ALL_MATS, lin, field, loftRing,
   setPress, createPain, PAIN, clothCushion, FACE, glReport, watchGL, createDisciplineScene, POSITIONS: ['lap', 'case', 'head', 'knees', 'spread'], IMPLEMENTS, PADDLE, seatGiver, buildBench, DEFAULT_TIMING, GIVER_BASE, GIVER_BEAT, GIVER_SEATED,
-  armIK, armReach, casePalm, humeralTwist, elbowClearance, posedSkinNear, skinSignedDist, lookAt,
+  armIK, armReach, twoBoneTo, casePalm, humeralTwist, elbowClearance, posedSkinNear, skinSignedDist, lookAt,
   setHandWorld, rotateBoneWorld, seatExcess, seatPoints, restClearance, PARENT,
   DANCE_BASE, DANCE_SRC, DANCE_MOVES, SIDED, STUMBLE, mirrorName, createDancer,
 };

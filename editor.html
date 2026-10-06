@@ -85,6 +85,7 @@
     <button id="sc-smack">Smack</button>
     <button id="sc-clear">Clear marks</button>
     <button id="sc-sound" class="on">Sound</button>
+    <button id="sc-pin" title="Hold both bodies' feet where they stand (position and angle) while you edit the rest of the pose; the Hips position always does">Pin feet</button>
   </div>
   <div class="sub" style="margin:8px 0 3px">Implement</div>
   <div class="tabs" id="sc-implements"></div>
@@ -162,7 +163,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261006-1650";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261006-1835";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -676,6 +677,8 @@ function buildScene() {
   scn.timing = sc.timing; scn.palmAim = sc.palmAim; scn.side = sc.side;
   if (sc.loop) scn.setLoop(true); else scn.setBeat(sc.beat);
   sess.frozen = PE.on;
+  if (pinWanted && !sess.pinned) sess.pinFeet(true);
+  syncPin();
   placeChars();
   if (PE.on) PE.settle();   // a new pairing or implement: re-freeze at the beat
 }
@@ -777,6 +780,9 @@ Object.keys(S.IMPLEMENTS).forEach(name => {
 controls.addEventListener('start', () => { camGo = null; document.querySelectorAll('#sc-cams button').forEach(x => x.classList.remove('on')); });
 function refreshImplements() { document.querySelectorAll('#sc-implements button').forEach(b => b.classList.toggle('on', b.dataset.impl === sc.implement)); }
 refreshImplements(); refreshPositions();
+let pinWanted = false;
+const syncPin = () => document.getElementById('sc-pin').classList.toggle('on', !!(sess && sess.pinned));
+document.getElementById('sc-pin').onclick = () => { if (!sess) return; pinWanted = !sess.pinned; sess.pinFeet(pinWanted); syncPin(); };
 document.getElementById('sc-sound').onclick =e => { sc.sound = !sc.sound; e.target.classList.toggle('on', sc.sound); };
 // One smack at a time (as in the game): lift, strike the next side, hold on contact.
 document.getElementById('sc-smack').onclick = () => { if (!scn) return; if (PE.on) PE.stop(); if (sc.loop) { sc.loop = false; scn.setLoop(false); refreshSceneUI(); } if (!scn.busy()) scn.cycle(); };
@@ -1257,7 +1263,7 @@ function animate() {
     if (view.spin) ch.group.rotation.y += dt * 0.5;
   }
   if (sess) { sess.frozen = PE.on; sess.tick(dt, t); }   // the game's own per-frame step for the scene (held still while the pose editor is on)
-  if (PE.on) PE.frame();
+  if (PE.on) { PE.frame(); if (sess) sess.applyPins(); }   // (the pose editor's own bones first, then the pinned feet are put back)
   // Marks fade slowly (the scene's bodies fade in the session).
   for (const ch of Object.values(chars)) S.fadeMarks(ch, dt);
   const onStage = visibleChars();   // the bodies outside the scene (the line-up, the turntable)

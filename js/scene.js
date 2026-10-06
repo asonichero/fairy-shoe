@@ -145,16 +145,44 @@ function holdChairHands(s, plant) {
 // ── Hips (editor-only base position) ────────────────────────────
 // The subject lies along a table, chest on the boards and fingers curled over its far edge; the disciplinarian stands square behind,
 // facing the same way, hands pinned to the subject's hips.
+// Where a palm goes on the subject's hip: the outermost skin on that side of the pelvis (from the posed mesh), the palm a hair off it along the surface normal.
+// Recomputed only when the pelvis has moved (a reaction), as it walks every skin point nearby.
+const hipCache = new WeakMap();
 function hipTarget(s, side) {
-  const pel = s.bones.pelvis.getWorldPosition(new T.Vector3()), th = s.bones['thigh' + side].getWorldPosition(new T.Vector3()), k = s.spec.H / 1.7;
-  const out = side === 'L' ? -1 : 1;
-  return { at: new T.Vector3(pel.x - 0.005 * k, pel.y + 0.035 * k, th.z + out * 0.07 * k), n: new T.Vector3(0, 0, out) };
+  const pel = s.bones.pelvis.getWorldPosition(new T.Vector3()), k = s.spec.H / 1.7, out = side === 'L' ? -1 : 1;
+  const key = s.bones.pelvis.matrixWorld.elements.map(v => Math.round(v * 500)).join(',') + side, hit = hipCache.get(s);
+  if (hit && hit[side] && hit[side].key === key) return hit[side].val;
+  const centre = new T.Vector3(pel.x, pel.y + 0.04 * k, pel.z + out * 0.1 * k), pts = S.posedSkinNear(s, centre, 0.16 * k);
+  let best = null, bz = -Infinity;
+  for (let i = 0; i < pts.length; i += 6) {
+    if (Math.abs(pts[i] - pel.x) > 0.06 * k || pts[i + 1] < pel.y - 0.02 * k || pts[i + 1] > pel.y + 0.1 * k) continue;
+    const z = out * pts[i + 2]; if (z > bz) { bz = z; best = i; }
+  }
+  let at, n;
+  if (best === null) { at = new T.Vector3(pel.x, pel.y + 0.035 * k, pel.z + out * 0.16 * k); n = new T.Vector3(0, 0, out); }
+  else { n = new T.Vector3(pts[best + 3], pts[best + 4], pts[best + 5]).normalize(); if (n.z * out < 0.2) n.set(0, 0, out); at = new T.Vector3(pts[best], pts[best + 1], pts[best + 2]).addScaledVector(n, 0.012 * k); }
+  const val = { at, n }; const rec = hit || {}; rec[side] = { key, val }; hipCache.set(s, rec);
+  return val;
 }
 function holdHipHands(g, s) {
   g.group.updateMatrixWorld(true);
   for (const side of ['L', 'R']) {
     const { at, n } = hipTarget(s, side), sh = g.bones['upperArm' + side].getWorldPosition(new T.Vector3());
-    S.armIK(g, side, at, sh.clone().add(new V3(-0.1, -0.1, n.z * 0.5)), n, new V3(1, -0.2, 0));
+    const fingers = new V3(1, -0.45, 0); fingers.addScaledVector(n, -fingers.dot(n)).normalize();   // along the skin, forward and down, never into it
+    S.armIK(g, side, at, sh.clone().add(new V3(-0.1, -0.1, n.z * 0.5)), n, fingers);
+  }
+}
+// ── Pinned feet: both bodies' feet held where they are (position and angle) while everything above them moves ──
+function footMarks(ch) {
+  ch.group.updateMatrixWorld(true); const m = {};
+  for (const side of ['L', 'R']) { const f = ch.bones['foot' + side]; m[side] = { pos: f.getWorldPosition(new T.Vector3()), quat: f.getWorldQuaternion(new T.Quaternion()) }; }
+  return m;
+}
+function pinFeetTo(ch, marks) {
+  ch.group.updateMatrixWorld(true);
+  for (const side of ['L', 'R']) {
+    S.twoBoneTo(ch, ['thigh' + side, 'shin' + side, 'foot' + side], marks[side].pos);
+    S.rotateBoneWorld(ch.bones['foot' + side], marks[side].quat);
   }
 }
 function setupHips(parent, scn, g, s) {
@@ -257,7 +285,7 @@ function createSession(scene, opts, env = {}) {
   const marks = env.marks || {};
     const st = { smacks: 0, peak: 0, tooHarsh: false, mode: 'idle', toRun: 0, since: 0, paceIdx: 2, strengthIdx: 3, runIdx: 2, ended: false,
       layers: { bottoms: false, briefs: false, ...(opts.layers || {}), skirt: (opts.layers && opts.layers.skirt) || 'up' }   /* a skirt is always hitched up for a correction (the editor may ask for another) */, implement: opts.implement || 'hand', position: opts.position || 'case' };
-    let g = null, s = null, scn = null, furniture = null, plant = null;
+    let g = null, s = null, scn = null, furniture = null, plant = null, pins = null;
 
     const derive = () => { const pace = PACE[st.paceIdx], m = STRENGTH[st.strengthIdx]; return { speed: pace, strength: Math.min(1, 0.66 * m), hold: 0.3 / pace, dwell: 0.6 / pace, face: clamp(0.1 + 0.45 * m * pace, 0.1, 1) }; };
 
@@ -310,6 +338,7 @@ function createSession(scene, opts, env = {}) {
       if (scn.pain) { const real = scn.pain.update; scn.pain.update = (dt, onSkin) => { if (!st.frozen) real(dt, onSkin); }; }   // (composure held still while frozen)
       scn.onImpact = (side, strength) => { st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
+      pins = null; if (st.pinFeet || position === 'hips') { st.pinFeet = true; pins = { g: footMarks(g), s: footMarks(s) }; }
       if (env.afterMake) env.afterMake(g, s);
     }
 
@@ -331,6 +360,10 @@ function createSession(scene, opts, env = {}) {
       rebuild(cfg) { make(cfg); },
       // Composure held still (nothing fades, nothing builds) from here until the first smack or run begins again.
       freeze() { st.frozen = true; },
+      // Both bodies' feet held where they stand (position and angle) however the rest of the pose moves; the hips position always does.
+      pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g), s: footMarks(s) } : null; },
+      get pinned() { return !!pins; },
+      applyPins() { if (pins) { pinFeetTo(g, pins.g); pinFeetTo(s, pins.s); } },
       get frozenComposure() { return !!st.frozen; },
       setBeat(b) { scn.setBeat(b); },
       get pace() { return PACE[st.paceIdx]; }, get strengthMult() { return STRENGTH[st.strengthIdx]; }, get runLength() { return RUN[st.runIdx]; },
@@ -378,6 +411,7 @@ function createSession(scene, opts, env = {}) {
           scn.update(dt);
           if (plant) holdChairHands(s, plant);   // hands on the chair
         }
+        api.applyPins();
         for (const ch of on) S.fadeMarks(ch, dt);
         for (const ch of on) { ch.group.updateMatrixWorld(true); S.bustSpring(ch, dt); }
         for (const ch of on) S.bustContact(ch, on);
