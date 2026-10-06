@@ -167,7 +167,7 @@
   <div id="stat"></div>
 </div>
 
-<script>window.FS_BUILD="20261007-0310";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
+<script>window.FS_BUILD="20261007-0320";(function(){var s=["vendor/three.min.js", "vendor/OrbitControls.js", "starlight-engine.js", "js/content.js", "js/edits.js", "js/poses.js", "js/room.js", "js/bodies.js", "js/scene.js", "js/editor-setup.js"];for(var i=0;i<s.length;i++)document.write('<script src="'+s[i]+'?v='+window.FS_BUILD+'"><\/script>');})();</script>
 <script>
 (function () {
 'use strict';
@@ -795,7 +795,9 @@ function showTab(kind) {
   tab = EDITOR.tableau(scene, kind, { giver: current[sc.giver], subject: current[sc.subject], subjectId: sc.subject, editor: true,
     layers: { bottoms: !!lowered[sc.subject], briefs: !!briefsDown[sc.subject], skirt: sc.skirt } }, { marks: {} });
   // The pose editor works on it as it does on the discipline scene: the base pose only (the scene is held still, with the writing at one place).
-  scn = { g: tab.giver, s: tab.subject, tool: null, tab: true, side: 'L', update: dt => { tab.tick(dt, 0); for (const c of [tab.giver, tab.subject]) for (const b of BONES) { c.pose[b].copy(c.bones[b].quaternion); c.target[b] = c.pose[b]; } }, setBeat() {}, setLoop() {}, chairPlant: null };
+  scn = { g: tab.giver, s: tab.subject, tool: null, tab: true, side: 'L', update: dt => tab.tick(dt, 0),
+    // (once the scene has come to rest: what the bones are is taken as the pose table, so the report holds the edited values as they are; not on every step, or the scene's own additions would pile up)
+    sync: () => { for (const c of [tab.giver, tab.subject]) for (const b of BONES) { c.pose[b].copy(c.bones[b].quaternion); c.target[b] = c.pose[b]; } }, setBeat() {}, setLoop() {}, chairPlant: null };
   tabKind = kind; camera.position.copy(tab.view.pos); controls.target.copy(tab.view.tgt); camera.fov = tab.view.fov; camera.updateProjectionMatrix(); controls.update();
   document.querySelectorAll('#af-kinds button').forEach(b => b.classList.toggle('on', b.dataset.kind === kind));
   placeChars();
@@ -1186,6 +1188,7 @@ PE.settle = () => {
   if (!scn) return;
   if (PE.base && PE.base.scn === scn) for (const w of ['g', 's']) scn[w].group.position.copy(PE.base[w].pos);
   for (let i = 0; i < 60; i++) scn.update(0.05);
+  if (scn.sync) scn.sync();
   if (scn.chairPlant) EDITOR.hold(scn.s, scn.chairPlant);
   PE.base = { ...snapState({ table: true, clear: true }), scn };
   PE.key = peKey(); PE.label = peLabel();
