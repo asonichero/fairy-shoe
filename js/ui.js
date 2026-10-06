@@ -93,9 +93,7 @@ function showIntro() {
     h('div', { class: 'panel' }, h('h3', {}, 'Your hands'), h('p', {}, 'Who you appear as in the room.'), keepers),
     h('div', { class: 'row' },
       h('button', { class: 'primary', onclick: () => { saveSettings(); startNew(); } }, 'Open the door'),
-      saved ? h('button', { onclick: () => { saveSettings(); continueGame(saved); } }, 'Continue (Day ' + saved.g.day + ')') : null,
-      h('a', { class: 'linkbtn', href: 'editor.html', target: '_blank', rel: 'noopener' }, 'Character editor'),
-      h('button', { class: 'quiet', title: 'For testing: a fresh game, straight to the correction with the highest expected severity', onclick: showSeverePicker }, 'Test: most severe correction')))));
+      saved ? h('button', { onclick: () => { saveSettings(); continueGame(saved); } }, 'Continue (Day ' + saved.g.day + ')') : null))));
 }
 function leaveToMenu() { teardownLive(); save(); showIntro(); }
 
