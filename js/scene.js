@@ -266,7 +266,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
       const seatTop = position === 'chair' ? chairSeatTop(g) : 0.45;
       const D = derive();
       scn = S.createDisciplineScene(scene, g, s, { lower: !!st.layers.bottoms, position: ENGINE_POSITION[position], pain: opts.pain, faces: true, severity: D.face });
-      if (s.skirt) S.setSkirtShell(s, true);   // the subject's skirt in a discipline scene is a shell skinned to the body, not cloth (see Starlight.setSkirtShell)
+      if (s.skirt) S.setSkirtHybrid(s, true);   // the subject's skirt in a discipline scene: the gathered back is driven by the body, the front and sides are cloth (see Starlight.setSkirtHybrid)
       applyLayers();
       let impl = cfg.implement || st.implement;
       if (position === 'spread' && !S.IMPLEMENTS[impl].dual) impl = 'paddle';
