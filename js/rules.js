@@ -112,17 +112,10 @@ function useWord(g, id, why) {
   const n = { type: 'safeword', id, why, mood, count: c.safeWords, need, changes: rec, text: CHARACTERS[id].name + ' called the safe word.' };
   g.notices.push(n); return n;
 }
-// After any change: whoever has met their threshold moves on at once (not telegraphed).
-// During the evening, whoever has settled enough is not removed (their behaviour report and aftercare still stand, and nothing is telegraphed): they are queued, and move on at the end of the evening.
-function sweepMoveOns(g) {
-  const out = [];
-  for (const id of g.roster.slice()) if (meetsGraduation(id, stats(g, id))) {
-    if (g.phase === 'evening') { g.moveQueue = g.moveQueue || []; if (!g.moveQueue.includes(id)) g.moveQueue.push(id); }
-    else out.push(moveOn(g, id));
-  }
-  return out;
-}
-function flushMoveOns(g) { const q = (g.moveQueue || []).filter(id => g.roster.includes(id)); g.moveQueue = []; return q.map(id => moveOn(g, id)); }
+// Nothing moves anyone on mid-day or mid-evening: chores, events, corrections and aftercare only change stats. Whether a resident is ready is checked once, after all
+// the behaviour has been dealt with (flushMoveOns, at the end of the evening). (Kept so the callers read the same; it does nothing.)
+function sweepMoveOns() { return []; }
+function flushMoveOns(g) { return g.roster.filter(id => meetsGraduation(id, stats(g, id))).map(id => moveOn(g, id)); }
 
 // Refill to the house size from those who have not yet been through the house. Nobody comes back once they have moved on or left, so the house shrinks as the pool runs out.
 function backfill(g, rng, silent) {

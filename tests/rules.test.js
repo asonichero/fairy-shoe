@@ -169,10 +169,11 @@ test('Snow White: Valued swings double, Satisfaction moves slowly', () => {
   R.changeStat(g, 'snow', 'sat', 1, 'event'); assert.equal(g.chars.snow.stats.sat, 3);
 });
 
-test('moving on is found on any stat change, removes the resident, and is permanent', () => {
+test('moving on is checked once, after all behaviour is dealt with, removes the resident, and is permanent', () => {
   const g = house(['goldilocks', 'red', 'jack']); g.chars.goldilocks.stats.wil = 3; g.chars.goldilocks.stats.val = 4; g.chars.goldilocks.stats.att = 3;
   R.applyChoreBand(g, 'goldilocks', 'completed', 1);   // attention 3 → 4
-  const out = R.sweepMoveOns(g);
+  assert.equal(R.sweepMoveOns(g).length, 0); assert.ok(g.roster.includes('goldilocks'));   // chores and corrections never do it
+  const out = R.flushMoveOns(g);
   assert.equal(out.length, 1); assert.ok(!g.roster.includes('goldilocks')); assert.deepEqual(g.collection, ['goldilocks']);
 });
 
