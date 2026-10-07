@@ -169,9 +169,12 @@ function holdAstrideHands(g, s) {
     const palmT = g.bones['upperArm' + side].getWorldPosition(new V3()).add(new V3(0, 0.045 * kg, 0));
     const pole = s.bones['upperArm' + mine].getWorldPosition(new V3()).add(new V3(out * 0.3, -0.25, 0.15));
     S.armIK(s, mine, palmT, pole, Y, new V3(0, 0, -1));
-    // the player's hands on the subject's waist, at each side
-    const wp = s.bones.spine1.getWorldPosition(new V3()), half = 0.13 * ks;
-    const target = wp.clone().add(new V3(out * (half + 0.012 * kg), 0.0, 0));
+    // the player's hands on the subject's hips, at each side: the outermost skin of the hip on that side, at the height of the top of the hip, the palm a hair off it
+    const wp = s.bones.pelvis.getWorldPosition(new V3()).add(new V3(0, 0.03 * ks, 0));
+    const pts = S.posedSkinNear(s, wp.clone().add(new V3(out * 0.1 * ks, 0, 0)), 0.2 * ks);
+    let best = -Infinity, bi = -1;
+    for (let i = 0; i < pts.length; i += 6) { if (Math.abs(pts[i + 1] - wp.y) > 0.03 * ks || Math.abs(pts[i + 2] - wp.z) > 0.06 * ks) continue; const d = out * (pts[i] - wp.x); if (d > best) { best = d; bi = i; } }
+    const target = bi < 0 ? wp.clone().add(new V3(out * 0.15 * ks, 0, 0)) : new V3(pts[bi], pts[bi + 1], pts[bi + 2]).add(new V3(out * 0.012 * kg, 0, 0));
     const gsh = g.bones['upperArm' + side].getWorldPosition(new V3());
     S.armIK(g, side, target, gsh.clone().add(new V3(out * 0.25, -0.2, -0.1)), new V3(out, 0, 0), new V3(0, -0.15, 1));
   }
