@@ -30,7 +30,10 @@ root.FairyShoePoses = {
   // Astride is laid out in code (setupAstride in scene.js: the hips, legs and the reach of the arms); these edits go on top, the same at every beat.
   astride: [
     { who: 'giver', beat: 'relaxed', bones: { upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], fingersL: [0, 0, -48], fingersR: [0, 0, 16], thumbR: [-3.7, -7.5, -13] } },
-    { who: 'subject', beat: 'base', bones: { upperArmL: [-3, 0, -35], forearmL: [-20, 0, 0], handL: [0, 0, 0], upperArmR: [-3, 0, 35], forearmR: [-20, 0, 0], handR: [0, 0, 0], fingersL: [0, 0, -50.5], fingersR: [0, 0, 56.5] } },
+    { who: 'giver', beat: 'raised', bones: { neck: [10, 0, 0], head: [0, 0, 0], upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], fingersL: [0, 0, -48], fingersR: [0, 0, 16] } },
+    { who: 'subject', beat: 'base', bones: { upperArmL: [-3, 0, -35], forearmL: [-20, 0, 0], handL: [0, 0, 0], upperArmR: [-3, 0, 35], forearmR: [-20, 0, 0], handR: [0, 0, 0], thighL: [-16.6, -1.6, 22.8], shinL: [11.1, -0.3, -10.6], footL: [9.2, 16.2, -9.1], thighR: [-16.9, 3.1, -23.8], shinR: [12.4, 1.6, 13.5], footR: [7.8, -18.7, 7.6] } },
+    { who: 'giver', beat: 'contact', bones: { spine1: [-0.5, 0, -0.3], neck: [12, 0, 0], upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], thighL: [-73.1, -4.9, 3.4], shinL: [89.5, 20.5, 16], footL: [0.5, 1.2, 3.1] } },
+    { who: 'subject', beat: 'contact', bones: { spine1: [-11, 0.2, -1.5], spine2: [-2.3, 0, -0.3], neck: [-10, 0, 0], head: [0, 0, 0], upperArmL: [-3, 0, -35], forearmL: [-20, 0, 0], handL: [0, 0, 0], upperArmR: [-3, 0, 35], forearmR: [-20, 0, 0], handR: [0, 0, 0], thighL: [-28.3, -9.6, 40.4], shinL: [35, -13.2, -39.1], footL: [-5.5, 16.7, -4.6], thighR: [-27.6, 10.7, -41.1], shinR: [33.6, 14.8, 43.6], footR: [-6.6, -19, 2] } },
   ],
   hips: [
     { who: 'giver', beat: 'contact', bones: { spine1: [-10.1, 0, 1], upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], thighL: [3.3, -1, 5.7], shinL: [19.6, -10.7, -15.5], footL: [-24.9, 2.2, 0], thighR: [3.5, -0.3, -5.5], shinR: [20.9, -3.3, -4.8], footR: [-25.4, 5.3, 16.1], fingersR: [0, 0, 16] } },

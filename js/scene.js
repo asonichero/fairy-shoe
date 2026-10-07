@@ -193,14 +193,16 @@ function setupAstride(parent, scn, g, s) {
   // The spine stays as it is: the hips tip back (the pelvis turned about the hip joints) until the back meets the chair's, the thighs turned forward by the same
   // amount so they stay level on the seat, and the shins and feet brought back to the floor.
   const orig = scn.giverQ; let legs = null;
-  const edit = who => Object.assign({}, ...(Poses.astride || []).filter(e => e.who === who).map(e => Object.fromEntries(Object.entries(e.bones).filter(([b]) => g.bones[b]).map(([b, v]) => [b, S.degQ(v)]))));
-  const gEdit = edit('giver'), sEdit = edit('subject');   // (the same at every beat)
+  const edit = (who, beats) => Object.assign({}, ...(Poses.astride || []).filter(e => e.who === who && beats.includes(e.beat)).map(e => Object.fromEntries(Object.entries(e.bones).filter(([b]) => g.bones[b]).map(([b, v]) => [b, S.degQ(v)]))));
+  // the giver's relaxed entry is the base for every beat; the raised and contact entries sit on top of it for their own beat
+  const gEdit = { relaxed: edit('giver', ['relaxed']), raised: { ...edit('giver', ['relaxed']), ...edit('giver', ['raised']) }, contact: { ...edit('giver', ['relaxed']), ...edit('giver', ['contact']) } };
+  const sEdit = edit('subject', ['base']), sContact = edit('subject', ['contact']);
   const apply = () => { g.target = scn.giverQ(scn.beat); for (const b of BONES) { g.pose[b] = g.target[b].clone(); g.bones[b].quaternion.copy(g.pose[b]); } g.group.updateMatrixWorld(true); };
   const setTilt = deg => {
     scn.giverQ = beat => {
       const b = orig(beat), q = S.degQ([-deg, 0, 0]), qi = S.degQ([deg, 0, 0]);
       const out = { ...b, pelvis: b.pelvis.clone().multiply(q), thighL: b.thighL.clone().multiply(qi), thighR: b.thighR.clone().multiply(qi) };
-      return { ...out, ...(legs || {}), ...gEdit };
+      return { ...out, ...(legs || {}), ...(gEdit[beat] || gEdit.relaxed) };
     };
     scn.giverQ.edited = true; apply();
   };
@@ -235,7 +237,9 @@ function setupAstride(parent, scn, g, s) {
   s.group.updateMatrixWorld(true);
   // the pose as it now stands is the subject's base; they take nothing from a smack here
   const base = {}; for (const b of BONES) base[b] = s.bones[b].quaternion.clone();
-  scn.baseQ = base; scn.reactQ = { L: base, R: base, B: base }; scn.buckQ = scn.reactQ;
+  // a smack takes the subject to their contact pose (the same whichever side, whichever implement); with no contact entry they stay as they are
+  const hit = { ...base, ...sContact };
+  scn.baseQ = base; scn.reactQ = { L: hit, R: hit, B: hit }; scn.buckQ = scn.reactQ;
   s.target = base; s.pose = {}; for (const b of BONES) s.pose[b] = base[b].clone();
   scn.noMarks = true;
   holdAstrideHands(g, s);
@@ -557,7 +561,7 @@ function createSession(scene, opts, env = {}) {
           scn.update(dt);
           if (lookAhead) lapLook(dt);
           if (st.position === 'astride') {   // the engine closes the hands as it swings; the edited fingers and thumbs hold the same at every beat, whatever the implement
-            for (const e of Poses.astride || []) { const c = e.who === 'giver' ? g : s; for (const [b, v] of Object.entries(e.bones)) if (/^(fingers|thumb)/.test(b) && c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); }
+            for (const e of Poses.astride || []) { if (e.who !== 'giver' || !(e.beat === 'relaxed' || e.beat === scn.beat)) continue; const c = g; for (const [b, v] of Object.entries(e.bones)) if (/^(fingers|thumb)/.test(b) && c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); }
             g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
           }
           if (plant) holdChairHands(s, plant);   // hands on the chair
