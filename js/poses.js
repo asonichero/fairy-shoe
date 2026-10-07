@@ -29,7 +29,7 @@ root.FairyShoePoses = {
   // Editor-only base position ("Astride"): the lap scene, seated, with its own poses; the game never offers it.
   // Astride is laid out in code (setupAstride in scene.js: the hips, legs and the reach of the arms); these edits go on top, the same at every beat.
   astride: [
-    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], fingersL: [0, 0, -48], fingersR: [0, 0, 16] } },
+    { who: 'giver', beat: 'relaxed', bones: { upperArmL: [0, 0, 0], forearmL: [0, 0, 0], handL: [0, 0, 0], upperArmR: [0, 0, 0], forearmR: [0, 0, 0], handR: [0, 0, 0], fingersL: [0, 0, -48], fingersR: [0, 0, 16], thumbR: [-3.7, -7.5, -13] } },
     { who: 'subject', beat: 'base', bones: { upperArmL: [-3, 0, -35], forearmL: [-20, 0, 0], handL: [0, 0, 0], upperArmR: [-3, 0, 35], forearmR: [-20, 0, 0], handR: [0, 0, 0], fingersL: [0, 0, -50.5], fingersR: [0, 0, 56.5] } },
   ],
   hips: [

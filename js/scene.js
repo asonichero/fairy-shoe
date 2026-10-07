@@ -553,6 +553,10 @@ function createSession(scene, opts, env = {}) {
           scn.clothLift = s.skirt && !s.skirt.off && !s.skirt.gathered ? S.SKIRT_THICK * 0.7 : 0;   // the palm lands on the skirt, not through it
           scn.update(dt);
           if (lookAhead) lapLook(dt);
+          if (st.position === 'astride') {   // the engine closes the hands as it swings; the edited fingers and thumbs hold the same at every beat, whatever the implement
+            for (const e of Poses.astride || []) { const c = e.who === 'giver' ? g : s; for (const [b, v] of Object.entries(e.bones)) if (/^(fingers|thumb)/.test(b) && c.bones[b]) c.bones[b].quaternion.copy(S.degQ(v)); }
+            g.group.updateMatrixWorld(true); s.group.updateMatrixWorld(true);
+          }
           if (plant) holdChairHands(s, plant);   // hands on the chair
         }
         api.applyPins();
