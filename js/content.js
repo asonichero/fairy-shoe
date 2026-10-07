@@ -186,6 +186,17 @@ const PAIR_LINES = {
 // {Name} {Subj} {Poss} {Obj} {Refl} {Second} {Title}. Pronouns that start a sentence capitalise themselves.
 // `trap`: the gentle answer is the right one; a correction counts as an overshoot, and a kind word pays extra.
 const EVENTS = {
+  // A setback undoes some of what has been gained (`fx`: [stat, change] pairs, always at least Attention or Composure or Valued down, or Wilfulness up).
+  setback: [
+    { text: '{Name} had a bad night, and a bad morning after it. Whatever was getting steadier has gone back to being loose, and {Subj} will not say why.', fx: [['com', -1], ['att', -1]] },
+    { text: 'A letter came for {Name} from the old life, and {Subj} read it three times by the fire. {Subj} has been somewhere else all day.', fx: [['att', -1], ['val', -1]] },
+    { text: '{Name} was doing so well that someone said so, and {Subj} promptly went and did the opposite, as if to check it was still allowed.', fx: [['wil', 1], ['att', -1]] },
+    { text: 'A traveller on the road told {Name} what the house was "really" for, and {Subj} has been quietly doubting it ever since.', fx: [['val', -1], ['wil', 1]] },
+    { text: 'The old habits came back to {Name} all at once this afternoon, the way they do. {Subj} caught them too late.', fx: [['com', -1], ['wil', 1]] },
+    { text: '{Name} woke at the hour {Subj} used to wake in the old life, and spent the whole of the day in that mood.', fx: [['sat', -1], ['com', -1]] },
+    { text: 'The weather turned, the fire smoked, and {Name} took all of it personally. Two weeks of good work went out of the window with the smoke.', fx: [['att', -1], ['sat', -1]] },
+    { text: '{Name} found something of {Poss} own in a drawer, from before, and could not put it down. Nothing else got done.', fx: [['att', -1], ['com', -1]] },
+  ],
   petty: [
     '{Name} put a frog in someone\'s shoe. {Subj} isn\'t saying whose. {Subj} is very pleased about it.',
     '{Name} "lost" the mending needle rather than finish {Poss} sewing. It was in {Poss} pocket the whole time.',
@@ -268,6 +279,7 @@ const CATEGORIES = {
   dishonest: { label: 'Concealment',         share: 15, mod: 1 },
   neglect:   { label: 'Withdrawal',          share: 10, mod: 0 },
   cruelty:   { label: 'A small cruelty',     share: 5,  mod: 2, needsSecond: true },
+  setback:   { label: 'A setback',           share: 16, mod: 1 },   // progress undone: likelier the more they have to lose
 };
 
 // ── Reprieves and aftercare ─────────────────────────────────────

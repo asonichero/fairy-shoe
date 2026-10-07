@@ -682,21 +682,24 @@ function createTableau(scene, kind, opts, env = {}) {
     hold = (t) => {   // (the seated pose is the one seatGiver left: thighs level, shins down)
       s.group.updateMatrixWorld(true);
       // writing: the nib travels along a line of the page, flicks back to the start of the next and lifts a little between, with small strokes riding on the travel
+      t = 1.1;   // (the aftercare scenes do not animate: the hand is simply writing)
       const per = 4.2, ln = Math.floor(t / per) % 5, u = (t % per) / per, travel = Math.min(1, u / 0.86), lift = u > 0.86 ? Math.sin((u - 0.86) / 0.14 * Math.PI) * 0.012 : 0;
       const nib = st.furn.localToWorld(new V3(-0.06 + 0.12 * (u > 0.86 ? 1 - (u - 0.86) / 0.14 : travel) + 0.006 * Math.sin(t * 11), 0.745 + lift, 0.52 - 0.016 * ln + 0.004 * Math.sin(t * 17)));
       const shR = s.bones.upperArmR.getWorldPosition(new V3()), shL = s.bones.upperArmL.getWorldPosition(new V3());
       const dir = new V3(0, 0, 1).applyAxisAngle(Y, a0());
       // the writing hand: the fingertips at the nib, the hand tilted up behind them toward the wrist, the palm turned in
-      const back = new V3(shR.x - nib.x, 0, shR.z - nib.z).normalize(), palmT = nib.clone().addScaledVector(back, 0.062).add(new V3(0, 0.05, 0));
+      const back = new V3(shR.x - nib.x, 0, shR.z - nib.z).normalize(), palmT = nib.clone().addScaledVector(back, 0.055).add(new V3(0, 0.03, 0));
       S.armIK(s, 'R', palmT, shR.clone().add(new V3(0.3, -0.15, -0.25)), null, null, new V3(-1, -0.2, 0.3).normalize());
       S.armIK(s, 'L', st.furn.localToWorld(new V3(-0.1, 0.746, 0.40)), shL.clone().add(new V3(-0.3, -0.1, -0.3).applyAxisAngle(Y, a0())), new V3(0, 1, 0), dir);
       s.bones.neck.rotateX(0.55); s.bones.head.rotateX(0.35);   // head bent over the page
       // the pen is held: fingers and thumb closed on it, its tip on the nib, its body lying back along the hand toward the wrist
       s.bones.fingersR.quaternion.multiply(S.degQ([0, 0, 38])); s.bones.thumbR.quaternion.multiply(S.degQ([-20, 0, 0])); s.group.updateMatrixWorld(true);
-      const hp = s.bones.handR.getWorldPosition(new V3()), axis = hp.clone().sub(nib).add(new V3(0, 0.045, 0)).normalize();
+      // (the tip is wherever the fingertips are, so the pen is in the hand by construction)
+      const hp = s.bones.handR.getWorldPosition(new V3()), kn = s.bones.fingersR.getWorldPosition(new V3()), along = kn.clone().sub(hp).normalize();
+      const tip = nib.clone(), axis = hp.clone().sub(tip).normalize();   // tip on the page, the shaft running up through the closed hand
       const q = new T.Quaternion().setFromUnitVectors(new V3(0, 1, 0), axis);
       pen.quaternion.copy(st.furn.getWorldQuaternion(new T.Quaternion()).invert().multiply(q));
-      pen.position.copy(st.furn.worldToLocal(nib.clone().addScaledVector(axis, 0.075)));
+      pen.position.copy(st.furn.worldToLocal(tip.clone().addScaledVector(axis, 0.065)));
     };
     gaze = () => eyesAt(s, st.furn.localToWorld(new V3(0.02, 0.746, 0.46)), 1);
     view = { pos: st.furn.localToWorld(new V3(0.9, 2.15, -0.95)), tgt: st.furn.localToWorld(new V3(0, 0.85, 0.45)), fov: 50 };   // over the subject's shoulder, down at the page
@@ -787,7 +790,10 @@ function createTableau(scene, kind, opts, env = {}) {
   for (const c of both) if (c.skirt && c.group.visible) { try { S.settleSkirt(c, both.filter(o => o !== c), []); } catch (e) { /* the skirt is cosmetic here */ } }
   return {
     view, subject: s, giver: g,
+    drift: true,   // (the camera moves slowly; nothing else does)
     tick(dt, t) {
+      // the scene is posed, settles for a second or so, and is then held: no animation, no cloth or hair, no faces. Only the camera moves.
+      this.n = (this.n || 0) + 1; if (this.n > (kind === 'held' || kind === 'heldalt' ? 6 : 50)) return;   // (the hugs solve their arms from the skin, which is costly: a few frames, then held)
       for (const c of both) if (c.group.visible) S.animateCharacter(c, dt, t);
       applyEdits();
       hold(t); applyEdits(); cleanArms(); gaze();
@@ -831,13 +837,17 @@ function createStage(viewEl, { onGLProblem } = {}) {
   // Standard angles (see cameraPose): a button takes the camera there; from then on the view is the user's to orbit, zoom and pan.
   const cam = { mode: 'overview', go: null, snap: false, framed: false };
   let api_onCam = null;
-  controls.addEventListener('start', () => { cam.go = null; cam.mode = 'free'; if (api_onCam) api_onCam(); });   // the user has taken the view
+  controls.addEventListener('start', () => { cam.go = null; cam.mode = 'free'; cam.userMoved = true; if (api_onCam) api_onCam(); });   // the user has taken the view
   function setCamera(mode, snap) {
     if (!CAMERAS.some(c => c[0] === mode)) return;
     cam.mode = mode; cam.snap = !!snap;
     cam.go = session ? cameraPose(mode, session) : null;
   }
   function updateCamera(dt) {
+    if (session && session.drift && cam.mode === 'free' && !cam.go && !cam.userMoved) {   // an aftercare scene: a slow sway about what it is looking at
+      const sw = Math.sin(clock * 0.28) * 0.12 * dt, c = Math.cos(sw), sn = Math.sin(sw), tg = controls.target, p = camera.position;
+      const x = p.x - tg.x, z = p.z - tg.z; p.x = tg.x + x * c - z * sn; p.z = tg.z + x * sn + z * c;
+    }
     if (cam.go) {
       const ease = cam.snap ? 1 : 1 - Math.exp(-dt * 5);
       camera.position.lerp(cam.go.pos, ease); controls.target.lerp(cam.go.tgt, ease);
@@ -881,7 +891,7 @@ function createStage(viewEl, { onGLProblem } = {}) {
     const t = createTableau(scene, kind, opts, { marks });
     session = t;
     const far = camera.aspect < 1 ? 1.6 : 1;   // (a tall, narrow view stands further back to keep both in frame)
-    cam.mode = 'free'; cam.go = { pos: t.view.tgt.clone().addScaledVector(t.view.pos.clone().sub(t.view.tgt), far), tgt: t.view.tgt, fov: t.view.fov }; cam.snap = true;
+    cam.userMoved = false; cam.mode = 'free'; cam.go = { pos: t.view.tgt.clone().addScaledVector(t.view.pos.clone().sub(t.view.tgt), far), tgt: t.view.tgt, fov: t.view.fov }; cam.snap = true;
     if (!running) { running = true; last = performance.now(); requestAnimationFrame(frame); }
     return t;
   }

@@ -14,7 +14,7 @@ const { STATS, CHARACTERS, ORDER, CHORES, CATEGORIES } = C;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const HOUSE_SIZE = 3;
 const EVENING_CANDLE = 5;          // marks to spend on reprieves and aftercare each evening
-const MAX_EVENTS = 2;              // at most this many events per evening
+const MAX_EVENTS = 3;              // at most this many events per evening
 
 // ── Random ──────────────────────────────────────────────────────
 function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
@@ -221,6 +221,7 @@ function categoryWeights(g, id, hasSecond) {
     dishonest: CATEGORIES.dishonest.share * (b.dishonest || 1),
     neglect: CATEGORIES.neglect.share * (1 + Math.max(0, 3 - s.sat) * 0.6 + Math.max(0, 3 - s.com) * 0.5) * (b.neglect || 1),
     cruelty: s.res >= 5 ? CATEGORIES.cruelty.share * (s.res - 4) : 0,   // only at very high Resentment
+    setback: CATEGORIES.setback.share * (0.6 + 0.9 * CHARACTERS[id].grad.filter(([k, op, t]) => cmp(s[k], op, t)).length),   // the closer to ready, the more there is to lose
   };
   if (!hasSecond) { w.friction = 0; w.cruelty = 0; }   // nobody to name: fall back to the rest (mischief most of all)
   return w;
@@ -250,13 +251,14 @@ function makeEvent(g, id, rng) {
   const t = own.length && rng() < 0.45 ? pick(rng, own) : pick(rng, opts);
   const def = CHARACTERS[id];
   const text = fillTemplate(t.text, { name: def.name, pron: def.pronouns, second: second ? CHARACTERS[second].name : '', title: g.title });
-  return { id, cat, second, text, trap: !!t.trap, mod: CATEGORIES[cat].mod };
+  return { id, cat, second, text, trap: !!t.trap, fx: t.fx || null, mod: CATEGORIES[cat].mod };
 }
 function applyEvent(g, ev, rec) {
   const { id, second: sec, cat } = ev;
   if (cat === 'boundary') changeStat(g, id, 'wil', 1, 'event', rec);
   else if (cat === 'friction') { changeStat(g, id, 'res', 1, 'event', rec); changeStat(g, sec, 'res', 1, 'event', rec); addRapport(g, id, sec, -1); }
   else if (cat === 'dishonest') changeStat(g, id, 'val', -1, 'event', rec);
+  else if (cat === 'setback') for (const [k, d] of (ev.fx || [['att', -1]])) changeStat(g, id, k, d, 'event', rec);
   else if (cat === 'neglect') { changeStat(g, id, 'sat', -1, 'event', rec); changeStat(g, id, 'com', -1, 'event', rec); }
   else if (cat === 'cruelty') { changeStat(g, sec, 'res', 1, 'event', rec); changeStat(g, id, 'val', -1, 'event', rec); }
 }

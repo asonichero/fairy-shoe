@@ -320,7 +320,7 @@ function renderEvening() {
       h('div', { class: 'area-stats' }, residentCard(id, { rerender: renderEvening })),
       h('div', { class: 'area-choices' },
         h('div', { class: 'choices' },
-          h('button', { class: 'choice', onclick: () => { if (!host.hidden) { host.hidden = true; host.replaceChildren(); } else renderSetup(card); } }, h('b', {}, 'Hold ' + d.pronouns[1] + ' to account'), h('span', {}, 'A live correction. How it goes, and when it ends, is entirely up to you.')),
+          h('button', { class: 'choice', onclick: () => { if (!host.hidden) { host.hidden = true; host.replaceChildren(); } else renderSetup(card); } }, h('b', {}, 'Take ' + d.pronouns[1] + ' in hand'), h('span', {}, 'A live correction. How it goes, and when it ends, is entirely up to you.')),
           host,
           h('button', { class: 'choice', onclick: () => { words.hidden = !words.hidden; } }, h('b', {}, 'Offer a word instead'), h('span', {}, 'A reprieve replaces the correction. It costs candle, and the trouble goes unanswered by hand.')),
           words)))));

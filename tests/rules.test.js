@@ -62,12 +62,12 @@ test('occurrence chance is clamped to 5–70', () => {
   assert.equal(R.occurrence({ wil: 4, res: 1, sat: 4, com: 2 }), 5 + 25 - 18);
 });
 
-test('at most two events, on two different people', () => {
+test('at most three events, on three different people at most', () => {
   for (let s = 1; s < 200; s++) {
     const g = house(['jack', 'goldilocks', 'rapunzel'], s);
     for (const id of g.roster) { g.chars[id].stats.wil = 7; g.chars[id].stats.res = 7; g.chars[id].stats.sat = 1; g.chars[id].stats.com = 1; }
     const ev = R.rollEvents(g, rng(s));
-    assert.ok(ev.length <= 2); assert.equal(new Set(ev.map(e => e.id)).size, ev.length);
+    assert.ok(ev.length <= 3); assert.equal(new Set(ev.map(e => e.id)).size, ev.length);
   }
 });
 
@@ -337,4 +337,15 @@ test('the last page: every resident has a grown and a lost epilogue, and their l
   const g = house(['red', 'jack']); g.unseen = [];
   R.moveOn(g, 'red'); assert.deepEqual(g.chars.red.final, g.chars.red.stats);
   let n; for (let i = 0; i < 3; i++) n = R.useWord(g, 'jack', 'harsh'); assert.equal(n.type, 'word'); assert.ok(g.chars.jack.final);
+});
+
+test('setbacks undo progress: likelier the closer to ready, and each takes something back', () => {
+  const g = house(['goldilocks', 'jack', 'red']);
+  const near = R.categoryWeights(g, 'goldilocks', true).setback;
+  g.chars.goldilocks.stats.wil = 3; g.chars.goldilocks.stats.att = 4; g.chars.goldilocks.stats.val = 4;
+  assert.ok(R.categoryWeights(g, 'goldilocks', true).setback > near);
+  const before = { ...g.chars.goldilocks.stats }, rec = [];
+  R.applyEvent(g, { id: 'goldilocks', cat: 'setback', fx: [['att', -1], ['val', -1]] }, rec);
+  assert.equal(g.chars.goldilocks.stats.att, before.att - 1); assert.equal(g.chars.goldilocks.stats.val, before.val - 1);
+  for (const t of C.EVENTS.setback) assert.ok(t.fx && t.fx.length && t.text.length > 40);
 });
