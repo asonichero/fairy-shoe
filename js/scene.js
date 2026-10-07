@@ -233,6 +233,8 @@ function setupAstride(parent, scn, g, s) {
     s.group.updateMatrixWorld(true);
     void hip;
   }
+  // where the subject's feet stand on the floor, before the edits: the pins hold them there whatever the edited legs would do
+  scn.astrideFeet = {}; for (const side of ['L', 'R']) { const f = s.bones['foot' + side]; scn.astrideFeet[side] = { pos: f.getWorldPosition(new V3()), quat: f.getWorldQuaternion(new T.Quaternion()) }; }
   for (const [b, q] of Object.entries(sEdit)) if (s.bones[b]) s.bones[b].quaternion.copy(q);   // (js/poses.js edits)
   s.group.updateMatrixWorld(true);
   // the pose as it now stands is the subject's base; they take nothing from a smack here
@@ -486,7 +488,7 @@ function createSession(scene, opts, env = {}) {
       scn.onImpact = (side, strength) => { st.lookT = 3; kickLegs(); st.smacks++; Sound.clap(st.implement, strength); if (api.onImpact) api.onImpact(api); };
       api.scn = scn; api.pain = scn.pain; api.subject = s; api.giver = g;
       lookAhead = position === 'lap' ? lapLookAhead(s) : null; st.look = 0; scn.legK = opts.stats ? 0.1 : 1;
-      pins = null; fixedPins = position === 'astride'; if (st.pinFeet || position === 'hips' || fixedPins) { st.pinFeet = true; pins = { g: footMarks(g, fixedPins), s: footMarks(s, fixedPins) }; }
+      pins = null; fixedPins = position === 'astride'; if (st.pinFeet || position === 'hips' || fixedPins) { st.pinFeet = true; pins = { g: footMarks(g, fixedPins), s: footMarks(s, fixedPins) }; if (scn.astrideFeet) Object.assign(pins.s, scn.astrideFeet); }
       if (env.afterMake) env.afterMake(g, s);
     }
 
@@ -509,7 +511,7 @@ function createSession(scene, opts, env = {}) {
       // Composure held still (nothing fades, nothing builds) from here until the first smack or run begins again.
       freeze() { st.frozen = true; },
       // Both bodies' feet held where they stand (position and angle) however the rest of the pose moves; the hips position always does.
-      pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g, fixedPins), s: footMarks(s, fixedPins) } : null; },
+      pinFeet(on) { st.pinFeet = !!on; pins = on ? { g: footMarks(g, fixedPins), s: footMarks(s, fixedPins) } : null; if (pins && scn.astrideFeet) Object.assign(pins.s, scn.astrideFeet); },
       get pinned() { return !!pins; },
       applyPins() { if (pins) { pinFeetTo(g, pins.g, fixedPins); pinFeetTo(s, pins.s, fixedPins);  if (plant && plant.hips) holdHipHands(g, s); } },
       get lookAhead() { return lookAhead; },
